@@ -58,7 +58,7 @@ npm run dev              # serves the extension at http://localhost:5173
 
 **Free hosting (recommended):** push this repo to GitHub, then **Settings → Pages → Source: GitHub Actions**. [pages.yml](.github/workflows/pages.yml) tests, builds and deploys on every push to `main`. A GitHub Pages site is public; anyone with the URL can see the map and package files.
 
-**Install in Owlbear:** Owlbear → profile → *Extensions* → *Add Custom Extension* → `https://corrida-repos.github.io/owlbear-rodeo-butler/manifest.json`, or `http://localhost:5173/manifest.json` while developing. Enable both **Encounter Butler** and **Forge!** in the room. Forge must be on its default system (Forge → System → *Load Default System*).
+**Install in Owlbear:** Owlbear → profile → *Extensions* → *Add Custom Extension* → `https://corrida-repos.github.io/owlbear-rodeo-butler/manifest.json`, or `http://localhost:5173/owlbear-rodeo-butler/manifest.json` while developing. Enable both **Encounter Butler** and **Forge!** in the room. Forge must be on its default system (Forge → System → *Load Default System*).
 
 ## New encounter workflow
 
@@ -108,7 +108,7 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 
 ## Milestone live test: one map, five wolves
 
-1. `npm run dev`. In an Owlbear room, add `http://localhost:5173/manifest.json`, and enable Forge (default system).
+1. `npm run dev`. In an Owlbear room, add `http://localhost:5173/owlbear-rodeo-butler/manifest.json`, and enable Forge (default system).
 2. Open a **new empty scene**. Add one party token yourself, set its initiative in Forge (this checks that existing state is preserved).
 3. Encounter Butler → **Bundled wolves test** → Load. Expect: package valid, Forge "Dungeons & Dragons 5E", 5 rows with HP 11/11 and AC 12, initiative shown as `d20 N +2 = T`.
    - On localhost, the map URL is flagged "not reachable by players". Tick the **GM-only override** for this first test. Players will see the map only once you load it from GitHub Pages.

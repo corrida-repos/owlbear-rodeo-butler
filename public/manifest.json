@@ -4,11 +4,11 @@
   "manifest_version": 1,
   "author": "Diogo Correia",
   "description": "Imports prepared encounter packages (map, grid, tokens, Forge! stat blocks, HP and rolled initiative).",
-  "icon": "icon.svg",
+  "icon": "/owlbear-rodeo-butler/icon.svg",
   "action": {
     "title": "Encounter Butler",
-    "icon": "icon.svg",
-    "popover": "index.html",
+    "icon": "/owlbear-rodeo-butler/icon.svg",
+    "popover": "/owlbear-rodeo-butler/index.html",
     "width": 440,
     "height": 720
   }

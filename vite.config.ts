@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 
-// base "./" so the built extension works from any sub-path (e.g. GitHub Pages /<repo>/).
+// Owlbear joins manifest paths onto the origin, so manifest paths are absolute (/owlbear-rodeo-butler/...).
+// Dev and GitHub Pages both serve under the same sub-path so one manifest works for both.
 export default defineConfig({
-  base: "./",
+  base: "/owlbear-rodeo-butler/",
   server: {
     port: 5173,
     // Owlbear Rodeo fetches manifest.json and loads the popover cross-origin.
