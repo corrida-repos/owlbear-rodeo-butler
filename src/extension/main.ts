@@ -453,7 +453,11 @@ function renderParty(p: PartyPackage, pv: PartyPreview): Child[] {
       pv.system.kind === "custom" ? h("label", {}, h("input", { type: "checkbox", checked: partyOpts.acceptCustomSystem, onchange: (e: Event) => { partyOpts.acceptCustomSystem = (e.target as HTMLInputElement).checked; render(); } }),
         "I confirm my custom Forge system uses the default attribute IDs") : null),
     h("div", { className: "panel" },
-      h("button", { onclick: doPartySync, disabled: busy || !canSync }, `Sync ${pv.rows.filter((r) => r.item).length} matched token(s)`),
+      h("button", { onclick: doPartySync, disabled: busy || !canSync }, (() => {
+        const upd = pv.rows.filter((r) => r.item).length;
+        const add = partyOpts.createMissing ? pv.rows.filter((r) => !r.item && avatars[r.member.ddbId]?.status === "ok").length : 0;
+        return `Sync party: ${upd} update${upd === 1 ? "" : "s"}${add ? `, ${add} new token${add === 1 ? "" : "s"}` : ""}`;
+      })()),
       !canSync ? h("div", { className: "small muted", style: "margin-top:6px" }, "Nothing to sync yet: add the party's tokens to the scene (named like the characters), or enable token creation.") : null),
   ];
 }

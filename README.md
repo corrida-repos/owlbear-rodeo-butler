@@ -97,6 +97,29 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 - **Token art:** the creature's own token is used first, then its own book art, then (for copies) the base creature's token or art. Anything other than its own token produces a warning.
 - `npm run check:5etools` converts **every** 5etools creature (4,574 in total, 1,144 of them copies) and validates the Forge metadata. Last run: 4,574/4,574 OK.
 
+## Party sync (D&D Beyond → party tokens)
+D&D Beyond has no public API. The export runs inside your logged-in D&D Beyond tab and uses the same character-service endpoints the sheet uses, with your own session; the login token never leaves the page. You must be the campaign's DM, or the characters must be visible to you.
+
+1. **Export:** in a dndbeyond.com tab, run [scripts/ddb-export.browser.js](scripts/ddb-export.browser.js) with `await ddbExport(<campaignId>)`. It downloads `ddb-party-<campaign>.json`: every character in the campaign, plus the shared **party-inventory** items each character has equipped (an armor taken from the party stash changes AC).
+2. **Convert:** `npm run party:build -- party/ddb-party-<campaign>.json` writes `party/<campaign>.party.json`. `party/` is git-ignored, so your players' sheets are never published.
+3. **Sync in Owlbear:** Encounter Butler → choose the file (or paste it) → preview → **Sync party**.
+   - Tokens are matched on the Character layer by D&D Beyond id (after the first sync), full name, or unique first name.
+   - Only Forge data is written. Position, image, owner, initiative and other extensions' data are untouched. Party members get `in-party: true`.
+   - **Current HP:** taken from D&D Beyond, or kept from the token (useful mid-session).
+   - **Missing tokens** can be created. D&D Beyond avatars **can't** be used, because D&D Beyond blocks cross-site image use (verified). Use the bundled placeholder (swap later via right-click → Replace Image) or pick an image from your Owlbear library.
+
+**What's computed:** ability scores (base + species/background/feat bonuses, overrides) and HP (base + Con × level + per-level bonuses such as Tough). **AC** uses the best equipped armor including party-stash items, the Dex cap, shields, item, feat and fighting-style bonuses (attunement-aware), and Unarmored Defense. Also computed:
+- saves, skills (proficiency, expertise, half-proficiency, ability-based bonuses), passives
+- initiative (Dex + bonuses; Alert's "+PB" encoded as a proficiency-bonus modifier) and advantage
+- speeds, senses, languages, resistances and immunities
+- weapon attacks (finesse/ranged ability, proficiency, magic bonus, versatile), including gear with weapon behaviour, such as a druidic Staff counting as a Quarterstaff
+- D&D Beyond actions, sorted into action, bonus action, reaction or other, with limited uses; class/subclass features up to the current level; species traits; feats
+- spellcasting DC and attack, slots used, prepared or known spells with dice chips (cantrips scaled by level), species/feat spells, and inventory
+
+**Verified 2026-11-04** against D&D Beyond's displayed sheet for 3 real characters (Wizard 2, Sorcerer 2, Druid 2): HP, AC, initiative, speed, all saves, passives, skills and attacks match. The first comparison caught the party-inventory armor, which is now handled. Synced live into Owlbear: tracker HP/AC and the unit cards (attacks and spells with dice chips) show correctly.
+
+**Known gaps:** active spell effects (Mage Armor, Shield) aren't applied. Multiclass spell slots aren't combined. Items granting fixed AC formulas beyond Unarmored Defense are flagged rather than guessed.
+
 ## Initiative rules implemented
 - Modifier: an explicit initiative value if the stat block has one. Otherwise Dex mod, plus `proficiency × PB(CR)` when the 2024 stat block marks initiative proficiency (×2 = expertise; the Aboleth's +7 is tested).
 - Trait/feature text adds unconditional effects automatically: "advantage on initiative rolls" (e.g. Alert, Combat Ready), "+N bonus to initiative" (2014 Alert), and "adds its proficiency bonus to initiative".
