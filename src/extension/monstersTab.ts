@@ -89,6 +89,7 @@ async function addFromIndex(r: IndexRow) {
     label: `${r.book}${sb.source.page ? `, p. ${sb.source.page}` : ""}` };
   entries.push(e);
   query = "";
+  searchInput?.focus();
   rerender();
   void fivetoolsImage(ft.monster).then((img) => { e.image = img.image; e.imageNote = img.note; rerender(); });
 }
@@ -180,20 +181,36 @@ async function addCustom() {
 const input = (value: string, oninput: (v: string) => void, attrs: Record<string, any> = {}) =>
   h("input", { type: "text", value, oninput: (e: Event) => oninput((e.target as HTMLInputElement).value), ...attrs }) as HTMLInputElement;
 
-function renderSearch(): Child {
-  if (!index) void loadIndex();
-  const box = input(query, (v) => { query = v; rerender(); refocus = true; }, { placeholder: index ? "Search 5etools monsters (e.g. wolf, goblin, Strahd)…" : "Loading monster list…", id: "monster-search", autocomplete: "off" });
+// The search box is a persistent element: typing only refreshes the results list (no full re-render, focus kept).
+let searchPanel: HTMLElement | null = null;
+let searchInput: HTMLInputElement | null = null;
+let resultsEl: HTMLElement | null = null;
+
+function updateResults() {
+  if (!resultsEl || !searchInput) return;
+  searchInput.placeholder = index ? "Search 5etools monsters (e.g. wolf, goblin, Strahd)…" : "Loading monster list…";
   const results = search(query);
-  return h("div", { className: "panel" },
-    box,
+  resultsEl.replaceChildren(
     results.length ? h("ul", { className: "results" }, ...results.map((r) =>
       h("li", { onclick: action(() => addFromIndex(r)), title: "Add to encounter" },
         h("span", { className: "rname" }, r.name),
         h("span", { className: "muted small" }, ` CR ${r.cr || "—"} · ${r.type} · ${r.book}`),
         r.rules === "2024" ? h("span", { className: "badge" }, "2024") : null,
-        h("span", { className: "add" }, "+")))) : query.trim().length >= 2 && index ? h("div", { className: "small muted", style: "margin-top:6px" }, "No match. Try another spelling, or add it as a custom creature.") : null);
+        h("span", { className: "add" }, "+"))))
+      : query.trim().length >= 2 && index ? h("div", { className: "small muted", style: "margin-top:6px" }, "No match. Try another spelling, or add it as a custom creature.") : "");
 }
-let refocus = false;
+
+function renderSearch(): Child {
+  if (!index) void loadIndex().then(updateResults);
+  if (!searchPanel) {
+    searchInput = h("input", { type: "text", autocomplete: "off", oninput: (e: Event) => { query = (e.target as HTMLInputElement).value; updateResults(); } }) as HTMLInputElement;
+    resultsEl = h("div");
+    searchPanel = h("div", { className: "panel" }, searchInput, resultsEl);
+  }
+  if (searchInput!.value !== query) searchInput!.value = query;
+  updateResults();
+  return searchPanel;
+}
 
 function renderEntry(e: Entry): Child {
   const sb = e.statblock;
@@ -279,10 +296,4 @@ export function renderMonstersTab(): Child[] {
   return nodes;
 }
 
-/** Keep typing focus in the search box across re-renders. */
-export function afterRenderMonsters() {
-  if (!refocus) return;
-  refocus = false;
-  const el = document.getElementById("monster-search") as HTMLInputElement | null;
-  if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
-}
+export function afterRenderMonsters() { /* search box keeps focus by itself */ }
