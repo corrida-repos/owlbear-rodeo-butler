@@ -4,6 +4,17 @@
 
 Everything here uses free tiers only: the official Owlbear SDK, Forge's built-in D&D 5E system, 5etools public data, and GitHub Pages.
 
+## How to use it (in Owlbear)
+Install `https://corrida-repos.github.io/owlbear-rodeo-butler/manifest.json` as a custom extension and enable it alongside **Forge!** (on its default system). The popover has three tabs:
+
+| Tab | You do | You get |
+|---|---|---|
+| **Monsters** | Search any 5etools creature (all 112 books; 2024 versions marked), tap to add, set quantities. Or **+ Custom creature**: paste a 5etools stat block JSON or fill in quick stats, and choose artwork (Owlbear library, an https link, or the placeholder). | One click adds them at the centre of your view, one row per creature type, each with its own HP (average or rolled), individually rolled initiative (advantage handled), Forge stat block, and a place in the tracker. Undo is available. 5etools token art is used as-is. |
+| **Party** | Once: drag **"Copy party for Encounter Butler"** to your bookmarks bar. Then on your D&D Beyond campaign page (you're the DM), click it and press **Paste party** in Owlbear. | Each character's computed stats are written onto the matching party token, and missing tokens can be created. Portraits are round: the D&D Beyond avatar is circle-masked through the free wsrv.nl image proxy, which also works around D&D Beyond blocking cross-site use. Initiative can be rolled for anyone without one. |
+| **Prepared encounter** | Load a package Claude prepared for you (map, grid, placements, as below). | The full scene in one import. |
+
+Party data is converted in your browser and never published. Images: 5etools via GitHub (CORS `*`), D&D Beyond portraits via wsrv.nl (CORS `*`, 1-year cache), custom art from your Owlbear library or any public https link.
+
 ## Architecture
 
 ```
