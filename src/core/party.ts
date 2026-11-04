@@ -4,7 +4,7 @@
  * characters that have none, if asked).
  */
 import { BUTLER_ITEM_KEY, FORGE_DEFAULT_DICTIONARY_ID, FORGE_KEYS, SIZE_CELLS } from "./constants";
-import type { PartyMember } from "./ddb";
+import { convertDdbCharacter, type PartyMember } from "./ddb";
 import { detectForgeSystem, forgeKey, validateForgeMetadata, type ForgeSystemStatus } from "./forge";
 import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
@@ -25,6 +25,16 @@ export interface PartyPackage {
 
 export function makePartyPackage(id: string, campaign: PartyPackage["campaign"], fetchedAt: string, members: PartyMember[], now = new Date()): PartyPackage {
   return { schema: PARTY_SCHEMA, id, campaign, fetchedAt, builtAt: now.toISOString(), forgeDictionary: FORGE_DEFAULT_DICTIONARY_ID, members };
+}
+
+export const DDB_EXPORT_SCHEMA = "owlbear-butler/ddb-export@1";
+
+/** Converts the raw D&D Beyond export (from the bookmarklet/console snippet) into a party package, in-browser or in Node. */
+export function partyFromDdbExport(exp: any, now = new Date()): PartyPackage {
+  if (exp?.schema !== DDB_EXPORT_SCHEMA || !Array.isArray(exp.characters)) throw new Error("Not a D&D Beyond party export.");
+  const slug = String(exp.campaign?.name ?? "party").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "party";
+  const members = exp.characters.map((c: any) => convertDdbCharacter(c, { partyInventory: exp.partyInventory }));
+  return makePartyPackage(slug, exp.campaign ?? { name: "Party" }, exp.fetchedAt ?? now.toISOString(), members, now);
 }
 
 export function validateParty(input: any): string[] {
@@ -113,8 +123,10 @@ export interface PartySyncOptions {
   /** "ddb": set current HP from D&D Beyond; "keep": keep the token's current HP (if it has one). */
   hp: "ddb" | "keep";
   createMissing: boolean;
-  /** Avatar images (by ddbId) for tokens to create. */
+  /** Portrait images by ddbId (e.g. circular D&D Beyond avatars): used for created tokens, and for matched ones if `replaceImages`. */
   avatars?: Record<number, ResolvedImage>;
+  /** Pictures to put on EXISTING matched tokens (e.g. circular D&D Beyond portraits); never placeholders. */
+  replaceWith?: Record<number, ResolvedImage>;
   acceptCustomSystem?: boolean;
   /**
    * "keep": never touch party initiative. "unset": roll only for members whose token has no initiative yet
@@ -133,6 +145,8 @@ export interface PartySyncReport {
   created: string[];
   skipped: string[];
   createdItemIds: string[];
+  /** Matched tokens whose picture was replaced, with their previous picture (for undo). */
+  previousImages: ImageSwapReport["previous"];
   /** Initiative rolled during this sync (dice, modifier, mode recorded like monster rolls). */
   rolled: { name: string; roll: InitiativeRoll }[];
   error?: string;
@@ -142,7 +156,7 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
   const newId = opts.newId ?? (() => globalThis.crypto.randomUUID());
   const now = opts.now ?? (() => new Date());
   const steps: StepResult[] = [];
-  const report: PartySyncReport = { ok: false, steps, updated: [], created: [], skipped: [], createdItemIds: [], rolled: [] };
+  const report: PartySyncReport = { ok: false, steps, updated: [], created: [], skipped: [], createdItemIds: [], rolled: [], previousImages: {} };
   const rng = opts.rng ?? cryptoRng;
   /** Rolls 1d20 (2d20 keep high/low with adv/dis) + the character's initiative modifier and records it. */
   const roll = (m: PartyMember, meta: Record<string, unknown>, record: PartyRecord) => {
@@ -217,6 +231,20 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
     if (updates.length) {
       await gw.updateMetadata(updates);
       steps.push({ step: "Update tokens", ok: true, detail: `Forge stat blocks written to ${updates.length} existing token(s); position, image and ownership untouched` });
+    }
+    if (opts.replaceWith) {
+      const imgUpdates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }[] = [];
+      for (const r of rows) {
+        const img = opts.replaceWith[r.member.ddbId];
+        if (!r.item || !img || !r.item.image || r.item.image.url === img.url) continue;
+        const cells = SIZE_CELLS[r.member.size] ?? 1;
+        report.previousImages[r.item.id] = { image: { ...r.item.image }, grid: tokenImageGrid(r.item.image.width, r.item.image.height, cells) };
+        imgUpdates.push({ id: r.item.id, image: img, grid: tokenImageGrid(img.width, img.height, cells) });
+      }
+      if (imgUpdates.length) {
+        await gw.updateImages(imgUpdates);
+        steps.push({ step: "Portraits", ok: true, detail: `${imgUpdates.length} token picture(s) set to the D&D Beyond portrait` });
+      }
     }
     if (creates.length) {
       await gw.addImages(creates);

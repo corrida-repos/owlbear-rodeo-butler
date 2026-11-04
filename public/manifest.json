@@ -1,15 +1,21 @@
 {
   "name": "Encounter Butler",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "manifest_version": 1,
   "author": "Diogo Correia",
-  "description": "Imports prepared encounter packages (map, grid, tokens, Forge! stat blocks, HP and rolled initiative).",
+  "description": "Add 5etools or custom monsters, sync your D&D Beyond party, or import prepared encounters \u2014 with Forge! stats, HP and rolled initiative.",
   "icon": "/owlbear-rodeo-butler/icon.svg",
   "action": {
     "title": "Encounter Butler",
     "icon": "/owlbear-rodeo-butler/icon.svg",
     "popover": "/owlbear-rodeo-butler/index.html",
     "width": 440,
-    "height": 720
-  }
+    "height": 760
+  },
+  "permissions": [
+    {
+      "name": "clipboard-read",
+      "reason": "Paste the party you copied from D&D Beyond"
+    }
+  ]
 }

@@ -37,3 +37,35 @@ ul.plain { margin: 0; padding-left: 18px; }
 label { display: flex; gap: 6px; align-items: flex-start; }
 .small { font-size: 11px; }
 .steps li { margin-bottom: 2px; }
+
+/* ---- v0.2 layout ---- */
+.tabs { display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px; position: sticky; top: 0; z-index: 2; }
+.tabs button, .seg button { flex: 1; background: transparent; color: var(--muted); padding: 6px 4px; font-weight: 600; }
+.tabs button.on, .seg button.on { background: var(--accent); color: #fff; }
+.seg { display: flex; gap: 4px; background: var(--bg); border-radius: 6px; padding: 3px; }
+.results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 260px; overflow: auto; }
+.results li { display: flex; align-items: baseline; gap: 6px; padding: 6px; border-radius: 6px; cursor: pointer; }
+.results li:hover { background: var(--bg); }
+.results .rname { font-weight: 600; }
+.results .add { margin-left: auto; color: var(--accent); font-weight: 700; font-size: 16px; }
+.badge { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; background: var(--accent); color: #fff; }
+.entry { display: flex; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border); }
+.entry:first-of-type { border-top: 0; }
+.thumb { width: 44px; height: 44px; object-fit: contain; flex: none; border-radius: 6px; }
+.thumb.round { border-radius: 50%; }
+.thumb.empty { display: grid; place-items: center; background: var(--bg); color: var(--muted); }
+.grow { flex: 1; min-width: 0; }
+.row.between { justify-content: space-between; }
+.count { min-width: 36px; text-align: center; font-weight: 700; }
+button.icon { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 2px 8px; }
+button.wide { width: 100%; }
+button.big { padding: 10px; font-size: 14px; }
+.center { text-align: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.grid2 label { flex-direction: column; gap: 2px; font-size: 12px; }
+.grid2 .span2 { grid-column: span 2; }
+textarea.tall { min-height: 140px; }
+.bookmarklet { display: inline-block; padding: 8px 12px; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; cursor: grab; }
+.filebtn { display: inline-flex; align-items: center; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); font-weight: 600; cursor: pointer; }
+.filebtn input { display: none; }
+details summary { cursor: pointer; font-weight: 600; }

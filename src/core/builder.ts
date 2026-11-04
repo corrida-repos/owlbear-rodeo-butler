@@ -180,7 +180,7 @@ export function buildPackage(src: EncounterSource, deps: BuildDeps): EncounterPa
   };
 }
 
-function rollHp(sb: Statblock, method: "average" | "roll", rng: Rng, warnings: string[]): HpRecord {
+export function rollHp(sb: Statblock, method: "average" | "roll", rng: Rng, warnings: string[]): HpRecord {
   if (method === "roll" && sb.hp.formula) {
     try {
       const r = rollFormula(sb.hp.formula, rng);
