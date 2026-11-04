@@ -111,6 +111,45 @@ describe("party sync", () => {
     expect(t.metadata[F("on-list")]).toBe(true);
   });
 
+  describe("party initiative", () => {
+    const fixed = (...faces: number[]) => { let i = 0; return () => (faces[i++ % faces.length]! - 1) / 20 + 0.001; };
+    const pkg2 = makePartyPackage("t2", { name: "T" }, "x", [
+      brann, // +6, token already has 14
+      { ...brann, ddbId: 1002, name: "Isolde Swift", initiative: { modifier: 3, advantage: true, reasons: [] } }, // token at 0
+    ]);
+    beforeEach(() => {
+      scene.items.push({ id: "tok-isolde", type: "IMAGE", layer: "CHARACTER", name: "x", label: "Isolde", position: { x: 0, y: 0 }, size: { w: 150, h: 150 },
+        metadata: { [F("init")]: 0 } });
+    });
+
+    it('"unset" rolls only for tokens without initiative (missing or 0), with advantage when the sheet has it', async () => {
+      const r = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "unset", rng: fixed(4, 17), newId }, scene);
+      expect(r.rolled.map((x) => x.name)).toEqual(["Isolde Swift"]);
+      expect(r.rolled[0]!.roll).toMatchObject({ dice: [4, 17], kept: 17, modifier: 3, mode: "advantage", total: 20 });
+      const isolde = scene.items.find((i) => i.id === "tok-isolde")!;
+      expect(isolde.metadata[F("init")]).toBe(20);
+      expect((isolde.metadata[BUTLER_ITEM_KEY] as any).initiative.dice).toEqual([4, 17]);
+      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(14);
+    });
+
+    it('"all" re-rolls everyone; "keep" touches nothing', async () => {
+      const r = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "all", rng: fixed(10), newId }, scene);
+      expect(r.rolled).toHaveLength(2);
+      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(10 + 6);
+      const k = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "keep", newId }, scene);
+      expect(k.rolled).toEqual([]);
+      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(16);
+    });
+
+    it("new tokens get rolled initiative too (unless keep)", async () => {
+      const pkg3 = makePartyPackage("t3", { name: "T" }, "x", [{ ...brann, ddbId: 1003, name: "Nobody New" }]);
+      const r = await syncParty(pkg3, { hp: "ddb", createMissing: true, initiative: "unset", rng: fixed(7), newId,
+        avatars: { 1003: { url: "https://cdn.example.org/n.png", width: 64, height: 64, mime: "image/png" } } }, scene);
+      expect(r.created).toHaveLength(1);
+      expect(scene.items.find((i) => i.name === "Nobody New")!.metadata[F("init")]).toBe(7 + 6);
+    });
+  });
+
   it("refuses for players", async () => {
     scene.role = "PLAYER";
     const r = await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);

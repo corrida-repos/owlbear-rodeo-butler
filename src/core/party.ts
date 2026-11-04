@@ -8,7 +8,8 @@ import type { PartyMember } from "./ddb";
 import { detectForgeSystem, forgeKey, validateForgeMetadata, type ForgeSystemStatus } from "./forge";
 import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
-import type { ListEntry } from "./schema";
+import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
+import type { InitiativeRoll, ListEntry } from "./schema";
 
 export const PARTY_SCHEMA = "owlbear-butler/party@1";
 
@@ -43,7 +44,7 @@ export function validateParty(input: any): string[] {
 export const normName = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
-export interface PartyRecord { role: "party"; ddbId: number; partyId: string; syncedAt: string }
+export interface PartyRecord { role: "party"; ddbId: number; partyId: string; syncedAt: string; initiative?: InitiativeRoll }
 
 export interface MatchRow {
   member: PartyMember;
@@ -115,6 +116,12 @@ export interface PartySyncOptions {
   /** Avatar images (by ddbId) for tokens to create. */
   avatars?: Record<number, ResolvedImage>;
   acceptCustomSystem?: boolean;
+  /**
+   * "keep": never touch party initiative. "unset": roll only for members whose token has no initiative yet
+   * (missing or 0, e.g. after Forge's "Reset Round & Initiative"). "all": re-roll everyone.
+   */
+  initiative?: "keep" | "unset" | "all";
+  rng?: Rng;
   newId?: () => string;
   now?: () => Date;
 }
@@ -126,6 +133,8 @@ export interface PartySyncReport {
   created: string[];
   skipped: string[];
   createdItemIds: string[];
+  /** Initiative rolled during this sync (dice, modifier, mode recorded like monster rolls). */
+  rolled: { name: string; roll: InitiativeRoll }[];
   error?: string;
 }
 
@@ -133,7 +142,15 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
   const newId = opts.newId ?? (() => globalThis.crypto.randomUUID());
   const now = opts.now ?? (() => new Date());
   const steps: StepResult[] = [];
-  const report: PartySyncReport = { ok: false, steps, updated: [], created: [], skipped: [], createdItemIds: [] };
+  const report: PartySyncReport = { ok: false, steps, updated: [], created: [], skipped: [], createdItemIds: [], rolled: [] };
+  const rng = opts.rng ?? cryptoRng;
+  /** Rolls 1d20 (2d20 keep high/low with adv/dis) + the character's initiative modifier and records it. */
+  const roll = (m: PartyMember, meta: Record<string, unknown>, record: PartyRecord) => {
+    const r = rollInitiative(m.initiative.modifier, resolveRollMode(m.initiative.advantage, false), rng, "importer", now);
+    meta[FORGE_KEYS.INITIATIVE] = r.total;
+    record.initiative = r;
+    report.rolled.push({ name: m.name, roll: r });
+  };
   try {
     const errors = validateParty(pkg);
     if (errors.length) throw new Error(`Party file invalid: ${errors.join("; ")}`);
@@ -163,6 +180,9 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
         meta[FORGE_KEYS.FABRICATED] = true;
         meta[FORGE_KEYS.IN_PARTY] = true;
         meta[FORGE_KEYS.ON_LIST] = existing[FORGE_KEYS.ON_LIST] ?? true;
+        const cur = existing[FORGE_KEYS.INITIATIVE];
+        const unset = typeof cur !== "number" || cur === 0;
+        if (opts.initiative === "all" || (opts.initiative === "unset" && unset)) roll(m, meta, record);
         meta[BUTLER_ITEM_KEY] = record;
         updates.push({ id: r.item.id, metadata: meta });
         report.updated.push(`${m.name} → token "${r.item.label ?? r.item.name}" (matched by ${r.by})`);
@@ -178,6 +198,7 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
         meta[FORGE_KEYS.FABRICATED] = true;
         meta[FORGE_KEYS.IN_PARTY] = true;
         meta[FORGE_KEYS.ON_LIST] = true;
+        if (opts.initiative === "all" || opts.initiative === "unset") roll(m, meta, record);
         meta[BUTLER_ITEM_KEY] = record;
         creates.push({
           id: newId(), name: m.name, layer: "CHARACTER", image: img,
@@ -190,7 +211,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
         report.skipped.push(`${m.name}: no matching token${r.ambiguous.length ? ` (ambiguous: ${r.ambiguous.join(", ")})` : ""}`);
       }
     }
-    steps.push({ step: "Plan", ok: true, detail: `${updates.length} to update, ${creates.length} to create, ${report.skipped.length} skipped` });
+    steps.push({ step: "Plan", ok: true, detail: `${updates.length} to update, ${creates.length} to create, ${report.skipped.length} skipped` +
+      `${report.rolled.length ? `, initiative rolled for ${report.rolled.length}` : opts.initiative && opts.initiative !== "keep" ? ", no initiative needed rolling" : ""}` });
 
     if (updates.length) {
       await gw.updateMetadata(updates);

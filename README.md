@@ -104,8 +104,9 @@ D&D Beyond has no public API. The export runs inside your logged-in D&D Beyond t
 2. **Convert:** `npm run party:build -- party/ddb-party-<campaign>.json` writes `party/<campaign>.party.json`. `party/` is git-ignored, so your players' sheets are never published.
 3. **Sync in Owlbear:** Encounter Butler → choose the file (or paste it) → preview → **Sync party**.
    - Tokens are matched on the Character layer by D&D Beyond id (after the first sync), full name, or unique first name.
-   - Only Forge data is written. Position, image, owner, initiative and other extensions' data are untouched. Party members get `in-party: true`.
+   - Only Forge data is written. Position, image, owner and other extensions' data are untouched; initiative only changes if you choose to roll it. Party members get `in-party: true`.
    - **Current HP:** taken from D&D Beyond, or kept from the token (useful mid-session).
+   - **Initiative:** rolls `1d20 + modifier` from the sheet (2d20 keep-highest with advantage, e.g. Alert-style features) for party members whose token has none (missing or 0, e.g. after Forge's "Reset Round & Initiative"). It can instead re-roll everyone or leave it to the players. The choice is remembered. Every roll is recorded on the token (dice, modifier, mode, total) and listed in the report.
    - **Missing tokens** can be created. D&D Beyond avatars **can't** be used, because D&D Beyond blocks cross-site image use (verified). Use the bundled placeholder (swap later via right-click → Replace Image) or pick an image from your Owlbear library.
 
 **What's computed:** ability scores (base + species/background/feat bonuses, overrides) and HP (base + Con × level + per-level bonuses such as Tough). **AC** uses the best equipped armor including party-stash items, the Dex cap, shields, item, feat and fighting-style bonuses (attunement-aware), and Unarmored Defense. Also computed:

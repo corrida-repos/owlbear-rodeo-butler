@@ -341,7 +341,12 @@ function renderReport(r: ImportReport) {
 let party: PartyPackage | null = null;
 let partyPreview: PartyPreview | null = null;
 let partyReport: PartySyncReport | null = null;
-const partyOpts = { hp: "ddb" as "ddb" | "keep", createMissing: false, acceptCustomSystem: false };
+type InitChoice = "keep" | "unset" | "all";
+const savedInit = store.get("butler.partyInitiative");
+const partyOpts = {
+  hp: "ddb" as "ddb" | "keep", createMissing: false, acceptCustomSystem: false,
+  initiative: (savedInit === "keep" || savedInit === "all" ? savedInit : "unset") as InitChoice,
+};
 const avatars: Record<number, { status: "ok" | "error" | "pending"; img?: ResolvedImage; message?: string }> = {};
 
 async function setParty(p: PartyPackage) {
@@ -448,6 +453,10 @@ function renderParty(p: PartyPackage, pv: PartyPreview): Child[] {
     h("div", { className: "panel" }, h("h2", {}, "Options"),
       h("label", {}, h("input", { type: "radio", name: "hp", checked: partyOpts.hp === "ddb", onchange: () => { partyOpts.hp = "ddb"; } }), "Set current HP from D&D Beyond"),
       h("label", {}, h("input", { type: "radio", name: "hp", checked: partyOpts.hp === "keep", onchange: () => { partyOpts.hp = "keep"; } }), "Keep current HP already on the token (mid-session)"),
+      h("div", { className: "small muted", style: "margin-top:6px" }, "Initiative:"),
+      ...([["unset", "Roll for party members without initiative (missing or 0)"], ["all", "Re-roll initiative for every party member"], ["keep", "Leave party initiative alone (players roll)"]] as const)
+        .map(([v, label]) => h("label", {}, h("input", { type: "radio", name: "pinit", checked: partyOpts.initiative === v,
+          onchange: () => { partyOpts.initiative = v; store.set("butler.partyInitiative", v); } }), label)),
       unmatched.length ? h("label", {}, h("input", { type: "checkbox", checked: partyOpts.createMissing, onchange: (e: Event) => { partyOpts.createMissing = (e.target as HTMLInputElement).checked; render(); } }),
         `Create tokens for the ${unmatched.length} character(s) without one`) : null,
       pv.system.kind === "custom" ? h("label", {}, h("input", { type: "checkbox", checked: partyOpts.acceptCustomSystem, onchange: (e: Event) => { partyOpts.acceptCustomSystem = (e.target as HTMLInputElement).checked; render(); } }),
@@ -466,6 +475,8 @@ function renderPartyReport(r: PartySyncReport) {
   return h("div", { className: "panel" },
     h("h2", {}, r.ok ? "Party sync complete" : "Party sync failed"),
     h("ul", { className: "checks steps" }, ...r.steps.map((s) => check(s.ok ? "ok" : "bad", `${s.step}: ${s.detail}`))),
+    r.rolled.length ? h("div", { className: "small" }, h("strong", {}, "Initiative rolled:"),
+      h("ul", { className: "plain" }, ...r.rolled.map((x) => h("li", {}, `${x.name}: ${describeInitiative(x.roll)}`)))) : null,
     h("ul", { className: "plain small" }, ...r.updated.map((x) => h("li", { className: "ok" }, `updated ${x}`)), ...r.created.map((x) => h("li", { className: "ok" }, `created ${x}`)), ...r.skipped.map((x) => h("li", { className: "warn" }, `skipped ${x}`))));
 }
 
