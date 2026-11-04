@@ -363,7 +363,7 @@ async function checkAvatar(m: PartyPackage["members"][number]) {
     const size = await measure(m.avatarUrl);
     avatars[m.ddbId] = { status: "ok", img: { url: m.avatarUrl, ...size, mime: res.headers.get("content-type") ?? "image/jpeg" } };
   } catch (e) {
-    avatars[m.ddbId] = { status: "error", message: `avatar unusable (${e instanceof Error ? e.message : e}; D&D Beyond doesn't allow cross-site use). Pick an image from your Owlbear library.` };
+    avatars[m.ddbId] = { status: "error", message: `D&D Beyond avatar can't be used (${e instanceof Error ? e.message : e}: D&D Beyond blocks cross-site use). Use the placeholder or an Owlbear library image.` };
   }
   render();
 }
@@ -418,7 +418,9 @@ function renderParty(p: PartyPackage, pv: PartyPreview): Child[] {
       : h("span", { className: "warn" }, r.ambiguous.length ? `ambiguous: ${r.ambiguous.join(", ")}` : "no token",
         partyOpts.createMissing ? h("div", { className: "small" },
           av?.status === "ok" ? h("span", { className: "ok" }, `image ${av.img!.width}×${av.img!.height}`)
-            : av?.status === "error" ? h("span", {}, h("span", { className: "bad" }, av.message ?? ""), " ", h("button", { className: "secondary", onclick: () => pickAvatar(m.ddbId, m.name) }, "Pick…"))
+            : av?.status === "error" ? h("span", {}, h("span", { className: "bad" }, av.message ?? ""), " ",
+              h("button", { className: "secondary", onclick: () => usePlaceholder(m.ddbId) }, "Placeholder"), " ",
+              h("button", { className: "secondary", onclick: () => pickAvatar(m.ddbId, m.name) }, "Library…"))
               : av?.status === "pending" ? "checking avatar…" : h("span", {},
                 h("button", { className: "secondary", onclick: () => checkAvatar(m) }, "D&D Beyond avatar"), " ",
                 h("button", { className: "secondary", onclick: () => usePlaceholder(m.ddbId) }, "Placeholder"), " ",
@@ -478,9 +480,13 @@ function render() {
 if (OBR.isAvailable) {
   OBR.onReady(async () => {
     render();
-    const ready = await OBR.scene.isReady();
-    if (!ready) alertError("Open a scene first, then reopen this panel.");
-    OBR.scene.onReadyChange((r) => { if (!r) { pkg = null; preview = null; lastReport = null; render(); } });
+    const NO_SCENE = "Open a scene first (this panel updates when one is ready).";
+    if (!(await OBR.scene.isReady())) alertError(NO_SCENE);
+    OBR.scene.onReadyChange((r) => {
+      if (r) { if (errorText === NO_SCENE) errorText = ""; }
+      else { pkg = null; preview = null; lastReport = null; party = null; partyPreview = null; partyReport = null; }
+      render();
+    });
   });
 } else {
   app.append(h("div", { className: "panel" }, "This page is an Owlbear Rodeo extension. Add ", h("code", {}, new URL("manifest.json", location.href).toString()), " in Owlbear → Profile → Extensions → Add Custom Extension."));
