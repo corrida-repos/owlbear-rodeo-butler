@@ -76,7 +76,7 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
   "map": { "name": "Church", "file": "church.jpg",              // or "image": {"kind":"library","search":"Church"} + width/height
            "grid": { "cellPx": 140, "offsetPx": {"x":12,"y":8}, "scale": "5ft" } },
   "groups": [
-    { "statblock": { "fivetools": { "name": "Wolf", "source": "XMM" } }, "token": "fivetools",
+    { "statblock": { "fivetools": { "name": "Wolf", "source": "XMM" } }, "token": "fivetools",   // "source" optional: omit to prefer the 2024 version
       "count": 5, "name": "Wolf {n}", "hp": "average",          // or "roll"
       "placements": [ {"x":8,"y":3,"note":"north"}, … ],        // top-left cell, 0-based, one per creature
       "hidden": false },
@@ -89,15 +89,25 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 }
 ```
 
+## 5etools creatures
+- **Any book or adventure in 5etools** works. Books are discovered from 5etools' own `data/bestiary/index.json` (112 sources), and titles come from `books.json`/`adventures.json`. Files are fetched on demand and cached in `.cache/5etools/`.
+- **No book given** (`{"name": "Bandit"}`): the 2024-rules version is preferred, then the newest book. The choice is recorded as an assumption. If you name a 2014 creature that has a 2024 reprint, it is kept as asked and flagged "a newer version exists".
+- The rules edition is **inferred from the publication date** (on or after the 2024 PHB means 2024), because 5etools doesn't tag editions. The stat block's source notes say so.
+- **Copies, templates and variants** (`_copy`: about 25% of all 5etools creatures, mostly adventure NPCs) are resolved following 5etools' own merge rules, including copies whose base creature is in another book. Supported: every `_mod` operation (text and array edits, spell add/replace/remove, skills, saves, senses, scalar hit/DC changes, size caps), templates, `_preserve`, and `<$name$>`-style variables. The card notes record the chain, e.g. "copy of Archmage (MM) → template Tiefling (PHB)".
+- **Token art:** the creature's own token is used first, then its own book art, then (for copies) the base creature's token or art. Anything other than its own token produces a warning.
+- `npm run check:5etools` converts **every** 5etools creature (4,574 in total, 1,144 of them copies) and validates the Forge metadata. Last run: 4,574/4,574 OK.
+
 ## Initiative rules implemented
 - Modifier: an explicit initiative value if the stat block has one. Otherwise Dex mod, plus `proficiency × PB(CR)` when the 2024 stat block marks initiative proficiency (×2 = expertise; the Aboleth's +7 is tested).
-- Advantage/disadvantage come from the stat block's flag, trait text ("advantage on Initiative"), or an explicit DM override. Both together cancel.
+- Trait/feature text adds unconditional effects automatically: "advantage on initiative rolls" (e.g. Alert, Combat Ready), "+N bonus to initiative" (2014 Alert), and "adds its proficiency bonus to initiative".
+- **Situational** effects ("*If* the broom is motionless at the start of combat, it has advantage…"), and dice added to initiative, are **not** applied automatically. They're shown as flags in the preview. When the encounter description makes them true (for example, the mimic is disguised as a chest), the encounter spec turns them on with a recorded reason: `"initiative": {"advantage": true, "reason": "disguised as a chest"}`.
+- A DM override can also set the modifier or disadvantage. Advantage plus disadvantage cancel.
 - Normal is `1d20+mod`. Adv/dis rolls `2d20`, keeps the high/low die, then adds the modifier. Every package records `dice`, `kept`, `modifier`, `mode`, `total`, `formula`, `rolledAt` and `rolledBy`, and the same record is stored on each token under `dev.owlbear-butler/import`.
 
 ## Validation status
 
 **Verified locally**
-- `npm test`: 28 tests pass, covering dice and initiative modes, 5etools→Forge conversion (Wolf, Aboleth, Priest from real 2024 MM data), and the Forge dictionary and type checks. They also cover grid/placement math, the asset URL policy, and an end-to-end import into an in-memory scene: duplicate detection, replace, party tokens and Forge round state preserved, abort cases, import-time rolls, and partial failure with rollback.
+- `npm test`: 44 tests pass, covering dice and initiative modes, 5etools→Forge conversion (Wolf, Aboleth, Priest from real 2024 MM data), copy/template resolution on real 5etools NPCs (Bitter Breath, Zariel, Traxigor, Cat Skeleton, Arabelle, Reduced-Threat Aboleth, Sylvira Savikas), initiative detection from trait text, and picking a source when no book is given, and the Forge dictionary and type checks. They also cover grid/placement math, the asset URL policy, and an end-to-end import into an in-memory scene: duplicate detection, replace, party tokens and Forge round state preserved, abort cases, import-time rolls, and partial failure with rollback.
 - `tsc` is clean, and `vite build` produces `dist/` with the manifest, popover, and the wolves package and map.
 - The dev server serves the manifest, package and map with CORS for `https://www.owlbear.rodeo`. The 5etools token URL returns 200 with CORS `*`.
 
@@ -131,6 +141,7 @@ Please report anything that differs. Forge's on-token format is internal, and th
 
 ## Known limits (v1)
 - Square grids only. No fog, walls or lighting (out of scope by request).
-- 5etools `_copy` monsters (variants) are rejected with a clear message; provide the stat block instead. Lair/mythic actions are flagged, not mapped.
+- Lair and mythic actions are flagged, not mapped (the Forge default system has no attribute for them).
+- Companion and summon stat blocks that scale with the caster's level (e.g. Steel Defender) convert, but with placeholder HP and saves. They are flagged.
 - Forge `Z001 Level`, `Z029 Proficiency` (its roll formula treats the value as a level), `Z040 Inventory` and `Z041` are left unset for monsters.
 - Owlbear item metadata size: the preflight reports the largest token's metadata size, but the exact Owlbear limit isn't documented in the SDK typings.

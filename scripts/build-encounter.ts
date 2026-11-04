@@ -7,17 +7,17 @@
  *   --out <dir>        output dir (default: public/encounters/<id>)
  *   --base <url>       public URL of the output dir; asset URLs become absolute (needed if you paste/upload the JSON)
  *   --seed <n>         deterministic rolls (tests only; omit for real games)
- *   --data <dir>       read 5etools bestiary JSON from a local folder instead of GitHub
+ *   --data <dir>       read 5etools data (bestiary/*.json, books.json, adventures.json) from a local folder
  *   --offline          skip network checks of token URLs
  *
  * Writes <out>/encounter.json (+ copies local map/token files into <out>/assets/).
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { buildPackage, type EncounterSource } from "../src/core/builder";
 import { cryptoRng, describeInitiative, seededRng } from "../src/core/dice";
-import { FIVETOOLS_DATA_BASE, FIVETOOLS_SOURCES, findMonster, fivetoolsArtUrl } from "../src/core/fivetools";
 import { validatePackage, type ImageRef } from "../src/core/schema";
+import { FivetoolsLibrary } from "./lib/fivetools-library";
 import { imageSize } from "./lib/image-size";
 
 type SourceInput = Omit<EncounterSource, "map"> & {
@@ -27,24 +27,6 @@ type SourceInput = Omit<EncounterSource, "map"> & {
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 ? process.argv[i + 1] : undefined;
-}
-
-async function loadBestiary(source: string, dataDir: string | undefined): Promise<any> {
-  const info = FIVETOOLS_SOURCES[source];
-  if (!info) throw new Error(`Unknown 5etools source "${source}". Add it to FIVETOOLS_SOURCES in src/core/fivetools.ts (file name from 5etools data/bestiary/).`);
-  if (dataDir) return JSON.parse(readFileSync(join(dataDir, info.file), "utf8"));
-  const cacheDir = resolve(".cache/5etools");
-  const cacheFile = join(cacheDir, info.file);
-  if (existsSync(cacheFile)) return JSON.parse(readFileSync(cacheFile, "utf8"));
-  const url = `${FIVETOOLS_DATA_BASE}/bestiary/${info.file}`;
-  process.stdout.write(`fetching ${url} ... `);
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  const text = await res.text();
-  mkdirSync(cacheDir, { recursive: true });
-  writeFileSync(cacheFile, text);
-  console.log("ok");
-  return JSON.parse(text);
 }
 
 async function urlExists(url: string): Promise<boolean> {
@@ -93,40 +75,36 @@ async function main() {
     }
   }
 
-  // ---- 5etools data
-  const bestiaries = new Map<string, any>();
+  // ---- 5etools data: any book in 5etools' index; copies resolved across books
+  const lib = await new FivetoolsLibrary(resolve(".cache/5etools"), arg("data"), (s) => console.log(s)).init();
   for (const g of input.groups) {
-    if ("fivetools" in g.statblock) {
-      const s = g.statblock.fivetools.source;
-      if (!bestiaries.has(s)) bestiaries.set(s, await loadBestiary(s, arg("data")));
-    }
+    if ("fivetools" in g.statblock) await lib.prepare(g.statblock.fivetools.name, g.statblock.fivetools.source);
   }
 
   const pkg = buildPackage(
     { ...input, map: { ...input.map, image: mapImage, width, height } },
-    {
-      fivetoolsMonster: (name, source) => findMonster(bestiaries.get(source), name, source),
-      rng: seed ? seededRng(Number(seed)) : cryptoRng,
-    },
+    { fivetools: lib.get, rng: seed ? seededRng(Number(seed)) : cryptoRng },
   );
 
-  // ---- check official token URLs; fall back to full art, else flag
+  // ---- pick the first reachable image: own token → own art → base creature's token/art
   if (!offline) {
     for (const [key, a] of Object.entries(pkg.assets)) {
-      if (a.image.kind !== "url" || !/^https:/.test(a.image.url)) continue;
-      if (base && a.image.url.startsWith(base)) continue; // our own output; reachable once deployed
-      if (await urlExists(a.image.url)) continue;
-      const m = /bestiary\/tokens\/([^/]+)\/([^/]+)\.webp$/.exec(a.image.url);
-      const art = m ? fivetoolsArtUrl(decodeURIComponent(m[1]!), decodeURIComponent(m[2]!)) : null;
-      if (art && (await urlExists(art))) {
-        a.image.url = art;
-        a.credit = `${a.credit} (token missing; using full artwork)`;
-        pkg.warnings.push(`${key}: no 5etools token image, using full book artwork instead (not circular).`);
-      } else {
-        pkg.warnings.push(`${key}: image not reachable (${a.image.url}). Provide artwork or pick from the Owlbear library.`);
+      if (a.image.kind !== "url" || !/^https:/.test(a.image.url)) { delete a.candidates; continue; }
+      if (base && a.image.url.startsWith(base)) { delete a.candidates; continue; } // our own output; reachable once deployed
+      const candidates = a.candidates ?? [a.image.url];
+      let found: string | null = null;
+      for (const c of candidates) if (await urlExists(c)) { found = c; break; }
+      delete a.candidates;
+      if (!found) { pkg.warnings.push(`${key}: no reachable image (tried ${candidates.length}). Provide artwork or pick from the Owlbear library.`); continue; }
+      if (found !== candidates[0]) {
+        const isToken = /\/tokens\//.test(found);
+        const isBase = candidates.indexOf(found) >= 2;
+        a.credit = `${a.credit} (${isBase ? "base creature's " : ""}${isToken ? "token" : "full artwork"})`;
+        pkg.warnings.push(`${key}: no own 5etools token; using the ${isBase ? "base creature's " : ""}${isToken ? "token" : "full book artwork (not circular)"} instead.`);
       }
+      a.image.url = found;
     }
-  }
+  } else for (const a of Object.values(pkg.assets)) delete a.candidates;
 
   const v = validatePackage(pkg);
   if (!v.ok) throw new Error(`built package is invalid:\n${v.errors.join("\n")}`);

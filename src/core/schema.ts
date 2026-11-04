@@ -23,6 +23,8 @@ export interface AssetInfo {
   /** Human-readable origin: "5etools-img XMM token", "user upload", "generated"... */
   credit?: string;
   provenance?: Provenance | "generated" | "placeholder";
+  /** Builder-only: alternative URLs tried in order when the first isn't reachable. */
+  candidates?: string[];
 }
 
 export interface ListEntry {
@@ -59,6 +61,8 @@ export interface StatblockInitiative {
   disadvantage: boolean;
   /** How the modifier/mode was derived, for the preview. */
   reasons: string[];
+  /** Situational initiative effects found in the stat block but NOT applied (e.g. "if motionless at the start of combat"). */
+  conditional?: string[];
 }
 
 export interface Statblock {

@@ -1,27 +1,19 @@
 import { FORGE_DIE_SIZES, SIZE_NAMES } from "./constants";
 import { fmtMod } from "./dice";
+import { resolveVariables } from "./fivetools-copy";
+import { proficiencyBonusForCr, type CatalogEntry } from "./fivetools-shared";
 import type { ListEntry, Statblock, StatblockInitiative } from "./schema";
+
+export { proficiencyBonusForCr };
 
 /**
  * Converts 5etools bestiary JSON (https://github.com/5etools-mirror-3/5etools-src, data/bestiary/*.json)
  * into a package Statblock with Forge default-system attribute values.
+ * Books are discovered from 5etools' own data/bestiary/index.json (see fivetools-shared.ts buildCatalog).
  */
 
 export const FIVETOOLS_DATA_BASE = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data";
 export const FIVETOOLS_IMG_BASE = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-img/main";
-
-/** Source code → bestiary file + human title, for the books we commonly use. Extend freely (data, not logic). */
-export const FIVETOOLS_SOURCES: Record<string, { file: string; title: string; rules: "2024" | "2014" }> = {
-  XMM: { file: "bestiary-xmm.json", title: "Monster Manual (2025)", rules: "2024" },
-  XPHB: { file: "bestiary-xphb.json", title: "Player's Handbook (2024)", rules: "2024" },
-  XDMG: { file: "bestiary-xdmg.json", title: "Dungeon Master's Guide (2024)", rules: "2024" },
-  MM: { file: "bestiary-mm.json", title: "Monster Manual (2014)", rules: "2014" },
-  MPMM: { file: "bestiary-mpmm.json", title: "Mordenkainen Presents: Monsters of the Multiverse", rules: "2014" },
-  VGM: { file: "bestiary-vgm.json", title: "Volo's Guide to Monsters", rules: "2014" },
-  ERLW: { file: "bestiary-erlw.json", title: "Eberron: Rising from the Last War", rules: "2014" },
-  WBtW: { file: "bestiary-wbtw.json", title: "The Wild Beyond the Witchlight", rules: "2014" },
-  CoS: { file: "bestiary-cos.json", title: "Curse of Strahd", rules: "2014" },
-};
 
 export function fivetoolsTokenUrl(source: string, name: string): string {
   return `${FIVETOOLS_IMG_BASE}/bestiary/tokens/${encodeURIComponent(source)}/${encodeURIComponent(name)}.webp`;
@@ -93,8 +85,10 @@ function renderTag(tag: string, body: string): string {
   }
 }
 
+const MINOR_WORDS = new Set(["a", "an", "and", "as", "at", "by", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with"]);
 function titleCase(s: string): string {
-  return s.replace(/\b([a-z])/g, (c) => c.toUpperCase());
+  return s.replace(/[A-Za-z][\w']*/g, (w, offset: number) =>
+    offset > 0 && MINOR_WORDS.has(w.toLowerCase()) ? w.toLowerCase() : w[0]!.toUpperCase() + w.slice(1));
 }
 
 export function renderTags(text: string): string {
@@ -161,10 +155,6 @@ function crNumber(cr: unknown): { text: string; value: number } {
   return { text, value };
 }
 
-export function proficiencyBonusForCr(cr: number): number {
-  if (!Number.isFinite(cr) || cr < 5) return 2;
-  return Math.min(9, Math.floor((cr - 1) / 4) + 2);
-}
 
 const abilityMod = (score: number) => Math.floor((score - 10) / 2);
 
@@ -238,38 +228,64 @@ export function deriveInitiative(m: any, dexScore: number, pb: number): Statbloc
   } else {
     reasons.push(`Dex ${fmtMod(modifier)} (no separate initiative listed)`);
   }
-  // Traits that grant advantage/disadvantage on initiative.
-  for (const t of [...(m.trait ?? []), ...(m.action ?? [])]) {
-    const text = renderEntries(t.entries);
-    if (/advantage on initiative/i.test(text) && !/disadvantage on initiative/i.test(text)) {
-      advantage = true;
-      reasons.push(`advantage from "${renderTags(String(t.name))}"`);
-    }
-    if (/disadvantage on initiative/i.test(text)) {
-      disadvantage = true;
-      reasons.push(`disadvantage from "${renderTags(String(t.name))}"`);
+
+  // Trait/feature text (feats like Alert, class features, "False Appearance" etc.).
+  // Unconditional effects are applied; conditional ones ("If ... at the start of combat") are listed for the
+  // encounter author to switch on when the situation applies (encounter spec `initiative.advantage`).
+  const conditional: string[] = [];
+  const COND = /\b(if|while|when|whenever|unless|as long as|until)\b/i;
+  for (const t of [...(m.trait ?? []), ...(m.action ?? []), ...(m.bonus ?? []), ...(m.reaction ?? [])]) {
+    const tname = renderTags(String(t.name ?? ""));
+    const text = renderEntries(t.entries).replace(/\[[^\]]*\]/g, "").replace(/[ \t]+/g, " ");
+    for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+      const adv = /(?<!dis)advantage on (?:its |their |his |her )?initiative/i.exec(sentence);
+      const dis = /disadvantage on (?:its |their |his |her )?initiative/i.exec(sentence);
+      const flat = /\+(\d+) bonus to (?:its |their )?initiative/i.exec(sentence) ?? /add(?:s)? (\d+) to (?:its |their )?initiative/i.exec(sentence);
+      const dice = /add(?:s)? (\d+d\d+) to (?:its |their )?initiative/i.exec(sentence);
+      const pbAdd = /add(?:s)? (?:its |their )?proficiency bonus to (?:its |their )?initiative/i.exec(sentence);
+      const hit = adv ?? dis ?? flat ?? dice ?? pbAdd;
+      if (!hit) continue;
+      const isCond = COND.test(sentence.slice(0, hit.index));
+      const label = `"${tname}": ${sentence.trim()}`;
+      if (isCond || dice) { conditional.push(label); continue; }
+      if (adv) { advantage = true; reasons.push(`advantage from "${tname}"`); }
+      if (dis) { disadvantage = true; reasons.push(`disadvantage from "${tname}"`); }
+      if (flat && typeof init !== "number") { modifier += Number(flat[1]); reasons.push(`+${flat[1]} from "${tname}"`); }
+      if (pbAdd && !(init && typeof init === "object" && init.proficiency)) { modifier += pb; reasons.push(`+PB(${pb}) from "${tname}"`); }
     }
   }
-  return { modifier, advantage, disadvantage, reasons };
+  return { modifier, advantage, disadvantage, reasons, ...(conditional.length ? { conditional } : {}) };
 }
 
-// ---------------------------------------------------------------- main conversion
+// ---------------------------------------------------------------- lookup
 
+/** Exact (case-insensitive) name match within one bestiary file's data; returns the RAW entry (may be a `_copy`). */
 export function findMonster(data: { monster?: any[] }, name: string, source: string): any {
-  const list = data.monster ?? [];
-  const m = list.find((x) => x.name?.toLowerCase() === name.toLowerCase() && x.source === source);
+  const list = data?.monster ?? [];
+  const m = list.find((x) => x.name?.toLowerCase() === name.toLowerCase() && x.source?.toLowerCase() === source.toLowerCase());
   if (!m) {
     const near = list.filter((x) => x.name?.toLowerCase().includes(name.toLowerCase())).slice(0, 5).map((x) => `${x.name} (${x.source})`);
     throw new Error(`Monster "${name}" not found in ${source}.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""}`);
   }
-  if (m._copy) throw new Error(`"${name}" (${source}) is a 5etools _copy entry of ${m._copy.name} (${m._copy.source}); copy resolution is not implemented yet — provide a stat block instead.`);
   return m;
 }
 
-export function convertMonster(m: any): Statblock {
+export interface ConvertOptions {
+  catalogEntry?: CatalogEntry;
+  /** From resolveCopy: how this creature was derived (copy chain/templates) and any notes. */
+  copyChain?: string[];
+  copyNotes?: string[];
+  /** Extra provenance notes (e.g. how the source was chosen). */
+  notes?: string[];
+}
+
+export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock {
+  if (input._copy) throw new Error(`"${input.name}" (${input.source}) is an unresolved _copy entry; run resolveCopy first.`);
+  const m = resolveVariables(input, input); // leftover <$name$>-style placeholders
   const flags: string[] = [];
-  const src = FIVETOOLS_SOURCES[m.source];
-  const sizeCode: string = Array.isArray(m.size) ? m.size[0] : "M";
+  const src = opts.catalogEntry;
+  // "Medium or Small" humanoids: default to Medium when it's an option.
+  const sizeCode: string = Array.isArray(m.size) ? (m.size.includes("M") ? "M" : m.size[0]) : "M";
   if (Array.isArray(m.size) && m.size.length > 1) flags.push(`Multiple sizes listed (${m.size.join("/")}); using ${sizeCode}.`);
 
   const scores = { str: m.str, dex: m.dex, con: m.con, int: m.int, wis: m.wis, cha: m.cha } as Record<string, number>;
@@ -290,7 +306,9 @@ export function convertMonster(m: any): Statblock {
   const saves: Record<string, number> = {};
   for (const k of Object.keys(scores)) {
     const listed = m.save?.[k];
-    saves[k] = listed != null ? Number(String(listed).replace("+", "")) : abilityMod(scores[k]!);
+    const num = listed != null ? /^\s*([+-]?\d+)\s*$/.exec(String(listed)) : null;
+    saves[k] = num ? Number(num[1]) : abilityMod(scores[k]!);
+    if (listed != null && !num) flags.push(`${k.toUpperCase()} save listed as "${renderTags(String(listed))}"; Forge shows the plain ability modifier.`);
   }
 
   const skills = m.skill
@@ -345,6 +363,18 @@ export function convertMonster(m: any): Statblock {
   if (sp.fly && typeof sp.fly === "object" && sp.fly.condition) flags.push(`Fly speed note: ${renderTags(sp.fly.condition)}.`);
   if (m.speed?.alternate || m.speed?.choose) flags.push("Alternate speeds not represented.");
   if (Array.isArray(m.ac) && typeof acRaw === "object" && acRaw.from) flags.push(`AC source: ${acRaw.from.map(renderTags).join(", ")}.`);
+  for (const c of initiative.conditional ?? []) flags.push(`Conditional initiative effect NOT applied automatically — ${c}`);
+  if (Array.isArray(m.reprintedAs) && m.reprintedAs.length) {
+    const [n, s] = String(m.reprintedAs[0]).split("|");
+    flags.push(`A newer version exists: ${n} (${s}). Using ${m.source} because it was requested.`);
+  }
+  if (src?.rules === "2014") flags.push(`2014-rules stat block (${src.title}).`);
+  for (const n of opts.copyNotes ?? []) flags.push(`Copy resolution: ${n}`);
+
+  const notes = ["Transcribed from 5etools data (fallback source); verify against your book if anything looks off."];
+  if (opts.copyChain?.length) notes.push(`5etools derives this creature from: ${opts.copyChain.join(" → ")}.`);
+  if (src) notes.push(`Rules edition ${src.rules} inferred from publication date ${src.published ?? "unknown"}.`);
+  notes.push(...(opts.notes ?? []));
 
   return {
     name: m.name,
@@ -355,7 +385,7 @@ export function convertMonster(m: any): Statblock {
       bookTitle: src?.title,
       page: m.page,
       url: `https://5e.tools/bestiary.html#${encodeURIComponent(m.name.toLowerCase())}_${m.source.toLowerCase()}`,
-      notes: ["Transcribed from 5etools data (fallback source); verify against your book if anything looks off."],
+      notes,
     },
     hp: { average: Number.isFinite(hpAvg) ? hpAvg : 1, formula: m.hp?.formula },
     initiative,

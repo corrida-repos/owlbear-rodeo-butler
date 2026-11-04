@@ -16,7 +16,7 @@ function wolvesPackage(): EncounterPackage {
     ...(source as any),
     map: { ...(source as any).map, image: { kind: "url", url: "https://example.org/enc/assets/forest-clearing.png" }, width: 1400, height: 980 },
   } as EncounterSource;
-  return buildPackage(src, { fivetoolsMonster: (n, s) => findMonster(data, n, s), rng: seededRng(2026), now: () => new Date("2026-11-04T12:00:00Z") });
+  return buildPackage(src, { fivetools: (n, s) => ({ monster: findMonster(data, n, s!) }), rng: seededRng(2026), now: () => new Date("2026-11-04T12:00:00Z") });
 }
 
 const resolvedAssets = (pkg: EncounterPackage): ImportOptions["resolvedAssets"] => ({

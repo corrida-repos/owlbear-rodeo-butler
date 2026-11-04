@@ -21,7 +21,7 @@ describe("5etools tag rendering", () => {
 
 describe("convertMonster", () => {
   it("Wolf (XMM p.373)", () => {
-    const sb = convertMonster(findMonster(data, "Wolf", "XMM"));
+    const sb = convertMonster(findMonster(data, "Wolf", "XMM"), { catalogEntry: { source: "XMM", file: "bestiary-xmm.json", title: "Monster Manual (2025)", published: "2025-02-18", rules: "2024" } });
     expect(sb.size).toBe("M");
     expect(sb.hp).toEqual({ average: 11, formula: "2d8 + 2" });
     expect(sb.source).toMatchObject({ provenance: "official", book: "XMM", page: 373, bookTitle: "Monster Manual (2025)" });

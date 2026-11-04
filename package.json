@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "encounter:build": "tsx scripts/build-encounter.ts",
-    "testmap": "tsx scripts/make-test-map.ts"
+    "testmap": "tsx scripts/make-test-map.ts",
+    "check:5etools": "tsx scripts/check-5etools.ts"
   },
   "dependencies": {
     "@owlbear-rodeo/sdk": "3.1.0"
