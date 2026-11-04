@@ -13,7 +13,7 @@ import {
   type ResolvedImage,
 } from "../core/importer";
 import type { EncounterPackage } from "../core/schema";
-import { PARTY_SCHEMA, previewParty, syncParty, type PartyPackage, type PartyPreview, type PartySyncReport } from "../core/party";
+import { PARTY_SCHEMA, previewParty, restoreTokenImages, setPartyTokenImages, syncParty, type ImageSwapReport, type PartyPackage, type PartyPreview, type PartySyncReport } from "../core/party";
 import { obrGateway } from "./obrGateway";
 
 // ------------------------------------------------------------------ tiny DOM helper (textContent only: package text is never parsed as HTML)
@@ -392,6 +392,34 @@ async function pickAvatar(ddbId: number, name: string) {
   render();
 }
 
+/** D&D Beyond's image service can crop/resize: ask for a square 256 px JPEG (same public CDN URL). */
+const ddbSquare = (url: string) => `${url.split("?")[0]}?width=256&height=256&fit=crop&quality=95`;
+
+let imageSwap: ImageSwapReport | null = null;
+async function useDdbAvatars() {
+  if (!party) return;
+  setBusy(true);
+  try {
+    const images: Record<number, ResolvedImage> = {};
+    const failed: string[] = [];
+    await Promise.all(party.members.map(async (m) => {
+      if (!m.avatarUrl) { failed.push(`${m.name}: no avatar on D&D Beyond`); return; }
+      const url = ddbSquare(m.avatarUrl);
+      try { const size = await measure(url); images[m.ddbId] = { url, ...size, mime: "image/jpeg" }; }
+      catch (e) { failed.push(`${m.name}: ${e instanceof Error ? e.message : e}`); }
+    }));
+    imageSwap = await setPartyTokenImages(party, images, obrGateway);
+    imageSwap.skipped.push(...failed);
+    await OBR.notification.show(imageSwap.ok ? `Token images updated: ${imageSwap.changed.length}` : `Couldn't update images: ${imageSwap.error}`, imageSwap.ok ? "SUCCESS" : "ERROR");
+  } finally { setBusy(false); render(); }
+}
+async function undoAvatars() {
+  if (!imageSwap) return;
+  setBusy(true);
+  try { const n = await restoreTokenImages(imageSwap.previous, obrGateway); imageSwap = { ...imageSwap, changed: [], previous: {}, skipped: [...imageSwap.skipped, `restored ${n} previous image(s)`] }; }
+  finally { setBusy(false); render(); }
+}
+
 async function doPartySync() {
   if (!party) return;
   setBusy(true);
@@ -448,6 +476,15 @@ function renderParty(p: PartyPackage, pv: PartyPreview): Child[] {
     h("div", { className: "panel" }, h("h2", {}, "Characters → tokens"),
       h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Character"), h("th", {}, "HP"), h("th", {}, "AC"), h("th", {}, "Init"), h("th", {}, "Token"))), h("tbody", {}, ...rows)),
       h("div", { className: "small muted", style: "margin-top:6px" }, "Matches tokens on the Character layer by name (full or first name). Only Forge stat data is written: position, image, owner and initiative are untouched.")),
+    h("div", { className: "panel" }, h("h2", {}, "Token images"),
+      h("div", { className: "small muted" }, "Replace the pictures of matched party tokens with each character's D&D Beyond avatar (position, size, stats unchanged)."),
+      h("div", { className: "row", style: "margin-top:6px" },
+        h("button", { className: "secondary", onclick: useDdbAvatars, disabled: busy || !pv.isGM || !pv.rows.some((r) => r.item) }, "Use D&D Beyond avatars"),
+        imageSwap && Object.keys(imageSwap.previous).length ? h("button", { className: "secondary", onclick: undoAvatars, disabled: busy }, "Undo") : null),
+      imageSwap ? h("ul", { className: "plain small" },
+        ...imageSwap.changed.map((x) => h("li", { className: "ok" }, `image set: ${x}`)),
+        ...imageSwap.skipped.map((x) => h("li", { className: "warn" }, x)),
+        imageSwap.error ? h("li", { className: "bad" }, imageSwap.error) : null) : null),
     h("div", { className: "panel" }, h("h2", {}, "Notes from the conversion"),
       h("ul", { className: "plain small" }, ...p.members.flatMap((m) => m.flags.map((f) => h("li", {}, `${m.name}: ${f}`))))),
     h("div", { className: "panel" }, h("h2", {}, "Options"),

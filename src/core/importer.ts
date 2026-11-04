@@ -13,6 +13,8 @@ export interface SceneItemLite {
   name: string;
   /** Visible text label (Owlbear image items' text), if any. */
   label?: string;
+  /** Current picture (image items only). */
+  image?: { url: string; width: number; height: number; mime: string };
   metadata: Record<string, unknown>;
 }
 
@@ -36,6 +38,8 @@ export interface SceneGateway {
   getItemBounds(ids: string[]): Promise<Bounds>;
   addImages(specs: ImageItemSpec[]): Promise<void>;
   deleteItems(ids: string[]): Promise<void>;
+  /** Replaces image items' picture (and image grid, so the on-map size stays the same). */
+  updateImages(updates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: Vec2 } }[]): Promise<void>;
   /** Shallow-merges keys into each item's metadata (other keys untouched). */
   updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]): Promise<void>;
   getSceneMetadata(): Promise<Record<string, unknown>>;

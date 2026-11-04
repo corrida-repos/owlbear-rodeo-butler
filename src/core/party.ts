@@ -236,3 +236,52 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
     return report;
   }
 }
+
+// ------------------------------------------------------------------ token images
+
+export interface ImageSwapReport {
+  ok: boolean;
+  changed: string[];
+  skipped: string[];
+  /** For undo: token id → the picture it had before. */
+  previous: Record<string, { image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }>;
+  error?: string;
+}
+
+/**
+ * Sets the picture of each matched party token (e.g. to the D&D Beyond avatar). Keeps position, scale,
+ * label, stats and the character's footprint (image grid is recomputed from the new picture's size).
+ */
+export async function setPartyTokenImages(pkg: PartyPackage, images: Record<number, ResolvedImage>, gw: SceneGateway): Promise<ImageSwapReport> {
+  const report: ImageSwapReport = { ok: false, changed: [], skipped: [], previous: {} };
+  try {
+    if ((await gw.getRole()) !== "GM") throw new Error("Only the GM can change party tokens.");
+    const rows = matchParty(pkg.members, await gw.getItems());
+    const updates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }[] = [];
+    for (const r of rows) {
+      const img = images[r.member.ddbId];
+      if (!r.item) { report.skipped.push(`${r.member.name}: no matching token`); continue; }
+      if (!img) { report.skipped.push(`${r.member.name}: no image`); continue; }
+      if (!r.item.image) { report.skipped.push(`${r.member.name}: token isn't an image`); continue; }
+      if (r.item.image.url === img.url) { report.skipped.push(`${r.member.name}: already using that image`); continue; }
+      const sizeCells = SIZE_CELLS[r.member.size] ?? 1;
+      const prevGrid = tokenImageGrid(r.item.image.width, r.item.image.height, sizeCells);
+      report.previous[r.item.id] = { image: { ...r.item.image }, grid: prevGrid };
+      updates.push({ id: r.item.id, image: img, grid: tokenImageGrid(img.width, img.height, sizeCells) });
+      report.changed.push(`${r.member.name} → token "${r.item.label ?? r.item.name}"`);
+    }
+    if (updates.length) await gw.updateImages(updates);
+    report.ok = true;
+    return report;
+  } catch (e) {
+    report.error = e instanceof Error ? e.message : String(e);
+    return report;
+  }
+}
+
+export async function restoreTokenImages(previous: ImageSwapReport["previous"], gw: SceneGateway): Promise<number> {
+  const present = new Set((await gw.getItems()).map((i) => i.id));
+  const updates = Object.entries(previous).filter(([id]) => present.has(id)).map(([id, p]) => ({ id, image: p.image, grid: p.grid }));
+  if (updates.length) await gw.updateImages(updates);
+  return updates.length;
+}
