@@ -6,7 +6,10 @@ export const obrGateway: SceneGateway = {
   getRole: () => OBR.player.getRole(),
   async getItems() {
     const items = await OBR.scene.items.getItems();
-    return items.map((i: Item): SceneItemLite => ({ id: i.id, type: i.type, layer: i.layer, name: i.name, metadata: i.metadata }));
+    return items.map((i: Item): SceneItemLite => ({
+      id: i.id, type: i.type, layer: i.layer, name: i.name, metadata: i.metadata,
+      label: (i as any).text?.plainText || undefined,
+    }));
   },
   getItemBounds: (ids) => OBR.scene.items.getItemBounds(ids),
   async addImages(specs: ImageItemSpec[]) {
@@ -29,6 +32,12 @@ export const obrGateway: SceneGateway = {
     await OBR.scene.items.addItems(items);
   },
   deleteItems: (ids) => OBR.scene.items.deleteItems(ids),
+  async updateMetadata(updates) {
+    const byId = new Map(updates.map((u) => [u.id, u.metadata]));
+    await OBR.scene.items.updateItems([...byId.keys()], (drafts) => {
+      for (const d of drafts) Object.assign(d.metadata, byId.get(d.id));
+    });
+  },
   getSceneMetadata: () => OBR.scene.getMetadata(),
   setSceneMetadata: (u) => OBR.scene.setMetadata(u),
   getRoomMetadata: () => OBR.room.getMetadata(),

@@ -13,6 +13,7 @@ import {
   type ResolvedImage,
 } from "../core/importer";
 import type { EncounterPackage } from "../core/schema";
+import { PARTY_SCHEMA, previewParty, syncParty, type PartyPackage, type PartyPreview, type PartySyncReport } from "../core/party";
 import { obrGateway } from "./obrGateway";
 
 // ------------------------------------------------------------------ tiny DOM helper (textContent only: package text is never parsed as HTML)
@@ -57,6 +58,8 @@ async function loadFromUrl(url: string) {
 }
 
 async function setPackage(json: unknown, url?: string) {
+  if ((json as any)?.schema === PARTY_SCHEMA) return setParty(json as PartyPackage);
+  party = null;
   pkg = json as EncounterPackage;
   pkgUrl = url;
   lastReport = null;
@@ -333,8 +336,137 @@ function renderReport(r: ImportReport) {
   );
 }
 
+// ------------------------------------------------------------------ party sync (D&D Beyond → existing party tokens)
+
+let party: PartyPackage | null = null;
+let partyPreview: PartyPreview | null = null;
+let partyReport: PartySyncReport | null = null;
+const partyOpts = { hp: "ddb" as "ddb" | "keep", createMissing: false, acceptCustomSystem: false };
+const avatars: Record<number, { status: "ok" | "error" | "pending"; img?: ResolvedImage; message?: string }> = {};
+
+async function setParty(p: PartyPackage) {
+  pkg = null; preview = null; lastReport = null;
+  party = p;
+  partyReport = null;
+  partyPreview = await previewParty(p, obrGateway);
+  render();
+}
+
+/** Avatars must be CORS-enabled for Owlbear to draw them; D&D Beyond's usually aren't, so fall back to the Owlbear library. */
+async function checkAvatar(m: PartyPackage["members"][number]) {
+  avatars[m.ddbId] = { status: "pending" };
+  render();
+  try {
+    if (!m.avatarUrl) throw new Error("no avatar on D&D Beyond");
+    const res = await fetch(m.avatarUrl, { mode: "cors" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const size = await measure(m.avatarUrl);
+    avatars[m.ddbId] = { status: "ok", img: { url: m.avatarUrl, ...size, mime: res.headers.get("content-type") ?? "image/jpeg" } };
+  } catch (e) {
+    avatars[m.ddbId] = { status: "error", message: `avatar unusable (${e instanceof Error ? e.message : e}; D&D Beyond doesn't allow cross-site use). Pick an image from your Owlbear library.` };
+  }
+  render();
+}
+
+/** Generic token hosted with this extension (public + CORS). Swap later in Owlbear: right-click → Replace Image. */
+async function usePlaceholder(ddbId: number) {
+  const url = new URL("tokens/party-placeholder.png", location.href).toString();
+  try {
+    const size = await measure(url);
+    avatars[ddbId] = { status: "ok", img: { url, ...size, mime: "image/png" } };
+  } catch (e) {
+    avatars[ddbId] = { status: "error", message: `placeholder failed to load (${e instanceof Error ? e.message : e})` };
+  }
+  render();
+}
+
+async function pickAvatar(ddbId: number, name: string) {
+  const picked = await OBR.assets.downloadImages(false, name, "CHARACTER");
+  const img = picked[0]?.image;
+  if (img) avatars[ddbId] = { status: "ok", img: { url: img.url, width: img.width, height: img.height, mime: img.mime } };
+  render();
+}
+
+async function doPartySync() {
+  if (!party) return;
+  setBusy(true);
+  try {
+    const imgs: Record<number, ResolvedImage> = {};
+    for (const [k, v] of Object.entries(avatars)) if (v.img) imgs[Number(k)] = v.img;
+    partyReport = await syncParty(party, { ...partyOpts, avatars: imgs }, obrGateway);
+    await OBR.notification.show(partyReport.ok ? `Party synced: ${partyReport.updated.length} updated, ${partyReport.created.length} created.` : "Party sync failed — see the report.", partyReport.ok ? "SUCCESS" : "ERROR");
+    partyPreview = await previewParty(party, obrGateway);
+  } finally {
+    setBusy(false);
+    render();
+  }
+}
+
+function renderParty(p: PartyPackage, pv: PartyPreview): Child[] {
+  const checks: HTMLElement[] = [];
+  if (pv.errors.length) checks.push(check("bad", `Party file invalid: ${pv.errors.join("; ")}`));
+  checks.push(check(pv.isGM ? "ok" : "bad", pv.isGM ? "You are the GM" : "You are not the GM — sync disabled"));
+  checks.push(pv.system.kind === "default" ? check("ok", `Forge system: ${pv.system.name}`) : check("warn", `Custom Forge system "${pv.system.name}" — attribute IDs may differ`));
+  for (const e of pv.forgeErrors) checks.push(check("bad", e));
+  const unmatched = pv.rows.filter((r) => !r.item);
+
+  const rows = pv.rows.map((r) => {
+    const m = r.member;
+    const av = avatars[m.ddbId];
+    const tokenCell = r.item
+      ? h("span", { className: "ok" }, `✔ "${r.item.label ?? r.item.name}"`, h("div", { className: "muted small" }, `by ${r.by}`))
+      : h("span", { className: "warn" }, r.ambiguous.length ? `ambiguous: ${r.ambiguous.join(", ")}` : "no token",
+        partyOpts.createMissing ? h("div", { className: "small" },
+          av?.status === "ok" ? h("span", { className: "ok" }, `image ${av.img!.width}×${av.img!.height}`)
+            : av?.status === "error" ? h("span", {}, h("span", { className: "bad" }, av.message ?? ""), " ", h("button", { className: "secondary", onclick: () => pickAvatar(m.ddbId, m.name) }, "Pick…"))
+              : av?.status === "pending" ? "checking avatar…" : h("span", {},
+                h("button", { className: "secondary", onclick: () => checkAvatar(m) }, "D&D Beyond avatar"), " ",
+                h("button", { className: "secondary", onclick: () => usePlaceholder(m.ddbId) }, "Placeholder"), " ",
+                h("button", { className: "secondary", onclick: () => pickAvatar(m.ddbId, m.name) }, "Library…"))) : null);
+    return h("tr", {},
+      h("td", {}, m.name, h("div", { className: "muted small" }, `${m.classes} · ${m.species}`)),
+      h("td", { className: "num" }, `${m.hp.current}/${m.hp.max}`),
+      h("td", { className: "num" }, String(m.ac)),
+      h("td", { className: "num" }, `${m.initiative.modifier >= 0 ? "+" : ""}${m.initiative.modifier}${m.initiative.advantage ? " adv" : ""}`),
+      h("td", {}, tokenCell));
+  });
+
+  const canSync = pv.isGM && !pv.errors.length && !pv.forgeErrors.length && (pv.system.kind === "default" || partyOpts.acceptCustomSystem) &&
+    pv.rows.some((r) => r.item || (partyOpts.createMissing && avatars[r.member.ddbId]?.status === "ok"));
+  return [
+    h("div", { className: "panel" },
+      h("h1", {}, `Party: ${p.campaign.name}`),
+      h("div", { className: "muted small" }, `D&D Beyond data from ${new Date(p.fetchedAt).toLocaleString()} · ${p.members.length} characters`)),
+    h("div", { className: "panel" }, h("h2", {}, "Checks"), h("ul", { className: "checks" }, ...checks)),
+    h("div", { className: "panel" }, h("h2", {}, "Characters → tokens"),
+      h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Character"), h("th", {}, "HP"), h("th", {}, "AC"), h("th", {}, "Init"), h("th", {}, "Token"))), h("tbody", {}, ...rows)),
+      h("div", { className: "small muted", style: "margin-top:6px" }, "Matches tokens on the Character layer by name (full or first name). Only Forge stat data is written: position, image, owner and initiative are untouched.")),
+    h("div", { className: "panel" }, h("h2", {}, "Notes from the conversion"),
+      h("ul", { className: "plain small" }, ...p.members.flatMap((m) => m.flags.map((f) => h("li", {}, `${m.name}: ${f}`))))),
+    h("div", { className: "panel" }, h("h2", {}, "Options"),
+      h("label", {}, h("input", { type: "radio", name: "hp", checked: partyOpts.hp === "ddb", onchange: () => { partyOpts.hp = "ddb"; } }), "Set current HP from D&D Beyond"),
+      h("label", {}, h("input", { type: "radio", name: "hp", checked: partyOpts.hp === "keep", onchange: () => { partyOpts.hp = "keep"; } }), "Keep current HP already on the token (mid-session)"),
+      unmatched.length ? h("label", {}, h("input", { type: "checkbox", checked: partyOpts.createMissing, onchange: (e: Event) => { partyOpts.createMissing = (e.target as HTMLInputElement).checked; render(); } }),
+        `Create tokens for the ${unmatched.length} character(s) without one`) : null,
+      pv.system.kind === "custom" ? h("label", {}, h("input", { type: "checkbox", checked: partyOpts.acceptCustomSystem, onchange: (e: Event) => { partyOpts.acceptCustomSystem = (e.target as HTMLInputElement).checked; render(); } }),
+        "I confirm my custom Forge system uses the default attribute IDs") : null),
+    h("div", { className: "panel" },
+      h("button", { onclick: doPartySync, disabled: busy || !canSync }, `Sync ${pv.rows.filter((r) => r.item).length} matched token(s)`),
+      !canSync ? h("div", { className: "small muted", style: "margin-top:6px" }, "Nothing to sync yet: add the party's tokens to the scene (named like the characters), or enable token creation.") : null),
+  ];
+}
+
+function renderPartyReport(r: PartySyncReport) {
+  return h("div", { className: "panel" },
+    h("h2", {}, r.ok ? "Party sync complete" : "Party sync failed"),
+    h("ul", { className: "checks steps" }, ...r.steps.map((s) => check(s.ok ? "ok" : "bad", `${s.step}: ${s.detail}`))),
+    h("ul", { className: "plain small" }, ...r.updated.map((x) => h("li", { className: "ok" }, `updated ${x}`)), ...r.created.map((x) => h("li", { className: "ok" }, `created ${x}`)), ...r.skipped.map((x) => h("li", { className: "warn" }, `skipped ${x}`))));
+}
+
 function render() {
   const nodes: Child[] = [renderLoader()];
+  if (partyReport) nodes.push(renderPartyReport(partyReport));
+  if (party && partyPreview) nodes.push(...renderParty(party, partyPreview));
   if (errorText) nodes.push(h("div", { className: "panel bad" }, errorText, " ", h("button", { className: "secondary", onclick: () => { errorText = ""; render(); } }, "Dismiss")));
   if (lastReport) nodes.push(renderReport(lastReport));
   if (pkg && preview) nodes.push(...renderPreview(preview, pkg));

@@ -11,6 +11,8 @@ export interface SceneItemLite {
   type: string;
   layer: string;
   name: string;
+  /** Visible text label (Owlbear image items' text), if any. */
+  label?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -34,6 +36,8 @@ export interface SceneGateway {
   getItemBounds(ids: string[]): Promise<Bounds>;
   addImages(specs: ImageItemSpec[]): Promise<void>;
   deleteItems(ids: string[]): Promise<void>;
+  /** Shallow-merges keys into each item's metadata (other keys untouched). */
+  updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]): Promise<void>;
   getSceneMetadata(): Promise<Record<string, unknown>>;
   setSceneMetadata(update: Record<string, unknown>): Promise<void>;
   getRoomMetadata(): Promise<Record<string, unknown>>;

@@ -33,13 +33,19 @@ export class FakeScene implements SceneGateway {
       const metadata = JSON.parse(JSON.stringify(s.metadata));
       const k = this.grid.dpi / s.grid.dpi;
       this.items.push({
-        id: s.id, type: "IMAGE", layer: s.layer, name: s.name, metadata, spec: s,
+        id: s.id, type: "IMAGE", layer: s.layer, name: s.name, label: s.label, metadata, spec: s,
         position: { x: s.position.x - s.grid.offset.x * k, y: s.position.y - s.grid.offset.y * k },
         size: { w: s.image.width * k, h: s.image.height * k },
       });
     }
   }
   async deleteItems(ids: string[]) { this.items = this.items.filter((i) => !ids.includes(i.id)); }
+  async updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]) {
+    for (const u of updates) {
+      const it = this.items.find((i) => i.id === u.id);
+      if (it) it.metadata = { ...it.metadata, ...JSON.parse(JSON.stringify(u.metadata)) };
+    }
+  }
   async getSceneMetadata() { return structuredClone(this.sceneMeta); }
   async setSceneMetadata(u: Record<string, unknown>) { this.sceneMeta = { ...this.sceneMeta, ...u }; }
   async getRoomMetadata() { return structuredClone(this.roomMeta); }

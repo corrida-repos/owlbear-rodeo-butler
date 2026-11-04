@@ -1,0 +1,87 @@
+{
+  "id": 1001,
+  "username": "TestPlayer",
+  "name": "Brann Testbeard",
+  "alignmentId": 1,
+  "baseHitPoints": 22,
+  "bonusHitPoints": null,
+  "overrideHitPoints": null,
+  "removedHitPoints": 5,
+  "temporaryHitPoints": 3,
+  "stats": [{"id": 1, "value": 16}, {"id": 2, "value": 12}, {"id": 3, "value": 14}, {"id": 4, "value": 10}, {"id": 5, "value": 12}, {"id": 6, "value": 8}],
+  "bonusStats": [{"id": 1, "value": null}, {"id": 2, "value": null}, {"id": 3, "value": null}, {"id": 4, "value": null}, {"id": 5, "value": null}, {"id": 6, "value": null}],
+  "overrideStats": [{"id": 1, "value": null}, {"id": 2, "value": null}, {"id": 3, "value": null}, {"id": 4, "value": null}, {"id": 5, "value": null}, {"id": 6, "value": null}],
+  "race": {
+    "fullName": "Hill Dwarf", "baseName": "Dwarf", "sizeId": 4,
+    "weightSpeeds": {"normal": {"walk": 25, "fly": 0, "burrow": 0, "swim": 0, "climb": 0}, "override": null},
+    "racialTraits": [
+      {"definition": {"id": 501, "name": "Darkvision", "snippet": "You can see in dim light within 60 feet of you as if it were bright light."}},
+      {"definition": {"id": 502, "name": "Dwarven Resilience", "snippet": "You have resistance to poison damage."}},
+      {"definition": {"id": 503, "name": "Speed", "snippet": "25 ft."}}
+    ]
+  },
+  "classes": [{
+    "id": 9001, "level": 3,
+    "definition": {"name": "Fighter", "spellCastingAbilityId": null, "spellRules": null},
+    "subclassDefinition": {"name": "Champion", "classFeatures": [{"name": "Improved Critical", "requiredLevel": 3, "snippet": "Your weapon attacks score a critical hit on a roll of 19 or 20."}]},
+    "classFeatures": [
+      {"definition": {"id": 601, "name": "Fighting Style", "requiredLevel": 1, "snippet": "Defense: +1 AC while wearing armor."}},
+      {"definition": {"id": 602, "name": "Second Wind", "requiredLevel": 1, "snippet": "Regain {{(1d10+classlevel)}} HP once per rest; you have {{proficiency}} uses."}},
+      {"definition": {"id": 603, "name": "Extra Attack", "requiredLevel": 5, "snippet": "Attack twice."}}
+    ]
+  }],
+  "feats": [
+    {"componentId": 701, "definition": {"id": 701, "name": "Tough", "snippet": "Your HP maximum increases by 2 per level."}},
+    {"componentId": 702, "definition": {"id": 702, "name": "Alert", "snippet": "+5 to initiative."}}
+  ],
+  "modifiers": {
+    "race": [
+      {"type": "bonus", "subType": "constitution-score", "value": 2, "componentId": 503},
+      {"type": "set-base", "subType": "darkvision", "value": 60, "componentId": 501},
+      {"type": "resistance", "subType": "poison", "friendlySubtypeName": "Poison", "componentId": 502},
+      {"type": "language", "subType": "common", "friendlySubtypeName": "Common"},
+      {"type": "language", "subType": "dwarvish", "friendlySubtypeName": "Dwarvish"}
+    ],
+    "class": [
+      {"type": "proficiency", "subType": "strength-saving-throws"},
+      {"type": "proficiency", "subType": "constitution-saving-throws"},
+      {"type": "proficiency", "subType": "athletics"},
+      {"type": "proficiency", "subType": "simple-weapons"},
+      {"type": "proficiency", "subType": "martial-weapons"},
+      {"type": "proficiency", "subType": "heavy-armor"},
+      {"type": "proficiency", "subType": "shields"},
+      {"type": "bonus", "subType": "armored-armor-class", "value": 1, "componentId": 601}
+    ],
+    "background": [],
+    "feat": [
+      {"type": "bonus", "subType": "hit-points-per-level", "value": 2, "componentId": 701},
+      {"type": "bonus", "subType": "initiative", "value": 5, "componentId": 702}
+    ],
+    "item": [
+      {"type": "bonus", "subType": "armor-class", "value": 1, "requiresAttunement": true, "componentId": 801},
+      {"type": "bonus", "subType": "armor-class", "value": 1, "requiresAttunement": false, "componentId": 802},
+      {"type": "bonus", "subType": "hit-points", "fixedValue": 2, "dice": {"diceString": "2d4 + 2"}, "componentId": 803}
+    ],
+    "condition": [{"type": "bonus", "subType": "armor-class", "value": 10}]
+  },
+  "inventory": [
+    {"equipped": true, "quantity": 1, "definition": {"id": 810, "name": "Chain Mail", "filterType": "Armor", "armorTypeId": 3, "armorClass": 16, "stealthCheck": 2}},
+    {"equipped": true, "quantity": 1, "definition": {"id": 811, "name": "Shield", "filterType": "Armor", "armorTypeId": 4, "armorClass": 2}},
+    {"equipped": true, "quantity": 1, "definition": {"id": 812, "name": "Longsword", "filterType": "Weapon", "categoryId": 2, "attackType": 1, "type": "Longsword",
+      "damage": {"diceString": "1d8"}, "damageType": "Slashing", "properties": [{"name": "Versatile", "notes": "1d10"}, {"name": "Sap"}]}},
+    {"equipped": true, "isAttuned": true, "quantity": 1, "definition": {"id": 801, "name": "Ring of Protection", "filterType": "Ring"}},
+    {"equipped": false, "quantity": 1, "definition": {"id": 802, "name": "Cloak of Protection (stowed)", "filterType": "Wondrous item"}},
+    {"equipped": false, "quantity": 2, "definition": {"id": 803, "name": "Potion of Healing", "filterType": "Potion"}}
+  ],
+  "actions": {
+    "class": [{"name": "Second Wind", "snippet": "Regain HP.", "dice": {"diceString": "1d10"}, "activation": {"activationType": 3}, "limitedUse": {"maxUses": 2, "resetType": 2, "numberUsed": 1, "useProficiencyBonus": false}}],
+    "race": null, "feat": [], "item": null
+  },
+  "classSpells": [],
+  "spells": {},
+  "spellSlots": [],
+  "characterValues": [],
+  "conditions": [],
+  "customSenses": [],
+  "decorations": {"avatarUrl": "https://www.dndbeyond.com/avatars/1/1/test.jpeg"}
+}

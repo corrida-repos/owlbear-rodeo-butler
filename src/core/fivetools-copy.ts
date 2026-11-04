@@ -84,7 +84,7 @@ export function shortName(m: any, titleCase = false): string {
 const SIZE_MULT: Record<string, number> = { L: 2, H: 3, G: 4 };
 
 /** Safe arithmetic evaluator for + - * / ( ) and numbers (no eval). */
-function evalMath(expr: string): number {
+export function evalMath(expr: string): number {
   const s = expr.replace(/\s+/g, "");
   let i = 0;
   const num = (): number => {
