@@ -101,10 +101,16 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 - `tsc` is clean, and `vite build` produces `dist/` with the manifest, popover, and the wolves package and map.
 - The dev server serves the manifest, package and map with CORS for `https://www.owlbear.rodeo`. The 5etools token URL returns 200 with CORS `*`.
 
-**Not yet verified live in Owlbear.** These need your test below:
-- that Forge picks up the tokens (tracker rows, unit cards, HP bars, dice chips) with exactly this metadata
-- `buildImage` token labels and the map grid alignment on a real scene
-- the Owlbear library picker path
+**Verified live in Owlbear (2026-11-04, from GitHub Pages, Forge 1.6.0 default system)**
+- The extension loads. Manifest paths must be absolute (`/owlbear-rodeo-butler/...`), because Owlbear joins them straight onto the origin.
+- All preview checks pass. The import creates the map plus 5 labelled, 1-cell wolf tokens at the planned cells, and the map grid lines up with the scene grid.
+- The Forge tracker lists Wolf 1–5 with exactly the package's initiative totals, HP 11/11, temp HP 0 and AC 12. The context menu shows Forge's unit actions.
+- The Forge unit card shows size, type, speeds, abilities, saves, senses, skills and CR. *Bite* has working `1d20+4` and `1d6+2` dice chips.
+- Changing one wolf's HP changes only that wolf.
+- Re-loading the package detects the existing import and blocks Import until you choose an option.
+
+**Not yet verified live**
+- the Owlbear library picker path, Replace/Undo in a real scene, and a second player viewing the scene
 
 ## Milestone live test: one map, five wolves
 
