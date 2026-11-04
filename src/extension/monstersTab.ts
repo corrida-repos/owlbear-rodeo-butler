@@ -26,7 +26,7 @@ function loadIndex() {
     index = (j.rows as any[]).map(([name, source, cr, type, size, token]) => ({
       name, source, cr, type, size, token: !!token, book: j.books[source]?.[0] ?? source, rules: j.books[source]?.[1] ?? "",
     }));
-    rerender();
+    updateResults(); // only the results list: a full re-render would steal focus from the search box
   })().catch((e) => { indexLoading = null; showError(e); });
   return indexLoading;
 }
@@ -277,7 +277,7 @@ function renderLastAdd(r: QuickAddReport): Child {
       h("h2", {}, r.ok ? `Added ${r.creatures.length} creature(s)` : "Couldn't add"),
       r.ok && r.createdItemIds.length ? h("button", { className: "secondary", onclick: action(undoAdd) }, "Undo") : null),
     r.error ? h("div", { className: "bad small" }, r.error) : null,
-    h("ul", { className: "plain small" }, ...r.creatures.map((c) => h("li", {}, `${c.name}: HP ${c.hp.max}${c.hp.dice ? ` (${c.hp.dice.join("+")}…)` : ""} · init ${describeInitiative(c.initiative)}`)),
+    h("ul", { className: "plain small" }, ...r.creatures.map((c) => h("li", {}, `${c.name}: HP ${c.hp.max}${c.hp.dice ? ` (${c.hp.formula}: ${c.hp.dice.join("+")})` : " (average)"} · init ${describeInitiative(c.initiative)}`)),
       ...r.warnings.map((w) => h("li", { className: "warn" }, w))));
 }
 

@@ -52,10 +52,15 @@ async function loadParty(text: string) {
   loadPortraits(p);
 }
 
+let pasteHint = "";
 async function pasteFromClipboard() {
-  let text = "";
-  try { text = await navigator.clipboard.readText(); } catch { pasteOpen = true; return; } // permission refused → manual paste box
-  if (!text.trim()) { pasteOpen = true; return; }
+  // Chrome may show its "allow clipboard" prompt (address bar); don't hang on it — offer the paste box meanwhile.
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), 3000));
+  let text: string | null = null;
+  try { text = await Promise.race([navigator.clipboard.readText(), timeout]); }
+  catch { pasteHint = "Clipboard access was blocked. Paste here instead (Ctrl+V):"; pasteOpen = true; return; }
+  if (text === null) { pasteHint = "Waiting for clipboard permission (check the prompt by the address bar), or paste here (Ctrl+V):"; pasteOpen = true; return; }
+  if (!text.trim()) { pasteHint = "Your clipboard is empty — click the D&D Beyond bookmarklet first, or paste here:"; pasteOpen = true; return; }
   await loadParty(text);
 }
 
@@ -94,7 +99,8 @@ function renderSteps(): Child {
           if (f) await loadParty(await f.text());
         }) }))),
     pasteOpen ? h("div", { style: "margin-top:6px" },
-      h("textarea", { placeholder: "Clipboard access was refused — paste here (Ctrl+V)", oninput: (e: Event) => { pasteText = (e.target as HTMLTextAreaElement).value; } }, pasteText),
+      h("div", { className: "small warn" }, pasteHint),
+      h("textarea", { placeholder: "Paste the party here (Ctrl+V)", oninput: (e: Event) => { pasteText = (e.target as HTMLTextAreaElement).value; } }, pasteText),
       h("button", { onclick: action(() => loadParty(pasteText)) }, "Load")) : null);
 }
 

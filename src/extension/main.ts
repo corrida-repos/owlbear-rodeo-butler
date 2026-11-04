@@ -14,6 +14,7 @@ const app = document.getElementById("app")!;
 
 function render() {
   const scrollY = app.parentElement ? window.scrollY : 0;
+  const focused = document.activeElement as HTMLElement | null;
   const nodes: Child[] = [
     h("nav", { className: "tabs" }, ...TABS.map(([t, label]) =>
       h("button", { className: t === tab ? "on" : "", onclick: () => { tab = t; store.set("butler.tab", t); ui.error = ""; rerender(); } }, label))),
@@ -23,6 +24,7 @@ function render() {
   nodes.push(...(tab === "monsters" ? renderMonstersTab() : tab === "party" ? renderPartyTab() : renderPackageTab()));
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   window.scrollTo(0, scrollY);
+  if (focused && focused !== document.body && focused.isConnected && document.activeElement !== focused) focused.focus();
   if (tab === "monsters") afterRenderMonsters();
 }
 setRerender(render);
