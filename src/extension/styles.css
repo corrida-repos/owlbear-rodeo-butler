@@ -1,0 +1,39 @@
+:root {
+  --bg: #1e2232;
+  --panel: #262b3e;
+  --text: #e8e8f0;
+  --muted: #a3a7bd;
+  --accent: #9d99ff;
+  --ok: #5fd38d;
+  --warn: #f2c14e;
+  --bad: #ff6b6b;
+  --border: #3a405a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f4f4f8; --panel: #ffffff; --text: #1d1f2b; --muted: #5d6175; --border: #d6d8e3; --accent: #5a54d6; --ok: #1f8a4c; --warn: #9a6b00; --bad: #c62828; color-scheme: light; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+#app { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+h1 { font-size: 16px; margin: 0; }
+h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+input[type=text], textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; font: inherit; }
+textarea { min-height: 60px; font-family: ui-monospace, monospace; font-size: 11px; }
+button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 6px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.checks li { display: flex; gap: 6px; }
+.ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+td.num { font-variant-numeric: tabular-nums; }
+canvas { width: 100%; border-radius: 6px; border: 1px solid var(--border); background: #000; }
+ul.plain { margin: 0; padding-left: 18px; }
+label { display: flex; gap: 6px; align-items: flex-start; }
+.small { font-size: 11px; }
+.steps li { margin-bottom: 2px; }

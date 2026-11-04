@@ -1,0 +1,570 @@
+{
+ "monster": [
+  {
+   "name": "Aboleth",
+   "source": "XMM",
+   "page": 12,
+   "srd52": true,
+   "basicRules2024": true,
+   "referenceSources": [
+    "RHW"
+   ],
+   "size": [
+    "L"
+   ],
+   "type": "aberration",
+   "alignment": [
+    "L",
+    "E"
+   ],
+   "ac": [
+    17
+   ],
+   "hp": {
+    "average": 150,
+    "formula": "20d10 + 40"
+   },
+   "speed": {
+    "walk": 10,
+    "swim": 40
+   },
+   "initiative": {
+    "proficiency": 2
+   },
+   "str": 21,
+   "dex": 9,
+   "con": 15,
+   "int": 18,
+   "wis": 15,
+   "cha": 18,
+   "save": {
+    "dex": "+3",
+    "con": "+6",
+    "int": "+8",
+    "wis": "+6"
+   },
+   "skill": {
+    "history": "+12",
+    "perception": "+10"
+   },
+   "senses": [
+    "Darkvision 120 ft."
+   ],
+   "passive": 20,
+   "languages": [
+    "Deep Speech; telepathy 120 ft."
+   ],
+   "cr": {
+    "cr": "10",
+    "xpLair": 7200
+   },
+   "trait": [
+    {
+     "name": "Amphibious",
+     "entries": [
+      "The aboleth can breathe air and water."
+     ]
+    },
+    {
+     "name": "Eldritch Restoration",
+     "entries": [
+      "If destroyed, the aboleth gains a new body in {@dice 5d10} days, reviving with all its {@variantrule Hit Points|XPHB} in the Far Realm or another location chosen by the DM."
+     ]
+    },
+    {
+     "name": "Legendary Resistance (3/Day, or 4/Day in Lair)",
+     "entries": [
+      "If the aboleth fails a saving throw, it can choose to succeed instead."
+     ]
+    },
+    {
+     "name": "Mucus Cloud",
+     "entries": [
+      "While underwater, the aboleth is surrounded by mucus. {@actSave con} {@dc 14}, each creature in a 5-foot {@variantrule Emanation [Area of Effect]|XPHB|Emanation} originating from the aboleth at the end of the aboleth's turn. {@actSaveFail} The target is cursed. Until the curse ends, the target's skin becomes slimy, the target can breathe air and water, and it can't regain {@variantrule Hit Points|XPHB} unless it is underwater.",
+      "While the cursed creature is outside a body of water, the creature takes 6 ({@damage 1d12}) Acid damage at the end of every 10 minutes unless moisture is applied to its skin before those minutes have passed."
+     ]
+    },
+    {
+     "name": "Probing Telepathy",
+     "entries": [
+      "If a creature the aboleth can see communicates telepathically with the aboleth, the aboleth learns the creature's greatest desires."
+     ]
+    }
+   ],
+   "action": [
+    {
+     "name": "Multiattack",
+     "entries": [
+      "The aboleth makes two Tentacle attacks and uses either Consume Memories or Dominate Mind if available."
+     ]
+    },
+    {
+     "name": "Tentacle",
+     "entries": [
+      "{@atkr m} {@hit 9}, reach 15 ft. {@h}12 ({@damage 2d6 + 5}) Bludgeoning damage. If the target is a Large or smaller creature, it has the {@condition Grappled|XPHB} condition (escape {@dc 14}) from one of four tentacles."
+     ]
+    },
+    {
+     "name": "Consume Memories",
+     "entries": [
+      "{@actSave int} {@dc 16}, one creature within 30 feet that is {@condition Charmed|XPHB} or {@condition Grappled|XPHB} by the aboleth. {@actSaveFail} 10 ({@damage 3d6}) Psychic damage. {@actSaveSuccess} Half damage. {@actSaveSuccessOrFail} The aboleth gains the target's memories if the target is a Humanoid and is reduced to 0 {@variantrule Hit Points|XPHB} by this action."
+     ]
+    },
+    {
+     "name": "Dominate Mind (2/Day)",
+     "entries": [
+      "{@actSave wis} {@dc 16}, one creature the aboleth can see within 30 feet. {@actSaveFail} The target has the {@condition Charmed|XPHB} condition until the aboleth dies or is on a different plane of existence from the target. While {@condition Charmed|XPHB}, the target acts as an ally to the aboleth and is under its control while within 60 feet of it. In addition, the aboleth and the target can communicate telepathically with each other over any distance.",
+      "The target repeats the save whenever it takes damage as well as after every 24 hours it spends at least 1 mile away from the aboleth, ending the effect on itself on a success."
+     ]
+    }
+   ],
+   "legendaryActionsLair": 4,
+   "legendary": [
+    {
+     "name": "Lash",
+     "entries": [
+      "The aboleth makes one Tentacle attack."
+     ]
+    },
+    {
+     "name": "Psychic Drain",
+     "entries": [
+      "If the aboleth has at least one creature {@condition Charmed|XPHB} or {@condition Grappled|XPHB}, it uses Consume Memories and regains 5 ({@dice 1d10}) {@variantrule Hit Points|XPHB}."
+     ]
+    }
+   ],
+   "legendaryGroup": {
+    "name": "Aboleth",
+    "source": "XMM"
+   },
+   "environment": [
+    "underdark",
+    "underwater"
+   ],
+   "treasure": [
+    "relics"
+   ],
+   "soundClip": {
+    "type": "internal",
+    "path": "bestiary/aboleth.opus"
+   },
+   "traitTags": [
+    "Amphibious",
+    "Legendary Resistances"
+   ],
+   "senseTags": [
+    "SD"
+   ],
+   "actionTags": [
+    "Multiattack",
+    "Tentacles"
+   ],
+   "languageTags": [
+    "DS",
+    "TP"
+   ],
+   "damageTags": [
+    "A",
+    "B",
+    "Y"
+   ],
+   "miscTags": [
+    "CUR",
+    "MA",
+    "RCH"
+   ],
+   "conditionInflict": [
+    "charmed",
+    "grappled"
+   ],
+   "conditionInflictLegendary": [
+    "poisoned"
+   ],
+   "savingThrowForced": [
+    "constitution",
+    "intelligence",
+    "wisdom"
+   ],
+   "savingThrowForcedLegendary": [
+    "constitution"
+   ],
+   "hasToken": true,
+   "hasFluff": true,
+   "hasFluffImages": true
+  },
+  {
+   "name": "Goblin Warrior",
+   "group": [
+    "Goblinoids"
+   ],
+   "source": "XMM",
+   "page": 142,
+   "srd52": true,
+   "basicRules2024": true,
+   "referenceSources": [
+    "BQGT",
+    "DrDe",
+    "DrDe-BD",
+    "FRAiF",
+    "HotB",
+    "RHW"
+   ],
+   "size": [
+    "S"
+   ],
+   "type": {
+    "type": "fey",
+    "tags": [
+     "goblinoid"
+    ]
+   },
+   "alignment": [
+    "C",
+    "N"
+   ],
+   "ac": [
+    15
+   ],
+   "hp": {
+    "average": 10,
+    "formula": "3d6"
+   },
+   "speed": {
+    "walk": 30
+   },
+   "str": 8,
+   "dex": 15,
+   "con": 10,
+   "int": 10,
+   "wis": 8,
+   "cha": 8,
+   "skill": {
+    "stealth": "+6"
+   },
+   "senses": [
+    "Darkvision 60 ft."
+   ],
+   "passive": 9,
+   "languages": [
+    "Common",
+    "Goblin"
+   ],
+   "cr": "1/4",
+   "gear": [
+    "leather armor|xphb",
+    "scimitar|xphb",
+    "shield|xphb",
+    "shortbow|xphb"
+   ],
+   "action": [
+    {
+     "name": "Scimitar",
+     "entries": [
+      "{@atkr m} {@hit 4}, reach 5 ft. {@h}5 ({@damage 1d6 + 2}) Slashing damage, plus 2 ({@damage 1d4}) Slashing damage if the attack roll had {@variantrule Advantage|XPHB}."
+     ]
+    },
+    {
+     "name": "Shortbow",
+     "entries": [
+      "{@atkr r} {@hit 4}, range 80/320 ft. {@h}5 ({@damage 1d6 + 2}) Piercing damage, plus 2 ({@damage 1d4}) Piercing damage if the attack roll had {@variantrule Advantage|XPHB}."
+     ]
+    }
+   ],
+   "bonus": [
+    {
+     "name": "Nimble Escape",
+     "entries": [
+      "The goblin takes the {@action Disengage|XPHB} or {@action Hide|XPHB} action."
+     ]
+    }
+   ],
+   "environment": [
+    "forest",
+    "grassland",
+    "hill",
+    "planar, acheron",
+    "planar, feywild",
+    "underdark"
+   ],
+   "treasure": [
+    "implements",
+    "individual"
+   ],
+   "senseTags": [
+    "D"
+   ],
+   "languageTags": [
+    "C",
+    "GO"
+   ],
+   "damageTags": [
+    "P",
+    "S"
+   ],
+   "miscTags": [
+    "MA",
+    "MLW",
+    "RA",
+    "RNG"
+   ],
+   "hasToken": true,
+   "hasFluff": true,
+   "hasFluffImages": true
+  },
+  {
+   "name": "Priest",
+   "source": "XMM",
+   "page": 248,
+   "srd52": true,
+   "basicRules2024": true,
+   "referenceSources": [
+    "DrDe",
+    "DrDe-SD",
+    "DrDe-TDoN",
+    "EFA",
+    "FRAiF",
+    "FRHoF",
+    "LFL",
+    "RHW"
+   ],
+   "size": [
+    "S",
+    "M"
+   ],
+   "type": {
+    "type": "humanoid",
+    "tags": [
+     "cleric"
+    ]
+   },
+   "alignment": [
+    "N"
+   ],
+   "ac": [
+    13
+   ],
+   "hp": {
+    "average": 38,
+    "formula": "7d8 + 7"
+   },
+   "speed": {
+    "walk": 30
+   },
+   "str": 16,
+   "dex": 10,
+   "con": 12,
+   "int": 13,
+   "wis": 16,
+   "cha": 13,
+   "skill": {
+    "medicine": "+7",
+    "perception": "+5",
+    "religion": "+5"
+   },
+   "passive": 15,
+   "languages": [
+    "Common plus one other language"
+   ],
+   "cr": "2",
+   "gear": [
+    "chain shirt|xphb",
+    "holy symbol|xphb",
+    "mace|xphb"
+   ],
+   "spellcasting": [
+    {
+     "name": "Spellcasting",
+     "type": "spellcasting",
+     "headerEntries": [
+      "The priest casts one of the following spells, using Wisdom as the spellcasting ability:"
+     ],
+     "will": [
+      "{@spell Light|XPHB}",
+      "{@spell Thaumaturgy|XPHB}"
+     ],
+     "daily": {
+      "1": [
+       "{@spell Spirit Guardians|XPHB}"
+      ]
+     },
+     "ability": "wis",
+     "displayAs": "action"
+    },
+    {
+     "name": "Divine Aid (3/Day)",
+     "type": "spellcasting",
+     "headerEntries": [
+      "The priest casts {@spell Bless|XPHB}, {@spell Dispel Magic|XPHB}, {@spell Healing Word|XPHB}, or {@spell Lesser Restoration|XPHB}, using the same spellcasting ability as Spellcasting."
+     ],
+     "daily": {
+      "3": [
+       "{@spell Bless|XPHB}",
+       "{@spell Dispel Magic|XPHB}",
+       "{@spell Healing Word|XPHB}",
+       "{@spell Lesser Restoration|XPHB}"
+      ]
+     },
+     "ability": "wis",
+     "displayAs": "bonus",
+     "hidden": [
+      "daily"
+     ]
+    }
+   ],
+   "action": [
+    {
+     "name": "Multiattack",
+     "entries": [
+      "The priest makes two attacks, using Mace or Radiant Flame in any combination."
+     ]
+    },
+    {
+     "name": "Mace",
+     "entries": [
+      "{@atkr m} {@hit 5}, reach 5 ft. {@h}6 ({@damage 1d6 + 3}) Bludgeoning damage plus 5 ({@damage 2d4}) Radiant damage."
+     ]
+    },
+    {
+     "name": "Radiant Flame",
+     "entries": [
+      "{@atkr r} {@hit 5}, range 60 ft. {@h}11 ({@damage 2d10}) Radiant damage."
+     ]
+    }
+   ],
+   "environment": [
+    "any"
+   ],
+   "treasure": [
+    "individual",
+    "relics"
+   ],
+   "soundClip": {
+    "type": "internal",
+    "path": "bestiary/priest.opus"
+   },
+   "actionTags": [
+    "Multiattack"
+   ],
+   "languageTags": [
+    "C",
+    "X"
+   ],
+   "damageTags": [
+    "B",
+    "R"
+   ],
+   "damageTagsSpell": [
+    "N",
+    "R"
+   ],
+   "spellcastingTags": [
+    "O"
+   ],
+   "miscTags": [
+    "MA",
+    "MLW",
+    "RA"
+   ],
+   "savingThrowForcedSpell": [
+    "wisdom"
+   ],
+   "hasToken": true,
+   "hasFluff": true,
+   "hasFluffImages": true
+  },
+  {
+   "name": "Wolf",
+   "source": "XMM",
+   "page": 373,
+   "srd52": true,
+   "basicRules2024": true,
+   "otherSources": [
+    {
+     "source": "XPHB",
+     "page": 359
+    }
+   ],
+   "referenceSources": [
+    "FRAiF",
+    "FRHoF",
+    "RHW",
+    "SoS"
+   ],
+   "size": [
+    "M"
+   ],
+   "type": "beast",
+   "alignment": [
+    "U"
+   ],
+   "ac": [
+    12
+   ],
+   "hp": {
+    "average": 11,
+    "formula": "2d8 + 2"
+   },
+   "speed": {
+    "walk": 40
+   },
+   "str": 14,
+   "dex": 15,
+   "con": 12,
+   "int": 3,
+   "wis": 12,
+   "cha": 6,
+   "skill": {
+    "perception": "+5",
+    "stealth": "+4"
+   },
+   "senses": [
+    "Darkvision 60 ft."
+   ],
+   "passive": 15,
+   "cr": "1/4",
+   "trait": [
+    {
+     "name": "Pack Tactics",
+     "entries": [
+      "The wolf has {@variantrule Advantage|XPHB} on attack rolls against a creature if at least one of the wolf's allies is within 5 feet of the creature and the ally doesn't have the {@condition Incapacitated|XPHB} condition."
+     ]
+    }
+   ],
+   "action": [
+    {
+     "name": "Bite",
+     "entries": [
+      "{@atkr m} {@hit 4}, reach 5 ft. {@h}5 ({@damage 1d6 + 2}) Piercing damage. If the target is a Medium or smaller creature, it has the {@condition Prone|XPHB} condition."
+     ]
+    }
+   ],
+   "environment": [
+    "forest",
+    "grassland",
+    "hill"
+   ],
+   "soundClip": {
+    "type": "internal",
+    "path": "bestiary/wolf.opus"
+   },
+   "traitTags": [
+    "Pack Tactics"
+   ],
+   "senseTags": [
+    "D"
+   ],
+   "damageTags": [
+    "P"
+   ],
+   "miscTags": [
+    "MA"
+   ],
+   "conditionInflict": [
+    "prone"
+   ],
+   "hasToken": true,
+   "hasFluff": true,
+   "hasFluffImages": true
+  }
+ ]
+}

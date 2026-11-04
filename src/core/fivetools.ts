@@ -1,0 +1,365 @@
+import { FORGE_DIE_SIZES, SIZE_NAMES } from "./constants";
+import { fmtMod } from "./dice";
+import type { ListEntry, Statblock, StatblockInitiative } from "./schema";
+
+/**
+ * Converts 5etools bestiary JSON (https://github.com/5etools-mirror-3/5etools-src, data/bestiary/*.json)
+ * into a package Statblock with Forge default-system attribute values.
+ */
+
+export const FIVETOOLS_DATA_BASE = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-src/main/data";
+export const FIVETOOLS_IMG_BASE = "https://raw.githubusercontent.com/5etools-mirror-3/5etools-img/main";
+
+/** Source code → bestiary file + human title, for the books we commonly use. Extend freely (data, not logic). */
+export const FIVETOOLS_SOURCES: Record<string, { file: string; title: string; rules: "2024" | "2014" }> = {
+  XMM: { file: "bestiary-xmm.json", title: "Monster Manual (2025)", rules: "2024" },
+  XPHB: { file: "bestiary-xphb.json", title: "Player's Handbook (2024)", rules: "2024" },
+  XDMG: { file: "bestiary-xdmg.json", title: "Dungeon Master's Guide (2024)", rules: "2024" },
+  MM: { file: "bestiary-mm.json", title: "Monster Manual (2014)", rules: "2014" },
+  MPMM: { file: "bestiary-mpmm.json", title: "Mordenkainen Presents: Monsters of the Multiverse", rules: "2014" },
+  VGM: { file: "bestiary-vgm.json", title: "Volo's Guide to Monsters", rules: "2014" },
+  ERLW: { file: "bestiary-erlw.json", title: "Eberron: Rising from the Last War", rules: "2014" },
+  WBtW: { file: "bestiary-wbtw.json", title: "The Wild Beyond the Witchlight", rules: "2014" },
+  CoS: { file: "bestiary-cos.json", title: "Curse of Strahd", rules: "2014" },
+};
+
+export function fivetoolsTokenUrl(source: string, name: string): string {
+  return `${FIVETOOLS_IMG_BASE}/bestiary/tokens/${encodeURIComponent(source)}/${encodeURIComponent(name)}.webp`;
+}
+export function fivetoolsArtUrl(source: string, name: string): string {
+  return `${FIVETOOLS_IMG_BASE}/bestiary/${encodeURIComponent(source)}/${encodeURIComponent(name)}.webp`;
+}
+
+// ---------------------------------------------------------------- tag rendering
+
+const ATK: Record<string, string> = {
+  m: "Melee Attack Roll:", r: "Ranged Attack Roll:", "m,r": "Melee or Ranged Attack Roll:",
+  mw: "Melee Weapon Attack:", rw: "Ranged Weapon Attack:", "mw,rw": "Melee or Ranged Weapon Attack:",
+  ms: "Melee Spell Attack:", rs: "Ranged Spell Attack:", "ms,rs": "Melee or Ranged Spell Attack:",
+};
+const ABIL: Record<string, string> = {
+  str: "Strength", dex: "Dexterity", con: "Constitution", int: "Intelligence", wis: "Wisdom", cha: "Charisma",
+};
+
+/** Returns a Forge dice chip like "[1d6+2]" if Forge can roll the formula, else "". */
+export function diceChip(formula: string): string {
+  const f = formula.replace(/\s+/g, "");
+  if (!/^[\dd+\-*/()]+$/i.test(f) || !/\d+d\d+/i.test(f) || f.length > 500) return "";
+  for (const m of f.matchAll(/(\d+)d(\d+)/gi)) {
+    const n = Number(m[1]);
+    const s = Number(m[2]);
+    if (n < 1 || n > 100 || !FORGE_DIE_SIZES.has(s)) return "";
+  }
+  return `[${f}]`;
+}
+
+function renderTag(tag: string, body: string): string {
+  const parts = body.split("|");
+  const first = (parts[0] ?? "").trim();
+  switch (tag) {
+    case "atk":
+    case "atkr":
+      return ATK[first] ?? "Attack:";
+    case "hit": {
+      const n = Number(first);
+      return `${fmtMod(n)} [1d20${fmtMod(n)}]`;
+    }
+    case "d20": {
+      const n = Number(first);
+      return `${fmtMod(n)} [1d20${fmtMod(n)}]`;
+    }
+    case "h": return "Hit: ";
+    case "m": return "Miss: ";
+    case "hom": return "Hit or Miss: ";
+    case "damage":
+    case "dice": {
+      const chip = diceChip(first);
+      return chip ? `${first} ${chip}` : first;
+    }
+    case "dc": return `DC ${first}`;
+    case "actSave": return `${first.split(",").map((a) => ABIL[a.trim()] ?? a).join(" or ")} Saving Throw:`;
+    case "actSaveFail": return first ? `Failure by ${first} or More:` : "Failure:";
+    case "actSaveSuccess": return "Success:";
+    case "actSaveSuccessOrFail": return "Failure or Success:";
+    case "actTrigger": return "Trigger:";
+    case "actResponse": return "Response:";
+    case "recharge": return first ? `(Recharge ${first}–6)` : "(Recharge 6)";
+    case "chance": return `${first} percent`;
+    case "spell": return titleCase(parts[2]?.trim() || first);
+    case "filter": return first;
+    default:
+      // {@tag name|source|display} convention
+      return (parts[2]?.trim() || first);
+  }
+}
+
+function titleCase(s: string): string {
+  return s.replace(/\b([a-z])/g, (c) => c.toUpperCase());
+}
+
+export function renderTags(text: string): string {
+  let out = text;
+  // innermost first, repeat until no tags remain
+  for (let i = 0; i < 10 && /\{@/.test(out); i++) {
+    out = out.replace(/\{@(\w+)\s*([^{}]*)\}/g, (_m, tag: string, body: string) => renderTag(tag, body));
+  }
+  return out;
+}
+
+export function renderEntries(entries: unknown): string {
+  if (entries == null) return "";
+  if (typeof entries === "string") return renderTags(entries);
+  if (typeof entries === "number") return String(entries);
+  if (Array.isArray(entries)) return entries.map(renderEntries).filter(Boolean).join("\n");
+  if (typeof entries === "object") {
+    const e = entries as Record<string, unknown>;
+    if (e.type === "list" && Array.isArray(e.items)) return e.items.map((it) => `• ${renderEntries(it)}`).join("\n");
+    if ((e.type === "item" || e.type === "itemSub") && e.name) {
+      return `${renderTags(String(e.name))} ${renderEntries(e.entries ?? e.entry)}`.trim();
+    }
+    if (e.entries) return `${e.name ? renderTags(String(e.name)) + ". " : ""}${renderEntries(e.entries)}`;
+    if (e.entry) return renderEntries(e.entry);
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------- field helpers
+
+const ALIGN: Record<string, string> = { L: "Lawful", N: "Neutral", C: "Chaotic", G: "Good", E: "Evil", U: "Unaligned", A: "Any alignment" };
+
+function alignmentText(a: unknown): string {
+  if (!Array.isArray(a) || a.length === 0) return "";
+  if (a.every((x) => typeof x === "string")) {
+    const codes = a as string[];
+    return codes.map((c) => ALIGN[c] ?? c).join(" ");
+  }
+  return a.map((x) => (typeof x === "object" && x && "alignment" in x ? alignmentText((x as any).alignment) : String(x))).join(" or ");
+}
+
+function typeText(t: unknown): string {
+  if (typeof t === "string") return titleCase(t);
+  if (t && typeof t === "object") {
+    const o = t as Record<string, any>;
+    const base = typeof o.type === "string" ? titleCase(o.type) : Array.isArray(o.type?.choose) ? o.type.choose.map(titleCase).join(" or ") : "";
+    const tags = Array.isArray(o.tags) ? o.tags.map((x: any) => (typeof x === "string" ? x : x.tag)).filter(Boolean) : [];
+    const swarm = o.swarmSize ? `Swarm of ${SIZE_NAMES[o.swarmSize] ?? o.swarmSize} ` : "";
+    return `${swarm}${base}${tags.length ? ` (${tags.map(titleCase).join(", ")})` : ""}`;
+  }
+  return "";
+}
+
+function speedValue(v: unknown): number {
+  if (typeof v === "number") return v;
+  if (v && typeof v === "object" && typeof (v as any).number === "number") return (v as any).number;
+  return 0;
+}
+
+function crNumber(cr: unknown): { text: string; value: number } {
+  const text = typeof cr === "string" ? cr : cr && typeof cr === "object" && typeof (cr as any).cr === "string" ? (cr as any).cr : "";
+  if (!text) return { text: "", value: NaN };
+  const value = text.includes("/") ? Number(text.split("/")[0]) / Number(text.split("/")[1]) : Number(text);
+  return { text, value };
+}
+
+export function proficiencyBonusForCr(cr: number): number {
+  if (!Number.isFinite(cr) || cr < 5) return 2;
+  return Math.min(9, Math.floor((cr - 1) / 4) + 2);
+}
+
+const abilityMod = (score: number) => Math.floor((score - 10) / 2);
+
+function damageList(v: unknown, key: string): string {
+  if (!Array.isArray(v)) return "";
+  return v
+    .map((x) => {
+      if (typeof x === "string") return titleCase(x);
+      if (x && typeof x === "object") {
+        const o = x as Record<string, any>;
+        if (o.special) return renderTags(o.special);
+        const inner = damageList(o[key], key);
+        return [o.preNote, inner, o.note].filter(Boolean).map((s) => renderTags(String(s))).join(" ");
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function entryList(arr: unknown): ListEntry[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((a: any) => ({ name: renderTags(String(a.name ?? "")), description: renderEntries(a.entries) }));
+}
+
+function spellcastingEntries(sc: any): ListEntry[] {
+  const out: ListEntry[] = [];
+  const header = renderEntries(sc.headerEntries);
+  out.push({ name: renderTags(String(sc.name ?? "Spellcasting")), description: header });
+  const hidden: string[] = Array.isArray(sc.hidden) ? sc.hidden : [];
+  const names = (arr: unknown) => (Array.isArray(arr) ? arr.map((s) => renderEntries(s)).join(", ") : "");
+  if (Array.isArray(sc.will) && !hidden.includes("will")) out.push({ name: "At Will", description: names(sc.will) });
+  if (sc.daily && !hidden.includes("daily")) {
+    for (const [k, v] of Object.entries(sc.daily)) {
+      const n = k.replace("e", "");
+      out.push({ name: `${n}/Day${k.endsWith("e") ? " Each" : ""}`, description: names(v) });
+    }
+  }
+  if (sc.spells) {
+    for (const [lvl, v] of Object.entries<any>(sc.spells)) {
+      const slots = v.slots ? ` (${v.slots} slot${v.slots > 1 ? "s" : ""})` : "";
+      out.push({ name: lvl === "0" ? "Cantrips" : `Level ${lvl}${slots}`, description: names(v.spells) });
+    }
+  }
+  if (sc.footerEntries) out.push({ name: "Note", description: renderEntries(sc.footerEntries) });
+  return out;
+}
+
+// ---------------------------------------------------------------- initiative
+
+export function deriveInitiative(m: any, dexScore: number, pb: number): StatblockInitiative {
+  const reasons: string[] = [];
+  let modifier = abilityMod(dexScore);
+  let advantage = false;
+  let disadvantage = false;
+  const init = m.initiative;
+  if (typeof init === "number") {
+    modifier = init;
+    reasons.push(`explicit initiative ${fmtMod(init)}`);
+  } else if (init && typeof init === "object") {
+    if (typeof init.initiative === "number") {
+      modifier = init.initiative;
+      reasons.push(`explicit initiative ${fmtMod(modifier)}`);
+    } else {
+      const prof = typeof init.proficiency === "number" ? init.proficiency : 0;
+      modifier = abilityMod(dexScore) + prof * pb;
+      reasons.push(`Dex ${fmtMod(abilityMod(dexScore))}${prof ? ` + ${prof}×PB(${pb})` : ""}`);
+    }
+    if (init.advantageMode === "adv") { advantage = true; reasons.push("initiative advantage (stat block)"); }
+    if (init.advantageMode === "dis") { disadvantage = true; reasons.push("initiative disadvantage (stat block)"); }
+  } else {
+    reasons.push(`Dex ${fmtMod(modifier)} (no separate initiative listed)`);
+  }
+  // Traits that grant advantage/disadvantage on initiative.
+  for (const t of [...(m.trait ?? []), ...(m.action ?? [])]) {
+    const text = renderEntries(t.entries);
+    if (/advantage on initiative/i.test(text) && !/disadvantage on initiative/i.test(text)) {
+      advantage = true;
+      reasons.push(`advantage from "${renderTags(String(t.name))}"`);
+    }
+    if (/disadvantage on initiative/i.test(text)) {
+      disadvantage = true;
+      reasons.push(`disadvantage from "${renderTags(String(t.name))}"`);
+    }
+  }
+  return { modifier, advantage, disadvantage, reasons };
+}
+
+// ---------------------------------------------------------------- main conversion
+
+export function findMonster(data: { monster?: any[] }, name: string, source: string): any {
+  const list = data.monster ?? [];
+  const m = list.find((x) => x.name?.toLowerCase() === name.toLowerCase() && x.source === source);
+  if (!m) {
+    const near = list.filter((x) => x.name?.toLowerCase().includes(name.toLowerCase())).slice(0, 5).map((x) => `${x.name} (${x.source})`);
+    throw new Error(`Monster "${name}" not found in ${source}.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""}`);
+  }
+  if (m._copy) throw new Error(`"${name}" (${source}) is a 5etools _copy entry of ${m._copy.name} (${m._copy.source}); copy resolution is not implemented yet — provide a stat block instead.`);
+  return m;
+}
+
+export function convertMonster(m: any): Statblock {
+  const flags: string[] = [];
+  const src = FIVETOOLS_SOURCES[m.source];
+  const sizeCode: string = Array.isArray(m.size) ? m.size[0] : "M";
+  if (Array.isArray(m.size) && m.size.length > 1) flags.push(`Multiple sizes listed (${m.size.join("/")}); using ${sizeCode}.`);
+
+  const scores = { str: m.str, dex: m.dex, con: m.con, int: m.int, wis: m.wis, cha: m.cha } as Record<string, number>;
+  for (const [k, v] of Object.entries(scores)) if (typeof v !== "number") { flags.push(`Missing ${k.toUpperCase()} score; defaulted to 10.`); scores[k] = 10; }
+
+  const cr = crNumber(m.cr);
+  if (!cr.text) flags.push("No challenge rating listed.");
+  const pb = proficiencyBonusForCr(cr.value);
+
+  const acRaw = Array.isArray(m.ac) ? m.ac[0] : undefined;
+  const ac = typeof acRaw === "number" ? acRaw : typeof acRaw?.ac === "number" ? acRaw.ac : NaN;
+  if (!Number.isFinite(ac)) flags.push("Armor class could not be parsed.");
+  if (Array.isArray(m.ac) && m.ac.length > 1) flags.push(`Multiple AC values listed; using ${ac}.`);
+
+  const hpAvg = typeof m.hp?.average === "number" ? m.hp.average : NaN;
+  if (!Number.isFinite(hpAvg)) flags.push(`Hit points not numeric (${JSON.stringify(m.hp)}).`);
+
+  const saves: Record<string, number> = {};
+  for (const k of Object.keys(scores)) {
+    const listed = m.save?.[k];
+    saves[k] = listed != null ? Number(String(listed).replace("+", "")) : abilityMod(scores[k]!);
+  }
+
+  const skills = m.skill
+    ? Object.entries(m.skill).filter(([k]) => k !== "other").map(([k, v]) => `${titleCase(k)} ${v}`).join(", ")
+    : "";
+  const senses = [...(m.senses ?? []).map((s: string) => renderTags(s)), m.passive != null ? `Passive Perception ${m.passive}` : ""]
+    .filter(Boolean).join(", ");
+
+  const sp = m.speed ?? {};
+  const actions = entryList(m.action);
+  const bonus = entryList(m.bonus);
+  const reactions = entryList(m.reaction);
+  const legendary = entryList(m.legendary);
+  if (m.legendaryHeader) legendary.unshift({ name: "Legendary Actions", description: renderEntries(m.legendaryHeader) });
+  const traits = entryList(m.trait);
+  const spells: ListEntry[] = [];
+  for (const sc of m.spellcasting ?? []) spells.push(...spellcastingEntries(sc));
+  if (m.mythic) flags.push("Mythic actions present but not mapped (no Forge default attribute for them).");
+  if (m.lairActions || m.legendaryGroup) flags.push("Lair actions/regional effects are not included.");
+
+  const initiative = deriveInitiative(m, scores.dex!, pb);
+  const typeStr = typeText(m.type);
+
+  const forge: Statblock["forge"] = {
+    Z002: SIZE_NAMES[sizeCode] ?? sizeCode,
+    Z003: alignmentText(m.alignment),
+    Z004: typeStr,
+    Z007: Number.isFinite(ac) ? ac : 10,
+    Z008: speedValue(sp.walk),
+    Z009: speedValue(sp.swim),
+    Z010: speedValue(sp.burrow),
+    Z011: speedValue(sp.climb),
+    Z012: speedValue(sp.fly),
+    Z013: senses,
+    Z014: skills,
+    Z015: Array.isArray(m.languages) && m.languages.length ? m.languages.map(renderTags).join(", ") : "None",
+    Z016: Number.isFinite(cr.value) ? cr.value : 0,
+    Z017: scores.str!, Z018: scores.dex!, Z019: scores.con!, Z020: scores.int!, Z021: scores.wis!, Z022: scores.cha!,
+    Z023: saves.str!, Z024: saves.dex!, Z025: saves.con!, Z026: saves.int!, Z027: saves.wis!, Z028: saves.cha!,
+    Z030: damageList(m.vulnerable, "vulnerable"),
+    Z031: damageList(m.resist, "resist"),
+    Z032: damageList(m.immune, "immune"),
+    Z033: damageList(m.conditionImmune, "conditionImmune"),
+    Z034: traits,
+    Z035: actions,
+    Z036: bonus,
+    Z037: reactions,
+    Z038: legendary,
+    Z039: spells,
+  };
+  if (cr.text.includes("/")) flags.push(`CR ${cr.text} stored as ${cr.value} (Forge CR is numeric).`);
+  if (sp.fly && typeof sp.fly === "object" && sp.fly.condition) flags.push(`Fly speed note: ${renderTags(sp.fly.condition)}.`);
+  if (m.speed?.alternate || m.speed?.choose) flags.push("Alternate speeds not represented.");
+  if (Array.isArray(m.ac) && typeof acRaw === "object" && acRaw.from) flags.push(`AC source: ${acRaw.from.map(renderTags).join(", ")}.`);
+
+  return {
+    name: m.name,
+    size: sizeCode as Statblock["size"],
+    source: {
+      provenance: "official",
+      book: m.source,
+      bookTitle: src?.title,
+      page: m.page,
+      url: `https://5e.tools/bestiary.html#${encodeURIComponent(m.name.toLowerCase())}_${m.source.toLowerCase()}`,
+      notes: ["Transcribed from 5etools data (fallback source); verify against your book if anything looks off."],
+    },
+    hp: { average: Number.isFinite(hpAvg) ? hpAvg : 1, formula: m.hp?.formula },
+    initiative,
+    forge,
+    flags,
+  };
+}

@@ -1,0 +1,282 @@
+{
+  "schema": "owlbear-butler/encounter@1",
+  "id": "wolves-test",
+  "revision": "2026-11-04T13:31:48.250Z",
+  "title": "Wolves in the Clearing (milestone test)",
+  "description": "A pack of five wolves has surrounded a forest path. Two lurk in the trees to the north, two to the south, and the pack leader blocks the path to the east.",
+  "rules": "2024",
+  "forgeDictionary": "forge-default-dnd5e@1.6.0",
+  "map": {
+    "name": "Forest Clearing (test map)",
+    "asset": "map",
+    "width": 1400,
+    "height": 980,
+    "grid": {
+      "cellPx": 70,
+      "offsetPx": {
+        "x": 0,
+        "y": 0
+      },
+      "cols": 20,
+      "rows": 14,
+      "scale": "5ft",
+      "type": "SQUARE"
+    }
+  },
+  "assets": {
+    "map": {
+      "image": {
+        "kind": "url",
+        "url": "https://corrida-repos.github.io/owlbear-rodeo-butler/encounters/wolves-test/assets/forest-clearing.png",
+        "width": 1400,
+        "height": 980,
+        "mime": "image/png"
+      },
+      "credit": "Procedurally generated test map (scripts/make-test-map.ts)",
+      "provenance": "user-provided"
+    },
+    "token-wolf-xmm": {
+      "image": {
+        "kind": "url",
+        "url": "https://raw.githubusercontent.com/5etools-mirror-3/5etools-img/main/bestiary/tokens/XMM/Wolf.webp",
+        "mime": "image/webp"
+      },
+      "credit": "5etools-img token (XMM)",
+      "provenance": "official"
+    }
+  },
+  "statblocks": {
+    "wolf-xmm": {
+      "name": "Wolf",
+      "size": "M",
+      "source": {
+        "provenance": "official",
+        "book": "XMM",
+        "bookTitle": "Monster Manual (2025)",
+        "page": 373,
+        "url": "https://5e.tools/bestiary.html#wolf_xmm",
+        "notes": [
+          "Transcribed from 5etools data (fallback source); verify against your book if anything looks off."
+        ]
+      },
+      "hp": {
+        "average": 11,
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "modifier": 2,
+        "advantage": false,
+        "disadvantage": false,
+        "reasons": [
+          "Dex +2 (no separate initiative listed)"
+        ]
+      },
+      "forge": {
+        "Z002": "Medium",
+        "Z003": "Unaligned",
+        "Z004": "Beast",
+        "Z007": 12,
+        "Z008": 40,
+        "Z009": 0,
+        "Z010": 0,
+        "Z011": 0,
+        "Z012": 0,
+        "Z013": "Darkvision 60 ft., Passive Perception 15",
+        "Z014": "Perception +5, Stealth +4",
+        "Z015": "None",
+        "Z016": 0.25,
+        "Z017": 14,
+        "Z018": 15,
+        "Z019": 12,
+        "Z020": 3,
+        "Z021": 12,
+        "Z022": 6,
+        "Z023": 2,
+        "Z024": 2,
+        "Z025": 1,
+        "Z026": -4,
+        "Z027": 1,
+        "Z028": -2,
+        "Z030": "",
+        "Z031": "",
+        "Z032": "",
+        "Z033": "",
+        "Z034": [
+          {
+            "name": "Pack Tactics",
+            "description": "The wolf has Advantage on attack rolls against a creature if at least one of the wolf's allies is within 5 feet of the creature and the ally doesn't have the Incapacitated condition."
+          }
+        ],
+        "Z035": [
+          {
+            "name": "Bite",
+            "description": "Melee Attack Roll: +4 [1d20+4], reach 5 ft. Hit: 5 (1d6 + 2 [1d6+2]) Piercing damage. If the target is a Medium or smaller creature, it has the Prone condition."
+          }
+        ],
+        "Z036": [],
+        "Z037": [],
+        "Z038": [],
+        "Z039": []
+      },
+      "flags": [
+        "CR 1/4 stored as 0.25 (Forge CR is numeric)."
+      ]
+    }
+  },
+  "creatures": [
+    {
+      "key": "wolf-1",
+      "name": "Wolf 1",
+      "statblock": "wolf-xmm",
+      "token": "token-wolf-xmm",
+      "cell": {
+        "x": 8,
+        "y": 3
+      },
+      "hp": {
+        "max": 11,
+        "current": 11,
+        "temp": 0,
+        "method": "average",
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "dice": [
+          15
+        ],
+        "kept": 15,
+        "modifier": 2,
+        "mode": "normal",
+        "total": 17,
+        "formula": "1d20+2",
+        "rolledAt": "2026-11-04T13:31:48.249Z",
+        "rolledBy": "package-builder"
+      },
+      "placementNote": "north tree line"
+    },
+    {
+      "key": "wolf-2",
+      "name": "Wolf 2",
+      "statblock": "wolf-xmm",
+      "token": "token-wolf-xmm",
+      "cell": {
+        "x": 11,
+        "y": 3
+      },
+      "hp": {
+        "max": 11,
+        "current": 11,
+        "temp": 0,
+        "method": "average",
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "dice": [
+          15
+        ],
+        "kept": 15,
+        "modifier": 2,
+        "mode": "normal",
+        "total": 17,
+        "formula": "1d20+2",
+        "rolledAt": "2026-11-04T13:31:48.250Z",
+        "rolledBy": "package-builder"
+      },
+      "placementNote": "north tree line"
+    },
+    {
+      "key": "wolf-3",
+      "name": "Wolf 3",
+      "statblock": "wolf-xmm",
+      "token": "token-wolf-xmm",
+      "cell": {
+        "x": 8,
+        "y": 10
+      },
+      "hp": {
+        "max": 11,
+        "current": 11,
+        "temp": 0,
+        "method": "average",
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "dice": [
+          17
+        ],
+        "kept": 17,
+        "modifier": 2,
+        "mode": "normal",
+        "total": 19,
+        "formula": "1d20+2",
+        "rolledAt": "2026-11-04T13:31:48.250Z",
+        "rolledBy": "package-builder"
+      },
+      "placementNote": "south tree line"
+    },
+    {
+      "key": "wolf-4",
+      "name": "Wolf 4",
+      "statblock": "wolf-xmm",
+      "token": "token-wolf-xmm",
+      "cell": {
+        "x": 11,
+        "y": 10
+      },
+      "hp": {
+        "max": 11,
+        "current": 11,
+        "temp": 0,
+        "method": "average",
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "dice": [
+          1
+        ],
+        "kept": 1,
+        "modifier": 2,
+        "mode": "normal",
+        "total": 3,
+        "formula": "1d20+2",
+        "rolledAt": "2026-11-04T13:31:48.250Z",
+        "rolledBy": "package-builder"
+      },
+      "placementNote": "south tree line"
+    },
+    {
+      "key": "wolf-5",
+      "name": "Wolf 5",
+      "statblock": "wolf-xmm",
+      "token": "token-wolf-xmm",
+      "cell": {
+        "x": 15,
+        "y": 7
+      },
+      "hp": {
+        "max": 11,
+        "current": 11,
+        "temp": 0,
+        "method": "average",
+        "formula": "2d8 + 2"
+      },
+      "initiative": {
+        "dice": [
+          9
+        ],
+        "kept": 9,
+        "modifier": 2,
+        "mode": "normal",
+        "total": 11,
+        "formula": "1d20+2",
+        "rolledAt": "2026-11-04T13:31:48.250Z",
+        "rolledBy": "package-builder"
+      },
+      "placementNote": "pack leader blocking the path east"
+    }
+  ],
+  "assumptions": [
+    "The party is expected to enter from the west end of the path (columns 0-3); no party tokens are created."
+  ],
+  "warnings": []
+}

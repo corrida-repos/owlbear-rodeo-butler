@@ -1,0 +1,31 @@
+{
+  "id": "wolves-test",
+  "title": "Wolves in the Clearing (milestone test)",
+  "description": "A pack of five wolves has surrounded a forest path. Two lurk in the trees to the north, two to the south, and the pack leader blocks the path to the east.",
+  "rules": "2024",
+  "map": {
+    "name": "Forest Clearing (test map)",
+    "file": "forest-clearing.png",
+    "credit": "Procedurally generated test map (scripts/make-test-map.ts)",
+    "grid": { "cellPx": 70, "offsetPx": { "x": 0, "y": 0 }, "scale": "5ft" }
+  },
+  "groups": [
+    {
+      "statblock": { "fivetools": { "name": "Wolf", "source": "XMM" } },
+      "token": "fivetools",
+      "count": 5,
+      "name": "Wolf {n}",
+      "hp": "average",
+      "placements": [
+        { "x": 8, "y": 3, "note": "north tree line" },
+        { "x": 11, "y": 3, "note": "north tree line" },
+        { "x": 8, "y": 10, "note": "south tree line" },
+        { "x": 11, "y": 10, "note": "south tree line" },
+        { "x": 15, "y": 7, "note": "pack leader blocking the path east" }
+      ]
+    }
+  ],
+  "assumptions": [
+    "The party is expected to enter from the west end of the path (columns 0-3); no party tokens are created."
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "owlbear-rodeo-butler",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Encounter package builder + Owlbear Rodeo importer extension with Forge! integration",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "encounter:build": "tsx scripts/build-encounter.ts",
+    "testmap": "tsx scripts/make-test-map.ts"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "3.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "tsx": "4.19.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.21",
+    "vitest": "2.1.9"
+  }
+}
