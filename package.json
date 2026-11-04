@@ -1,7 +1,7 @@
 {
   "name": "owlbear-rodeo-butler",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Encounter package builder + Owlbear Rodeo importer extension with Forge! integration",
   "type": "module",
   "scripts": {
