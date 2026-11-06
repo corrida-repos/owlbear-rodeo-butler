@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "manifest_version": 1,
   "author": "Diogo Correia",
-  "description": "Add 5etools or custom monsters, sync your D&D Beyond party, or import prepared encounters into Forge!",
+  "description": "Add 5etools or homebrew creatures, sync your D&D Beyond party into Forge!, and check encounter difficulty and initiative.",
   "homepage_url": "https://github.com/corrida-repos/owlbear-rodeo-butler",
   "icon": "/owlbear-rodeo-butler/icon.svg",
   "action": {

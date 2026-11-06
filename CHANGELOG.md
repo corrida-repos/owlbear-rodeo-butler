@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (1.1.0)
+
+- **New layout: three tabs.** *Add Creatures*, *Add Party Members* and *Combat* replace Monsters / Party / Prepared encounter. Prepared encounters are now a collapsed section at the bottom of Add Creatures.
+- **Import homebrewed creature:** upload a stat block JSON file, or start from any published 5etools creature and edit its stat block before adding it. Name it yourself and give it any token (Owlbear library upload, https link, the original 5etools token or the placeholder).
+- **Add Party Members:** a one-button **Sync from D&D Beyond**. It opens your campaign, and the bookmark there sends the party straight back (no clipboard step) and syncs it as Forge's Party. The campaign is remembered. Re-drag the bookmark once. Published and homebrewed party members (sidekicks, companions) can be added like creatures. Undo removes tokens a sync created and restores replaced portraits.
+- **Combat tab:** encounter difficulty from the 2024 DMG XP budgets (Low / Moderate / High), plus an invented **Extreme** tier for boss fights (1.5× High). Exclude non-hostile creatures or absent characters, set levels, and see it update live. **Roll all initiatives** or **Roll just creatures' initiatives**.
+- Party sync no longer rolls initiative by default (the Combat tab does); the old choices are still in *Sync options*.
+
 ## 1.0.0 — 2026-11-04
 
 First public release. Install in Owlbear Rodeo with

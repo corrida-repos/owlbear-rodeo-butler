@@ -2,9 +2,9 @@
 
 An [Owlbear Rodeo](https://www.owlbear.rodeo) extension for Dungeon Masters who run D&D 5e with **D&D Beyond** character sheets and the **Forge!** battle system.
 
-- **Monsters:** search any creature from 5etools (2014 and 2024 books), or add your own, and drop them on the map. Each one has its own HP, rolled initiative, a full Forge stat block with clickable dice, and a place in the initiative tracker.
-- **Party:** copy your whole party from your D&D Beyond campaign in one click. HP, AC, saves, skills, attacks and spells are written onto your players' tokens, and their D&D Beyond portraits can be used too.
-- **Prepared encounter:** import a ready-made scene (map, grid, positioned monsters) in one go.
+- **Add Creatures:** search any creature from 5etools (2014 and 2024 books), or bring your own stat block and token, choose how many, and drop them on the map. Each one has its own HP, rolled initiative, a full Forge stat block with clickable dice, and a place in the initiative tracker.
+- **Add Party Members:** one button syncs your D&D Beyond campaign's character sheets onto your players' tokens as Forge's Party. Press it again whenever someone levels up. You can also add sidekicks and companions the same way as creatures.
+- **Combat:** see whether the fight is Low, Moderate, High or Extreme for your party (2024 rules), and roll initiative for everyone or just the creatures.
 
 It's free: no account, server or subscription beyond the free Owlbear Rodeo and D&D Beyond accounts you already have.
 
@@ -37,27 +37,35 @@ The **Encounter Butler** icon now appears in the room's toolbar at the top left.
 
 ## Use it
 
-### Monsters
-1. Open a scene, then open Encounter Butler → **Monsters**.
-2. Type a name (*goblin*, *young red dragon*…). Results from 2024 books are marked. Tap a creature to add it and set how many you want.
-3. HP is the stat block's average; tick **roll HP** on a row to roll it instead. Click **Add creatures to the scene**. The creatures appear in the middle of your view, already in the Forge tracker with rolled initiative. **Undo** removes them again.
-4. **+ Custom creature** handles homebrew. Paste a 5etools stat block, or type quick stats, and pick art from your Owlbear library, an https image link, or the placeholder.
+### Add Creatures
+1. Open a scene, then open Encounter Butler → **Add Creatures**.
+2. **Import published creature:** type a name (*goblin*, *young red dragon*…). Results from 2024 books are marked. Pick a creature to put it on the list; pick it again for one more.
+3. **Import homebrewed creature:**
+   - **Stat block (JSON):** upload or paste a 5etools-format stat block, or *start from a published creature*: its stat block is loaded into the box so you can edit anything. **Quick stats** is a short form for simple NPCs.
+   - **Name** replaces the stat block's name (or gives one if the JSON has none).
+   - **Token:** upload or choose an image in Owlbear's library, use an https image link, the original creature's 5etools token, or the placeholder.
+   - Set the **quantity** and click **Put on the list**.
+4. In the list, set how many of each with **− / +**, and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the Forge tracker with rolled initiative. **Undo** removes them again.
+
+A **Prepared encounter** (map, grid and positioned creatures in one file) can still be imported from the collapsed section at the bottom of this tab. To make your own packages, see the [developer guide](docs/DEVELOPMENT.md#new-encounter-workflow).
 
 Right-click any token → **View …** to open its Forge unit card, with clickable attack and damage dice.
 
-### Party (from D&D Beyond)
-**Once:** open Encounter Butler → **Party** and drag the **⭳ Copy party for Encounter Butler** button to your browser's bookmarks bar.
+### Add Party Members (from D&D Beyond)
+**Once:** open Encounter Butler → **Add Party Members** → *First time: set up the bookmark*, and drag the **⭳ Copy party for Encounter Butler** button to your browser's bookmarks bar. If you set it up before version 1.1, drag it again.
 
-**Every session (or whenever your players level up):**
-1. In another tab, go to [dndbeyond.com](https://www.dndbeyond.com) → **Campaigns** → your campaign page.
-2. Click the **Copy party for Encounter Butler** bookmark. A purple notice confirms when the party has been copied.
-3. Back in Owlbear, press **Paste party**. Allow clipboard access if your browser asks. If pasting doesn't work, a box appears where you can paste with Ctrl+V / ⌘V.
-4. Review the preview, then click **Sync party**.
+**Every time a character sheet changes:**
+1. Press **⟳ Sync from D&D Beyond**. Your campaign opens in a new tab (the first time, open the campaign you DM from the list).
+2. Click the **Copy party for Encounter Butler** bookmark in that tab. It sends the party back to Owlbear and closes itself.
+3. The party tokens are updated and marked as Forge's Party. If something needs a look first (two tokens that could match, an error), you see a preview and press **Sync party** yourself. **Undo** removes tokens the sync created and puts back pictures it replaced.
 
-Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync only writes Forge stats: it leaves token positions and owners alone, and it changes images only if you choose to use the D&D Beyond portraits. You can also roll initiative for anyone who doesn't have one yet.
+Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync only writes Forge stats: it leaves token positions and owners alone, and it changes images only if you choose to use the D&D Beyond portraits (*Sync options*). If the tab didn't send the party back (some browsers block it), the bookmark also copies it to your clipboard: press **Paste party**.
 
-### Prepared encounter
-Paste the link to an `encounter.json` package and click **Load URL**. Check the preview, then click **Import … creatures + map**. The bundled **wolves test** shows what this does. To make your own packages, see the [developer guide](docs/DEVELOPMENT.md#new-encounter-workflow).
+Below the sync, **Import published / homebrewed party member** work exactly like Add Creatures, for sidekicks, companions or a guest character. They join Forge's Party.
+
+### Combat
+- **Difficulty calculator:** compares the hostile creatures in the scene with your party, using the 2024 Dungeon Master's Guide XP budgets. **Low**, **Moderate** and **High** follow the book. **Extreme** is an extra tier for boss fights, at 1.5× the High budget. Untick a creature that isn't hostile, or a character who isn't in this fight; enter a level for party members without a sheet. The calculator updates as tokens come and go.
+- **Initiatives:** **Roll all initiatives** rolls for every unit in the Forge tracker. **Roll just creatures' initiatives** leaves the party alone, so players can roll their own and you type the results into Forge's tracker. Advantage (e.g. from Alert or a monster trait) is applied.
 
 ## Privacy
 - Your D&D Beyond login never leaves the D&D Beyond tab. The bookmark reads your campaign there, using your own session, and copies the result only to **your** clipboard. Nothing is sent to or stored on any server run by this project.
@@ -71,8 +79,9 @@ Paste the link to an `encounter.json` package and click **Load URL**. Check the 
 | "Unable to load extension" | Check the link: it must end in `/manifest.json`. Remove the extension and add it again. |
 | Icon missing in the room | Enable Encounter Butler in the room's **Extensions** list. Custom extensions are per room. |
 | "Forge has a custom system" | In Forge, choose **System → Load Default System**. |
-| "You are not the GM" | Only the room's GM can add monsters or sync the party. |
+| "You are not the GM" | Only the room's GM can add creatures, sync the party or roll initiative. |
 | Bookmark says "No characters found" | Open the campaign page itself (`dndbeyond.com/campaigns/<number>`), and make sure you are its DM. |
+| Sync button opens D&D Beyond but nothing comes back | Drag the bookmark to your bar again (older bookmarks can't send the party back), or use **Paste party**. |
 | Paste does nothing | Allow clipboard access for owlbear.rodeo, or paste into the box that appears. |
 | Party token not updated | Rename the token to the character's name, or let the sync create one. |
 

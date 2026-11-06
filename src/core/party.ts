@@ -6,7 +6,7 @@
 import { BUTLER_ITEM_KEY, FORGE_DEFAULT_DICTIONARY_ID, FORGE_KEYS, SIZE_CELLS } from "./constants";
 import { convertDdbCharacter, type PartyMember } from "./ddb";
 import { detectForgeSystem, forgeKey, validateForgeMetadata, type ForgeSystemStatus } from "./forge";
-import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type SceneItemLite, type StepResult } from "./importer";
+import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type InitiativeSetup, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
 import type { InitiativeRoll, ListEntry } from "./schema";
@@ -54,7 +54,7 @@ export function validateParty(input: any): string[] {
 export const normName = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
-export interface PartyRecord { role: "party"; ddbId: number; partyId: string; syncedAt: string; initiative?: InitiativeRoll }
+export interface PartyRecord { role: "party"; ddbId: number; partyId: string; syncedAt: string; initiative?: InitiativeRoll; initiativeSetup?: InitiativeSetup }
 
 export interface MatchRow {
   member: PartyMember;
@@ -185,7 +185,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
       const meta = partyForgeMetadata(m, newId);
       const errs = validateForgeMetadata(meta);
       if (errs.length) throw new Error(`${m.name}: ${errs.join("; ")}`);
-      const record: PartyRecord = { role: "party", ddbId: m.ddbId, partyId: pkg.id, syncedAt: now().toISOString() };
+      const record: PartyRecord = { role: "party", ddbId: m.ddbId, partyId: pkg.id, syncedAt: now().toISOString(),
+        initiativeSetup: { modifier: m.initiative.modifier, advantage: m.initiative.advantage, disadvantage: false } };
       if (r.item) {
         const existing = r.item.metadata;
         const hasHp = typeof existing[forgeKey("Z005")] === "number";

@@ -6,8 +6,11 @@
  *
  *   await ddbExport()                        // on a /campaigns/<id> page: id detected from the URL
  *   await ddbExport(7909498, { mode: "download" })
+ *
+ * When Encounter Butler opened this tab ("Sync from D&D Beyond"), the party is posted straight back to it
+ * (only to `targetOrigin`, the extension's own origin) and no clipboard is needed.
  */
-async function ddbExport(campaignId, { mode = "clipboard" } = {}) {
+async function ddbExport(campaignId, { mode = "clipboard", targetOrigin } = {}) {
   const toast = (msg, ok = true) => {
     const el = Object.assign(document.createElement("div"), { textContent: msg });
     Object.assign(el.style, { position: "fixed", zIndex: 99999, top: "16px", right: "16px", maxWidth: "380px", padding: "12px 16px", borderRadius: "8px",
@@ -45,16 +48,26 @@ async function ddbExport(campaignId, { mode = "clipboard" } = {}) {
     const json = JSON.stringify(bundle);
     const names = characters.map((c) => c.name).join(", ");
     if (mode === "return") return bundle;
+    let sent = false;
+    if (targetOrigin && window.opener && !window.opener.closed) {
+      // The browser only delivers this if the opener really is Encounter Butler; the clipboard copy below stays as a fallback.
+      try { window.opener.postMessage({ type: "encounter-butler/ddb-export", bundle }, targetOrigin); sent = true; } catch { /* opener gone */ }
+    }
     let copied = false;
     if (mode === "clipboard") {
       try { window.focus(); await navigator.clipboard.writeText(json); copied = true; } catch { /* fall back to download */ }
     }
-    if (!copied) {
+    if (!copied && !sent) {
       const slug = campaignName.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([json], { type: "application/json" })), download: `ddb-party-${slug}.json` });
       document.body.append(a); a.click(); a.remove();
     }
-    toast(copied ? `Party copied (${names}). In Owlbear: Encounter Butler → Party → Paste party.` : `Party saved as a file (${names}). In Owlbear: Encounter Butler → Party → Choose file.`);
+    if (sent) {
+      toast(`Party sent to Encounter Butler (${names}). This tab closes in a moment.`);
+      setTimeout(() => window.close(), 3000);
+      return { campaign: campaignName, characters: characters.map((c) => c.name), sent, copied, bytes: json.length };
+    }
+    toast(copied ? `Party copied (${names}). In Owlbear: Encounter Butler → Add Party Members → Paste party.` : `Party saved as a file (${names}). In Owlbear: Encounter Butler → Add Party Members → Choose file.`);
     return { campaign: campaignName, characters: characters.map((c) => c.name), copied, bytes: json.length };
   } catch (e) {
     toast(`Encounter Butler: ${e instanceof Error ? e.message : e}`, false);

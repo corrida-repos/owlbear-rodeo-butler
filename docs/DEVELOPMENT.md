@@ -87,6 +87,9 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 }
 ```
 
+## Combat tab
+[src/core/combat.ts](../src/core/combat.ts): Forge units are CHARACTER-layer images with Forge metadata. Party = `in-party: true`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
+
 ## 5etools creatures
 - **Any book or adventure in 5etools** works. Books are discovered from 5etools' own `data/bestiary/index.json` (112 sources), and titles come from `books.json`/`adventures.json`. Files are fetched on demand and cached in `.cache/5etools/`.
 - **No book given** (`{"name": "Bandit"}`): the 2024-rules version is preferred, then the newest book. The choice is recorded as an assumption. If you name a 2014 creature that has a 2024 reprint, it is kept as asked and flagged "a newer version exists".
@@ -97,6 +100,10 @@ Rebuilding re-rolls. Importing **never** re-rolls a package's recorded initiativ
 
 ## Party sync (D&D Beyond → party tokens)
 D&D Beyond has no public API. The export runs inside your logged-in D&D Beyond tab and uses the same character-service endpoints the sheet uses, with your own session; the login token never leaves the page. You must be the campaign's DM, or the characters must be visible to you.
+
+**One-button sync (extension, v1.1):** the extension can't call D&D Beyond itself (checked 2026-11-06: `character-service.dndbeyond.com` sends no CORS headers). Instead **Sync from D&D Beyond** `window.open`s the campaign page (the id is remembered from the last export). The bookmarklet, built with the extension's own origin as `targetOrigin`, posts the export back with `window.opener.postMessage`. The popover accepts only messages from `https://www.dndbeyond.com` of type `encounter-butler/ddb-export`, then syncs automatically unless the preview has ambiguities or errors. The clipboard copy stays as a fallback.
+
+Manual / CLI route:
 
 1. **Export:** in a dndbeyond.com tab, run [scripts/ddb-export.browser.js](../scripts/ddb-export.browser.js) with `await ddbExport(<campaignId>)`. It downloads `ddb-party-<campaign>.json`: every character in the campaign, plus the shared **party-inventory** items each character has equipped (an armor taken from the party stash changes AC).
 2. **Convert:** `npm run party:build -- party/ddb-party-<campaign>.json` writes `party/<campaign>.party.json`. `party/` is git-ignored, so your players' sheets are never published.

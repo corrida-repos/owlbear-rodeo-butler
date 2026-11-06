@@ -50,6 +50,9 @@ export interface SceneGateway {
   setGridType(type: "SQUARE"): Promise<void>;
 }
 
+/** Initiative modifier and advantage state used to roll a token's initiative. */
+export interface InitiativeSetup { modifier: number; advantage: boolean; disadvantage: boolean }
+
 export interface ResolvedImage { url: string; width: number; height: number; mime: string }
 
 /** Per-item record this importer stores on every item it creates. */
@@ -60,6 +63,8 @@ export interface ButlerItemRecord {
   role: "map" | "creature";
   creatureKey?: string;
   initiative?: InitiativeRoll;
+  /** How to (re-)roll this token's initiative later (Combat tab). */
+  initiativeSetup?: InitiativeSetup;
   hp?: { max: number; method: string; formula?: string; dice?: number[] };
   source?: string;
 }
@@ -294,6 +299,7 @@ export async function executeImport(pkg: EncounterPackage, opts: ImportOptions, 
         role: "creature",
         creatureKey: c.key,
         initiative,
+        initiativeSetup: { modifier: sb.initiative.modifier, advantage: sb.initiative.advantage, disadvantage: sb.initiative.disadvantage },
         hp: { max: c.hp.max, method: c.hp.method, formula: c.hp.formula, dice: c.hp.dice },
         source: [sb.source.provenance, sb.source.book, sb.source.page].filter(Boolean).join(" "),
       };

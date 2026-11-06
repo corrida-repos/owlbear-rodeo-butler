@@ -291,7 +291,7 @@ export function resetPackageTab() { pkg = null; preview = null; lastReport = nul
 
 export function renderPackageTab(): Child[] {
   const nodes: Child[] = [
-    h("p", { className: "small muted" }, "For encounters prepared for you (map, grid and creature placements in one file). To just drop creatures into the current scene, use the Monsters tab."),
+    h("p", { className: "small muted" }, "For encounters prepared for you (map, grid and creature placements in one file). To just drop creatures into the current scene, use the sections above."),
     renderLoader(),
   ];
   if (lastReport) nodes.push(renderReport(lastReport));

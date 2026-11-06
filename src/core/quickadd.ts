@@ -3,7 +3,7 @@
  * individually rolled initiative. Tokens are laid out around a point (the GM's view centre), one row per
  * creature type, snapped to the grid; the GM then drags them where they belong.
  */
-import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
+import { BUTLER_ITEM_KEY, FORGE_KEYS, SIZE_CELLS } from "./constants";
 import { rollHp } from "./builder";
 import { cryptoRng, rollForStatblock, type Rng } from "./dice";
 import { buildForgeMetadata, detectForgeSystem, validateForgeMetadata } from "./forge";
@@ -44,7 +44,7 @@ export function nameCreatures(base: string, count: number, existing: string[]): 
 }
 
 export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGateway,
-  opts: { rng?: Rng; newId?: () => string; now?: () => Date; acceptCustomSystem?: boolean } = {}): Promise<QuickAddReport> {
+  opts: { rng?: Rng; newId?: () => string; now?: () => Date; acceptCustomSystem?: boolean; inParty?: boolean } = {}): Promise<QuickAddReport> {
   const newId = opts.newId ?? (() => globalThis.crypto.randomUUID());
   const rng = opts.rng ?? cryptoRng;
   const now = opts.now ?? (() => new Date());
@@ -52,7 +52,7 @@ export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGat
   const report: QuickAddReport = { ok: false, importId, steps: [], createdItemIds: [], creatures: [], warnings: [] };
   try {
     if (!entries.length) throw new Error("Nothing to add.");
-    if ((await gw.getRole()) !== "GM") throw new Error("Only the GM can add creatures.");
+    if ((await gw.getRole()) !== "GM") throw new Error(`Only the GM can add ${opts.inParty ? "party members" : "creatures"}.`);
     const sys = detectForgeSystem(await gw.getRoomMetadata());
     if (sys.kind === "custom" && !opts.acceptCustomSystem) throw new Error(`Custom Forge system "${sys.name}" loaded; switch Forge to its default system first.`);
     for (const e of entries) {
@@ -81,10 +81,12 @@ export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGat
         const initiative = rollForStatblock(sb.initiative, rng, "importer");
         const creature: Creature = { key: name, name, statblock: "", token: "", cell: { x: 0, y: 0 }, hp, initiative };
         const forge = buildForgeMetadata(creature, e.statblock, initiative, newId);
+        if (opts.inParty) forge[FORGE_KEYS.IN_PARTY] = true; // shows in Forge's Party
         const errs = validateForgeMetadata(forge);
         if (errs.length) throw new Error(`${name}: ${errs.join("; ")}`);
         const record: ButlerItemRecord = {
           packageId: "quick-add", revision: now().toISOString(), importId, role: "creature", creatureKey: name, initiative,
+          initiativeSetup: { modifier: sb.initiative.modifier, advantage: sb.initiative.advantage, disadvantage: sb.initiative.disadvantage },
           hp: { max: hp.max, method: hp.method, formula: hp.formula, dice: hp.dice },
           source: [e.statblock.source.provenance, e.statblock.source.book, e.statblock.source.page].filter(Boolean).join(" "),
         };
