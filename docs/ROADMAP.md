@@ -4,10 +4,14 @@ Status (2026-11-08):
 - **Phase 0:** done. Live-checked with a GM and a player (background, context menu → card, public/private roll
   notifications, 256 kB item metadata OK). Finding: players can't select GM-owned tokens, so they open cards from the
   popover, not the context menu.
-- **Phase 1:** code done. All converters write native sheets, Forge code removed, Combat tab reads native data,
-  game-system room setting (search follows it), bundled package rebuilt; 86 tests, 4,574/4,574 5etools creatures OK.
-  Live check in Owlbear still pending.
-- **Next:** phase 2 (unit card + clickable dice).
+- **Phase 1:** done. All converters write native sheets, Forge code removed, Combat tab reads native data,
+  game-system room setting (search follows it), bundled package rebuilt; 4,574/4,574 5etools creatures OK. Live: a
+  5etools wolf added from Add Creatures carries its native sheet (card shows AC, HP, initiative, actions).
+- **Phase 2:** done. Full unit card (F2) with clickable dice (F3: Shift/Ctrl or toggle for adv/dis, damage after an
+  attack, crit damage, public/private, session roll log), portraits, aliases, renaming and controlling player (F7).
+  Players get a "My units" popover to open their cards. Live: GM attack with advantage + crit damage; player private
+  check seen by the player and the GM only. 105 tests.
+- **Next:** phase 3 (combat core: tracker, turns, HP, Dead / Death Saves / Stable).
 
 ## Goal
 

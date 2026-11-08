@@ -2,7 +2,7 @@
 
 An [Owlbear Rodeo](https://www.owlbear.rodeo) extension for Dungeon Masters who run D&D 5.5e (2024) or 5e (2014), with or without **D&D Beyond** character sheets. It needs no other extension.
 
-> **Version 2 is being built.** Encounter Butler no longer uses Forge!: creatures and party members keep their stat block on the token. Unit cards with clickable dice, the initiative tracker, HP and conditions are on the way (see the [roadmap](docs/ROADMAP.md)).
+> **Version 2 is being built.** Encounter Butler no longer uses Forge!: creatures and party members keep their stat block on the token, and unit cards have clickable dice. The initiative tracker, HP and conditions are on the way (see the [roadmap](docs/ROADMAP.md)).
 
 - **Add Creatures:** search any creature from 5etools (2014 and 2024 books), or bring your own stat block and token, choose how many, and drop them on the map. Each one has its own HP, rolled initiative, its full stat block stored on the token, and a place in the initiative order.
 - **Add Party Members:** one button syncs your D&D Beyond campaign's character sheets onto your players' tokens as the party. Press it again whenever someone levels up. You can also add sidekicks and companions the same way as creatures.
@@ -49,7 +49,11 @@ The **Encounter Butler** icon now appears in the room's toolbar at the top left.
 
 A **Prepared encounter** (map, grid and positioned creatures in one file) can still be imported from the collapsed section at the bottom of this tab. To make your own packages, see the [developer guide](docs/DEVELOPMENT.md#new-encounter-workflow).
 
-Right-click a creature or party token → **View unit card**. For now this is a preview with a test roll; the full card with clickable attack and damage dice is coming next.
+Right-click a creature or party token → **View unit card** (or click a name in the Combat tab). The card shows the whole stat block, and every bonus and damage value is a button:
+- **Click** to roll, **Shift-click** for advantage, **Ctrl-click** (Cmd on Mac) for disadvantage, or use the toggle at the top of the card.
+- After an attack, roll its damage from the result box; after a natural 20, use **Crit** (damage dice doubled).
+- **Public** rolls show to everyone as a notification. **Private** rolls show only to you (a player's private roll also shows to the GM). *Roll log* lists this session's rolls.
+- **Edit unit** (GM): rename it, give it an alias players see until you reveal it, set a portrait, and choose which player controls it. That player then finds the unit under the Encounter Butler button and can open its card and roll.
 
 ### Add Party Members (from D&D Beyond)
 **Once:** open Encounter Butler → **Add Party Members** → *First time: set up the bookmark*, and drag the **⭳ Copy party for Encounter Butler** button to your browser's bookmarks bar. If you set it up before version 1.1, drag it again.

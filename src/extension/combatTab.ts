@@ -7,6 +7,8 @@ import { crLabel, EXTREME_FACTOR, listCombatants, rollSceneInitiative, sceneDiff
 import { describeInitiative, fmtMod } from "../core/dice";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
+import { openCard } from "./cardPopover";
+import { renderRollLog } from "./rollLogView";
 import { roomSettings, roomSystem, setRoomSettings } from "./roomSettings";
 import { SYSTEMS, type SystemId } from "../core/systems";
 
@@ -28,6 +30,8 @@ export function refreshCombat(immediate = false) {
 document.addEventListener("focusout", () => { if (pending) { pending = false; setTimeout(rerender, 0); } });
 
 const fmt = (n: number) => n.toLocaleString("en-US");
+/** A unit's name that opens its card. */
+const cardLink = (c: Combatant) => h("button", { className: "linkish", title: "Open the unit card", onclick: () => void openCard(c.id) }, c.name);
 const TIER_TEXT: Record<Tier, string> = {
   Low: "Low: the party should win without much trouble, though it may spend some resources.",
   Moderate: "Moderate: expect the party to spend real resources (spell slots, Hit Points), with a chance of a character going down.",
@@ -70,14 +74,14 @@ function renderDifficulty(cs: Combatant[]): Child {
   const partyRows = party.map((c) =>
     h("tr", { className: c.exclude ? "off" : "" },
       h("td", {}, h("input", { type: "checkbox", checked: !c.exclude, title: "In this fight", onchange: action(() => setCombatSettings(obrGateway, c.id, { exclude: !c.exclude })) })),
-      h("td", {}, c.name, h("div", { className: "muted small" },
+      h("td", {}, cardLink(c), h("div", { className: "muted small" },
         c.levelSource === "sheet" ? "level from the sheet" : c.levelSource === "set" ? "level set here" : c.levelSource === "cr" ? `level guessed from CR ${crLabel(c.cr!)}` : "level unknown: enter it")),
       h("td", { className: "num" }, levelInput(c))));
 
   const foeRows = foes.map((c) =>
     h("tr", { className: c.exclude ? "off" : "" },
       h("td", {}, h("input", { type: "checkbox", checked: !c.exclude, title: "Hostile (counts toward difficulty)", onchange: action(() => setCombatSettings(obrGateway, c.id, { exclude: !c.exclude })) })),
-      h("td", {}, c.name, c.exclude ? h("div", { className: "muted small" }, "not hostile: ignored") : null),
+      h("td", {}, cardLink(c), c.exclude ? h("div", { className: "muted small" }, "not hostile: ignored") : null),
       h("td", { className: "num" }, c.cr === null ? "?" : crLabel(c.cr)),
       h("td", { className: "num" }, c.cr === null ? "—" : fmt(xpForCr(c.cr)))));
 
@@ -117,7 +121,7 @@ function renderInitiative(cs: Combatant[]): Child {
       h("li", {}, h("strong", {}, `${r.roll.total}`), ` ${r.name}${r.party ? " (party)" : ""}: ${describeInitiative(r.roll)}`))) : null,
     !lastRoll && order.length ? h("div", { style: "margin-top:8px" },
       h("div", { className: "small muted" }, "Current order"),
-      h("ul", { className: "plain small" }, ...order.map((c) => h("li", {}, h("strong", {}, String(c.initiative)), ` ${c.name} (${fmtMod(c.setup.modifier)}${c.setup.advantage ? " adv" : ""})`)))) : null);
+      h("ul", { className: "plain small" }, ...order.map((c) => h("li", {}, h("strong", {}, String(c.initiative)), " ", cardLink(c), ` (${fmtMod(c.setup.modifier)}${c.setup.advantage ? " adv" : ""})`)))) : null);
 }
 
 function renderSettings(): Child {
@@ -134,6 +138,6 @@ function renderSettings(): Child {
 
 export function renderCombatTab(): Child[] {
   if (!combatants) { refreshCombat(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
-  return [renderDifficulty(combatants), renderInitiative(combatants), renderSettings()];
+  return [renderDifficulty(combatants), renderInitiative(combatants), renderRollLog(), renderSettings()];
 }
 export function resetCombatTab() { combatants = null; lastRoll = null; }

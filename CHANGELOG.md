@@ -3,6 +3,10 @@
 ## Unreleased (2.0.0, in progress)
 
 - **No more Forge!** Encounter Butler stores each unit's stat block and live state (HP, initiative, party) on the token itself and works on its own. Units created with Forge aren't converted: add them again. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's coming (unit cards with clickable dice, initiative tracker, HP, conditions, player view).
+- **Unit cards:** right-click a unit → *View unit card*, or click a name in the Combat tab. The card shows the whole stat block: portrait, AC, HP, initiative, speed, abilities, saves, skills, senses, defences and every trait, action, reaction, legendary action, spell and item.
+- **Clickable dice:** every bonus and damage value on the card rolls. Shift-click for advantage, Ctrl/Cmd-click for disadvantage (or the toggle on the card). After an attack, the card offers its damage, and crit damage (dice doubled) after a natural 20. Rolls are **public** (everyone gets a notification) or **private** (only you; a player's private roll also goes to the GM). Each browser keeps a roll log for the session.
+- **Players:** the Encounter Butler button shows a player their own units, with a button to open the card and roll. The GM picks who controls a unit on its card (*Edit unit*).
+- **Names, aliases and portraits:** rename a unit (the token label follows), show it to players under an alias ("Hooded figure") until revealed, and give it a portrait different from its token art (link or Owlbear library).
 - **Game system setting:** D&D 5.5E (2024 rules, default) or 5E (2014 rules), in the Combat tab. Creature search puts the chosen edition's books first.
 - Mythic actions are now listed with legendary actions. Dice chips accept any die size (e.g. d3).
 - Party files from earlier versions need a fresh sync from D&D Beyond.

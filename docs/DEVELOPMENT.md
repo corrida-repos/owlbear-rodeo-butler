@@ -119,6 +119,21 @@ broadcast message.
   `[background.html PLAYER:Worg:eea1]`). Owlbear runs the pages in cross-origin iframes, so this is the easiest way to
   see GM and player logs side by side. See [devlog.ts](../src/extension/devlog.ts).
 
+## Unit card and dice (phase 2)
+- [card.ts](../src/core/card.ts): who sees what (`cardAccess`: GM everything; a player the full card of units they
+  control, else name/alias, portrait and conditions; nothing for hidden tokens), shown names and aliases, portraits,
+  and the standard rolls (ability checks, saves, skills, initiative with its built-in advantage).
+- [chips.ts](../src/core/chips.ts): splits sheet text into text and roll segments. The printed value before a chip is
+  folded into the button (`+4 [1d20+4]` → **+4**), the kind is guessed from context (attack / save / check / damage /
+  plain dice, plus the damage type), and bare `(2d6 + 6)` without a chip also becomes rollable. `check:5etools`
+  reports chip statistics over every creature.
+- [dice.ts](../src/core/dice.ts) rolls `kh`/`kl` terms; advantage turns the leading `1d20` into `2d20kh1`; crits double
+  every damage die. [rolls.ts](../src/core/rolls.ts) messages carry mode, crit, the natural d20 and every die rolled.
+- The background page writes every roll this client may see to a per-room log in localStorage
+  ([rollLog.ts](../src/extension/rollLog.ts)); the card and popover read it and follow the `storage` event (all
+  extension pages share one origin).
+- `controlledBy` stores the Owlbear user id (`Player.id`, the same across tabs and reconnects).
+
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
 

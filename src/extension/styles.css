@@ -87,3 +87,39 @@ input.lvl { width: 44px; text-align: center; }
 .tier-moderate .fill { background: var(--warn); } .tier-high .fill { background: var(--bad); } .tier-extreme .fill { background: var(--extreme); }
 .meter .mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); opacity: .7; }
 .budgets { display: flex; justify-content: space-between; gap: 4px; flex-wrap: wrap; color: var(--muted); }
+
+/* ---- 2.0: unit card ---- */
+.portrait { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; flex: none; border: 2px solid var(--border); background: var(--bg); }
+.portrait.empty { display: grid; place-items: center; color: var(--muted); font-size: 22px; }
+.card-head h1 { font-size: 17px; line-height: 1.2; }
+.conds { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.cond { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
+.cond.auto { border-color: var(--bad); color: var(--bad); }
+.statbar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stat { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.stat.wide { grid-column: span 3; flex-direction: row; align-items: baseline; gap: 6px; }
+.stat .k, .ab .k { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.stat .v { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stat .v.low { color: var(--bad); }
+.rollbar { display: flex; flex-direction: column; gap: 6px; padding: 6px; position: sticky; top: 0; z-index: 3; }
+.rollbar .seg button { padding: 4px; font-size: 12px; }
+button.chip { display: inline; background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 0 5px; margin: 0 1px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.5; }
+button.chip:hover { background: var(--accent); color: #fff; }
+button.chip.big { font-size: 15px; padding: 1px 8px; }
+button.chip.small { font-size: 10px; font-weight: 600; }
+button.chip-damage { color: var(--bad); border-color: var(--bad); }
+button.chip-damage:hover { background: var(--bad); }
+button.chip-save.prof { background: var(--accent); color: #fff; }
+.abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.ab { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 2px; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.stack.tight { gap: 4px; }
+.section summary { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.entry-text { margin: 8px 0 0; }
+.lastroll { border-color: var(--accent); position: sticky; bottom: 0; z-index: 3; box-shadow: 0 -4px 12px rgba(0,0,0,.25); }
+.lastroll.nat20 { border-color: var(--ok); }
+.lastroll.nat1 { border-color: var(--bad); }
+.lastroll .total { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.badge.bad-bg { background: var(--bad); }
+ul.log li { margin-bottom: 2px; }
+button.linkish { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; text-align: left; }
+button.linkish:hover { text-decoration: underline; }

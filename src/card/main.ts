@@ -1,106 +1,309 @@
 /**
- * Unit card popover (opened from the token context menu with ?id=<itemId>).
- * Phase 0 spike: shows the token, sends test rolls (public / private) and, for the GM, measures how much metadata
- * Owlbear accepts on one token. The full card (F2) replaces this in phase 2.
+ * Unit card popover (card.html?id=<itemId>), F2 + F3 + F7.
+ *  - GM, or a player who controls the unit: the full stat block, every roll clickable.
+ *  - Any other player: name (or the GM's alias), portrait and conditions only.
+ * Rolls: click = normal, Shift = advantage, Ctrl/Cmd = disadvantage (or the Adv/Dis toggle for touch). Attacks offer
+ * their damage next, with crit damage after a natural 20. Public rolls go to everyone; private ones stay with the
+ * roller (and the GM, for a player's roll).
  */
 import "../extension/devlog";
-import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import { BUTLER_NS } from "../core/constants";
+import OBR, { type Item, type Player } from "@owlbear-rodeo/sdk";
+import {
+  abilityRows, cardAccess, challengeLine, combineModes, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
+  speedLine, typeLine, unitName, type CardAccess, type StandardRoll,
+} from "../core/card";
+import { damageAfter, parseChips, rollLabel, type RollSegment, type Segment } from "../core/chips";
 import { cryptoRng, fmtMod } from "../core/dice";
-import { maxHp } from "../core/sheet";
+import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
+import type { RollMode } from "../core/schema";
+import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
+import { displayConditions } from "../core/systems";
 import { readUnit } from "../core/unit";
-import { makeRoll, ROLL_CHANNEL, rollDestination, type Role, type RollVisibility } from "../core/rolls";
 import { h, store, type Child } from "../extension/dom";
+import { onRollLog, readRollLog } from "../extension/rollLog";
+import { initRoomSettings, onRoomSettings, roomSystem } from "../extension/roomSettings";
 
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
-const SPIKE_KEY = `${BUTLER_NS}/spike-size`;
 
 let item: Item | null = null;
 let role: Role = "PLAYER";
+let me = { id: "", name: "" };
+let players: Player[] = [];
 let visibility: RollVisibility = store.get("butler.rollVisibility") === "private" ? "private" : "public";
-let formula = "1d20+5";
-const log: string[] = [];
+/** Advantage/disadvantage toggle for the next roll (touch-friendly); resets after a roll. */
+let nextMode: RollMode = "normal";
+/** The last roll made from this card, with its follow-up damage rolls. */
+let last: { msg: RollMessage; entry?: string; damage: RollSegment[]; attackNatural?: number } | null = null;
+let log: RollMessage[] = [];
+let editOpen = false;
+let error = "";
+const closed = new Set<string>(["spells", "inventory"]);
+
+// ------------------------------------------------------------------ rolling
+
+async function roll(formula: string, label: string, kind: RollMessage["kind"], ev: MouseEvent | null, opts: { builtIn?: RollMode; crit?: boolean; entry?: string; segs?: Segment[]; seg?: RollSegment; followUp?: boolean } = {}) {
+  const u = item && readUnit(item.metadata);
+  if (!item || !u) return;
+  const clicked: RollMode = ev?.shiftKey ? "advantage" : ev && (ev.ctrlKey || ev.metaKey) ? "disadvantage" : nextMode;
+  const mode = combineModes(clicked, opts.builtIn);
+  // Public rolls name the unit the way players know it (alias), private ones by its real name.
+  const name = visibility === "public" && u.state.alias?.trim() ? u.state.alias.trim() : unitName(itemInfo(item), u.sheet);
+  try {
+    const msg = makeRoll(formula, label, { id: me.id, name: me.name, role }, visibility,
+      { rng: cryptoRng, unit: { id: item.id, name }, kind, mode, crit: opts.crit });
+    await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: rollDestination(msg) });
+    // Damage rolled from the result panel keeps the attack's other damage buttons (e.g. Slashing + Fire, or a crit).
+    const damage = kind === "attack" && opts.segs && opts.seg ? damageAfter(opts.segs, opts.seg) : opts.followUp && last ? last.damage : [];
+    const attackNatural = kind === "attack" ? msg.natural : opts.followUp ? last?.attackNatural : undefined;
+    last = { msg, entry: opts.entry ?? last?.entry, damage, attackNatural };
+    nextMode = "normal";
+    error = "";
+  } catch (e) {
+    error = `Roll failed: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  render();
+}
+
+const rollStandard = (r: StandardRoll) => (ev: MouseEvent) => void roll(r.formula, r.label, r.kind === "initiative" ? "check" : r.kind, ev, { builtIn: r.mode });
+
+function chipButton(entry: SheetEntry, segs: Segment[], seg: RollSegment): HTMLElement {
+  return h("button", {
+    className: `chip chip-${seg.kind}`,
+    title: `${seg.formula}${seg.kind === "attack" || seg.kind === "save" || seg.kind === "check" ? " · Shift: advantage · Ctrl: disadvantage" : ""}`,
+    onclick: (ev: MouseEvent) => void roll(seg.formula, rollLabel(entry.name, seg), seg.kind, ev, { entry: entry.name, segs, seg }),
+  }, seg.display);
+}
+
+function entryText(entry: SheetEntry, canRoll: boolean): Child[] {
+  const segs = parseChips(entry.text);
+  const out: Child[] = [];
+  for (const s of segs) {
+    if (s.t === "text") {
+      // Keep the sheet's line breaks (lists, multi-paragraph traits).
+      s.text.split("\n").forEach((line, i) => { if (i) out.push(h("br")); out.push(line); });
+    } else out.push(canRoll ? chipButton(entry, segs, s) : s.display);
+  }
+  return out;
+}
+
+// ------------------------------------------------------------------ rendering
+
+interface ItemInfo { visible: boolean; createdUserId?: string; label?: string; name: string; imageUrl?: string }
+const itemInfo = (i: Item): ItemInfo => ({
+  visible: i.visible, createdUserId: i.createdUserId, name: i.name,
+  label: (i as any).text?.plainText || undefined, imageUrl: (i as any).image?.url,
+});
+
+function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, access: CardAccess): Child {
+  const viewer = { id: me.id, role };
+  const img = portraitUrl(info, state);
+  const name = shownName(access, viewer, info, sheet, state);
+  const conds = sheet ? displayConditions(roomSystem(), sheet, state) : [];
+  return h("div", { className: "panel card-head" },
+    h("div", { className: "row", style: "flex-wrap:nowrap;align-items:flex-start" },
+      img ? h("img", { className: "portrait", src: img, alt: "" }) : h("div", { className: "portrait empty" }, "?"),
+      h("div", { className: "grow" },
+        h("h1", {}, name),
+        access === "full" && sheet ? h("div", { className: "small muted" }, typeLine(sheet)) : null,
+        role === "GM" && state.alias?.trim() ? h("div", { className: "small warn" }, `Players see: ${state.alias.trim()}`) : null,
+        role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null)),
+    conds.length ? h("div", { className: "conds" }, ...conds.map((c) =>
+      h("span", { className: `cond${c.automatic ? " auto" : ""}`, title: c.detail ?? "" }, c.label, c.level ? ` ${c.level}` : "", c.detail ? ` (${c.detail})` : ""))) : null);
+}
+
+function statsBar(sheet: UnitSheet, state: UnitState): Child {
+  const init = initiativeRoll(sheet);
+  const max = maxHp(sheet, state);
+  return h("div", { className: "statbar" },
+    h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),
+    h("div", { className: "stat" }, h("span", { className: "k" }, "HP"),
+      h("span", { className: `v${state.hp * 2 <= max ? " low" : ""}` }, `${state.hp}/${max}`),
+      state.tempHp ? h("span", { className: "small ok" }, `+${state.tempHp} temp`) : sheet.hp.formula ? h("span", { className: "small muted" }, sheet.hp.formula) : null),
+    h("div", { className: "stat" }, h("span", { className: "k" }, "Initiative"),
+      h("button", { className: "chip chip-check big", title: `${init.formula}${init.mode ? ` (${init.mode})` : ""}`, onclick: rollStandard(init) },
+        fmtMod(init.bonus), init.mode === "advantage" ? " adv" : init.mode === "disadvantage" ? " dis" : ""),
+      state.initiative !== null ? h("span", { className: "small muted" }, `rolled ${state.initiative}`) : null),
+    h("div", { className: "stat wide" }, h("span", { className: "k" }, "Speed"), h("span", { className: "small" }, speedLine(sheet))));
+}
+
+function rollControls(): Child {
+  const modeBtn = (m: RollMode, label: string) => h("button", { className: nextMode === m ? "on" : "", onclick: () => { nextMode = m; render(); } }, label);
+  return h("div", { className: "panel rollbar" },
+    h("div", { className: "seg" }, modeBtn("normal", "Normal"), modeBtn("advantage", "Advantage"), modeBtn("disadvantage", "Disadvantage")),
+    h("div", { className: "seg" },
+      h("button", { className: visibility === "public" ? "on" : "", onclick: () => setVisibility("public") }, "Public"),
+      h("button", { className: visibility === "private" ? "on" : "", title: role === "GM" ? "Only you see it" : "Only you and the GM see it", onclick: () => setVisibility("private") },
+        role === "GM" ? "Private (only me)" : "Private (me + GM)")));
+}
+
+function setVisibility(v: RollVisibility) {
+  visibility = v;
+  store.set("butler.rollVisibility", v);
+  render();
+}
+
+function abilities(sheet: UnitSheet): Child {
+  return h("div", { className: "abilities" }, ...abilityRows(sheet).map((a) =>
+    h("div", { className: "ab" },
+      h("div", { className: "k" }, a.short),
+      h("button", { className: "chip chip-check", title: `${a.check.label}: ${a.check.formula}`, onclick: rollStandard(a.check) }, fmtMod(a.mod)),
+      h("div", { className: "small muted" }, String(a.score)),
+      h("button", { className: `chip chip-save small${a.proficientSave ? " prof" : ""}`, title: `${a.save.label}: ${a.save.formula}`, onclick: rollStandard(a.save) }, `save ${fmtMod(a.save.bonus)}`))));
+}
+
+function infoLines(sheet: UnitSheet): Child {
+  const d = sheet.defenses;
+  const lines: [string, string | undefined][] = [
+    ["Vulnerabilities", d.vulnerable], ["Resistances", d.resist], ["Immunities", d.immune], ["Condition immunities", d.conditionImmune],
+    ["Senses", [sheet.senses, sheet.passivePerception !== undefined ? `Passive Perception ${sheet.passivePerception}` : ""].filter(Boolean).join("; ") || undefined],
+    ["Languages", sheet.languages], ["Challenge", challengeLine(sheet)],
+  ];
+  const skills = skillRolls(sheet);
+  return h("div", { className: "panel stack tight" },
+    skills.length ? h("div", { className: "row" }, h("strong", { className: "small" }, "Skills"), ...skills.map((s) =>
+      h("button", { className: "chip chip-check", title: s.formula, onclick: rollStandard(s) }, `${s.label.replace(/ check$/, "")} ${fmtMod(s.bonus)}`))) : null,
+    ...lines.filter(([, v]) => v).map(([k, v]) => h("div", { className: "small" }, h("strong", {}, `${k} `), v!)));
+}
+
+function sections(sheet: UnitSheet): Child[] {
+  return SECTIONS.filter(([key]) => sheet[key].length).map(([key, title]) =>
+    h("details", { className: "panel section", open: !closed.has(key), ontoggle: (e: Event) => { (e.target as HTMLDetailsElement).open ? closed.delete(key) : closed.add(key); } },
+      h("summary", {}, `${title} (${sheet[key].length})`),
+      ...sheet[key].map((entry) => h("p", { className: "entry-text" }, h("strong", {}, `${entry.name}. `), ...entryText(entry, true)))));
+}
+
+function lastRoll(): Child {
+  if (!last) return null;
+  const m = last.msg;
+  const nat20 = m.natural === 20;
+  const critHint = last.attackNatural === 20;
+  return h("div", { className: `panel lastroll${nat20 ? " nat20" : m.natural === 1 ? " nat1" : ""}` },
+    h("div", { className: "row between" },
+      h("span", {}, h("strong", {}, m.label), m.crit ? " (critical)" : "", m.visibility === "private" ? h("span", { className: "small muted" }, " · private") : null),
+      h("button", { className: "icon", title: "Close", onclick: () => { last = null; render(); } }, "✕")),
+    h("div", { className: "row" }, h("span", { className: "total" }, String(m.total)),
+      nat20 ? h("span", { className: "badge" }, "NATURAL 20") : m.natural === 1 ? h("span", { className: "badge bad-bg" }, "natural 1") : null,
+      h("span", { className: "small muted" }, rollDetail(m))),
+    last.damage.length ? h("div", { className: "row", style: "margin-top:6px" },
+      ...last.damage.flatMap((d) => [
+        h("button", { className: critHint ? "secondary" : "", onclick: (ev: MouseEvent) => void roll(d.formula, rollLabel(last!.entry ?? "", d), "damage", ev, { followUp: true }) },
+          `Damage ${d.display}${d.damageType ? ` ${d.damageType}` : ""}`),
+        h("button", { className: critHint ? "" : "secondary", title: "Critical hit: damage dice doubled", onclick: (ev: MouseEvent) => void roll(d.formula, rollLabel(last!.entry ?? "", d), "damage", ev, { crit: true, followUp: true }) },
+          "Crit"),
+      ])) : null);
+}
+
+function rollLog(): Child {
+  const mine = item ? log.filter((m) => m.unit?.id === item!.id) : [];
+  return h("details", { className: "panel" },
+    h("summary", {}, `Roll log (${log.length})`),
+    log.length ? h("ul", { className: "plain small log" }, ...log.slice(0, 25).map((m) =>
+      h("li", { className: mine.includes(m) ? "" : "muted" },
+        h("strong", {}, String(m.total)), ` ${m.unit?.name ?? m.by.name} · ${m.label}${m.crit ? " (crit)" : ""}`,
+        m.natural === 20 ? " · nat 20" : m.natural === 1 ? " · nat 1" : "", m.visibility === "private" ? " · private" : "",
+        h("span", { className: "muted" }, ` (${m.by.name})`))))
+      : h("div", { className: "small muted" }, "No rolls yet this session."));
+}
+
+function editPanel(info: ItemInfo, state: UnitState): Child {
+  if (role !== "GM") return null;
+  const name = h("input", { type: "text", value: info.label ?? info.name }) as HTMLInputElement;
+  const alias = h("input", { type: "text", value: state.alias ?? "", placeholder: "e.g. Hooded figure (empty: real name)" }) as HTMLInputElement;
+  const portrait = h("input", { type: "text", value: state.portraitUrl ?? "", placeholder: "https://… (empty: token image)" }) as HTMLInputElement;
+  // One entry per player: the same account connected twice appears twice in the party list.
+  const known = [...new Map(players.filter((p) => p.role === "PLAYER").map((p) => [p.id, p])).values()];
+  const ctrl = h("select", {},
+    h("option", { value: "", selected: !state.controlledBy }, "Nobody (GM)"),
+    ...known.map((p) => h("option", { value: p.id, selected: p.id === state.controlledBy }, p.name)),
+    state.controlledBy && !known.some((p) => p.id === state.controlledBy) ? h("option", { value: state.controlledBy, selected: true }, "A player who isn't connected") : null) as HTMLSelectElement;
+  return h("details", { className: "panel", open: editOpen, ontoggle: (e: Event) => { editOpen = (e.target as HTMLDetailsElement).open; } },
+    h("summary", {}, "Edit unit (GM)"),
+    h("div", { className: "grid2", style: "margin-top:8px" },
+      h("label", { className: "span2" }, "Name (token label)", name),
+      h("label", { className: "span2" }, "Alias players see until revealed", alias),
+      h("label", { className: "span2" }, "Portrait URL", h("div", { className: "row", style: "flex-wrap:nowrap" }, portrait,
+        h("button", { className: "secondary", title: "Pick an image from your Owlbear library", onclick: async () => {
+          try {
+            const [img] = await OBR.assets.downloadImages(false, undefined, "CHARACTER");
+            if (img) portrait.value = img.image.url;
+          } catch (e) { error = e instanceof Error ? e.message : String(e); render(); }
+        } }, "Library"))),
+      h("label", { className: "span2" }, "Controlled by", ctrl)),
+    h("div", { className: "row", style: "margin-top:8px" },
+      h("button", { onclick: () => void saveEdits(name.value, alias.value, portrait.value, ctrl.value) }, "Save"),
+      state.alias ? h("button", { className: "secondary", onclick: () => void saveEdits(name.value, "", portrait.value, ctrl.value) }, "Reveal (clear alias)") : null));
+}
+
+async function saveEdits(name: string, alias: string, portrait: string, controller: string) {
+  try {
+    const p = portrait.trim();
+    if (p && !/^https:\/\//i.test(p)) throw new Error("Portrait must be an https:// link that players' browsers can load.");
+    await OBR.scene.items.updateItems([itemId], (ds) => {
+      for (const d of ds as any[]) {
+        const n = name.trim();
+        if (n) { d.name = n; if (d.text) d.text.plainText = n; }
+        const cur = (d.metadata[STATE_KEY] ?? {}) as Record<string, unknown>;
+        const next: Record<string, unknown> = { ...cur };
+        for (const [k, v] of [["alias", alias.trim()], ["portraitUrl", p], ["controlledBy", controller]] as const) {
+          if (v) next[k] = v; else delete next[k];
+        }
+        d.metadata[STATE_KEY] = next;
+      }
+    });
+    error = "";
+    await OBR.notification.show("Unit updated.", "SUCCESS");
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+    render();
+  }
+}
 
 function render() {
+  const scrollY = window.scrollY;
+  const focused = document.activeElement as HTMLElement | null;
+  if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName) && focused.closest("details")) return; // don't wipe a field the GM is typing in
   const nodes: Child[] = [];
-  if (!item) {
-    nodes.push(h("div", { className: "panel warn" }, "This token is no longer in the scene."));
+  const u = item ? readUnit(item.metadata) : null;
+  if (!item || !u) {
+    nodes.push(h("div", { className: "panel warn" }, item ? "This token isn't an Encounter Butler unit." : "This token is no longer in the scene."));
   } else {
-    const img = (item as any).image?.url as string | undefined;
-    const name = (item as any).text?.plainText || item.name;
-    nodes.push(h("div", { className: "panel row" },
-      img ? h("img", { src: img, alt: "", width: 56, height: 56, style: "border-radius:50%;object-fit:cover" }) : null,
-      h("div", {}, h("strong", {}, name), h("div", { className: "small muted" }, (() => {
-        const u = readUnit(item.metadata);
-        if (!u) return "Not a Butler unit";
-        const { sheet, state } = u;
-        return `${sheet.name} · AC ${sheet.ac} · HP ${state.hp}/${maxHp(sheet, state)}${state.tempHp ? ` (+${state.tempHp} temp)` : ""} · Init ${fmtMod(sheet.initiative.modifier)}`;
-      })()))));
-
-    nodes.push(h("div", { className: "panel stack" },
-      h("strong", {}, "Test roll"),
-      h("div", { className: "row" },
-        h("input", { type: "text", value: formula, oninput: (e: Event) => { formula = (e.target as HTMLInputElement).value; } }),
-        h("button", { onclick: () => void roll(name) }, "Roll")),
-      h("label", { className: "row small" },
-        h("input", { type: "checkbox", checked: visibility === "private", onchange: (e: Event) => {
-          visibility = (e.target as HTMLInputElement).checked ? "private" : "public";
-          store.set("butler.rollVisibility", visibility);
-        } }),
-        role === "GM" ? "Private (only you see it)" : "Private (only you and the GM see it)")));
-
-    if (role === "GM") {
-      nodes.push(h("details", { className: "panel" },
-        h("summary", {}, "Diagnostics: metadata size limit"),
-        h("p", { className: "small muted" }, "Writes test data of growing size to this token, reads it back, then removes it."),
-        h("button", { onclick: () => void sizeTest() }, "Run size test")));
+    const info = itemInfo(item);
+    const access = cardAccess({ id: me.id, role }, info, u.state);
+    if (access === "none") {
+      nodes.push(h("div", { className: "panel warn" }, "This token is no longer in the scene."));
+    } else {
+      nodes.push(header(info, u.sheet, u.state, access));
+      if (access === "full") {
+        
+        nodes.push(statsBar(u.sheet, u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
+      } else {
+        nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));
+      }
     }
   }
-  if (log.length) nodes.push(h("pre", { className: "panel small", style: "white-space:pre-wrap" }, log.join("\n")));
+  if (error) nodes.push(h("div", { className: "panel bad" }, error));
+  nodes.push(rollLog());
+  // Last: sticks to the bottom of the popover while the stat block scrolls above it.
+  nodes.push(lastRoll());
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
-}
-
-async function roll(unitName: string) {
-  try {
-    const msg = makeRoll(formula, "test roll", { id: OBR.player.id, name: await OBR.player.getName(), role }, visibility,
-      { rng: cryptoRng, unit: item ? { id: item.id, name: unitName } : undefined });
-    await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: rollDestination(msg) });
-    console.log("[Butler] roll sent", rollDestination(msg), msg.total);
-  } catch (e) {
-    log.push(`Roll failed: ${e instanceof Error ? e.message : e}`);
-    render();
-  }
-}
-
-async function sizeTest() {
-  log.length = 0;
-  for (const kb of [8, 16, 32, 64, 128, 256]) {
-    const payload = "x".repeat(kb * 1024);
-    try {
-      await OBR.scene.items.updateItems([itemId], (ds) => { for (const d of ds) d.metadata[SPIKE_KEY] = payload; });
-      await new Promise((r) => setTimeout(r, 400));
-      const [back] = await OBR.scene.items.getItems([itemId]);
-      const got = back?.metadata[SPIKE_KEY];
-      log.push(`${kb} kB: ${typeof got === "string" && got.length === payload.length ? "OK" : `not stored (read back ${typeof got === "string" ? got.length : 0} bytes)`}`);
-    } catch (e) {
-      log.push(`${kb} kB: error: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
-    }
-    render();
-  }
-  try {
-    await OBR.scene.items.updateItems([itemId], (ds) => { for (const d of ds) delete d.metadata[SPIKE_KEY]; });
-    log.push("Test data removed.");
-  } catch (e) {
-    log.push(`Cleanup failed: ${e instanceof Error ? e.message : e}`);
-  }
-  console.log("[Butler] metadata size test", log.join(" | "));
-  render();
+  window.scrollTo(0, scrollY);
 }
 
 OBR.onReady(async () => {
-  role = await OBR.player.getRole();
+  const [r, name] = await Promise.all([OBR.player.getRole(), OBR.player.getName()]);
+  role = r;
+  me = { id: OBR.player.id, name };
+  await initRoomSettings();
+  onRoomSettings(() => render());
   [item = null] = await OBR.scene.items.getItems([itemId]);
+  log = readRollLog();
+  if (role === "GM") {
+    players = await OBR.party.getPlayers();
+    OBR.party.onChange((ps) => { players = ps; render(); });
+  }
   render();
+  onRollLog((l) => { log = l; render(); });
   OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });
 });

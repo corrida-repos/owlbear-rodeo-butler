@@ -26,39 +26,92 @@ export function rollDie(sides: number, rng: Rng): number {
   return Math.floor(rng() * sides) + 1;
 }
 
+/** One dice term of a formula, e.g. "2d20kh1": every die rolled, and the ones that count. */
+export interface DiceGroup {
+  count: number;
+  sides: number;
+  sign: 1 | -1;
+  keep?: { which: "high" | "low"; n: number };
+  rolls: number[];
+  kept: number[];
+}
+
 export interface FormulaRoll {
   formula: string;
+  /** Dice that count toward the total (all of them unless a term keeps highest/lowest). */
   dice: number[];
   modifier: number;
   total: number;
+  groups: DiceGroup[];
 }
 
-/** Rolls simple formulas: "2d8 + 2", "4d10-4", "15". */
+const TERM = /[+-]?(\d+d\d+(?:k[hl]\d+)?|\d+)/gi;
+const FORMULA = /^([+-]?(\d+d\d+(k[hl]\d+)?|\d+))+$/i;
+
+/** True if `formula` is something rollFormula accepts within the dice limits (≤ 100 dice of 2–1000 sides). */
+export function isRollable(formula: string): boolean {
+  const clean = formula.replace(/\s+/g, "");
+  if (!FORMULA.test(clean) || !/\d+d\d+/i.test(clean)) return false;
+  for (const m of clean.matchAll(/(\d+)d(\d+)(?:k[hl](\d+))?/gi)) {
+    const n = Number(m[1]), s = Number(m[2]);
+    if (n < 1 || n > 100 || s < 2 || s > 1000 || (m[3] !== undefined && (Number(m[3]) < 1 || Number(m[3]) > n))) return false;
+  }
+  return true;
+}
+
+/** Rolls formulas like "2d8 + 2", "4d10-4", "15", "2d20kh1+5" (keep highest) and "2d20kl1" (keep lowest). */
 export function rollFormula(formula: string, rng: Rng): FormulaRoll {
   const clean = formula.replace(/\s+/g, "");
-  if (!/^([+-]?(\d+d\d+|\d+))+$/i.test(clean)) throw new Error(`Unsupported dice formula: "${formula}"`);
-  const terms = clean.match(/[+-]?(\d+d\d+|\d+)/gi) ?? [];
+  if (!FORMULA.test(clean)) throw new Error(`Unsupported dice formula: "${formula}"`);
   const dice: number[] = [];
+  const groups: DiceGroup[] = [];
   let modifier = 0;
   let total = 0;
-  for (const term of terms) {
+  for (const term of clean.match(TERM) ?? []) {
     const sign = term.startsWith("-") ? -1 : 1;
     const body = term.replace(/^[+-]/, "");
-    const m = /^(\d+)d(\d+)$/i.exec(body);
+    const m = /^(\d+)d(\d+)(?:k([hl])(\d+))?$/i.exec(body);
     if (m) {
-      const n = Number(m[1]);
-      const s = Number(m[2]);
-      for (let i = 0; i < n; i++) {
-        const r = rollDie(s, rng);
-        dice.push(r);
-        total += sign * r;
+      const count = Number(m[1]);
+      const sides = Number(m[2]);
+      const rolls = Array.from({ length: count }, () => rollDie(sides, rng));
+      let kept = rolls;
+      let keep: DiceGroup["keep"];
+      if (m[3]) {
+        keep = { which: m[3].toLowerCase() === "h" ? "high" : "low", n: Math.min(count, Number(m[4])) };
+        const order = rolls.map((v, i) => ({ v, i })).sort((a, b) => (keep!.which === "high" ? b.v - a.v : a.v - b.v) || a.i - b.i);
+        const keepIdx = new Set(order.slice(0, keep.n).map((o) => o.i));
+        kept = rolls.filter((_, i) => keepIdx.has(i));
       }
+      groups.push({ count, sides, sign, ...(keep ? { keep } : {}), rolls, kept });
+      for (const r of kept) { dice.push(r); total += sign * r; }
     } else {
       modifier += sign * Number(body);
       total += sign * Number(body);
     }
   }
-  return { formula, dice, modifier, total };
+  return { formula, dice, modifier, total, groups };
+}
+
+/** A d20 test rolled with advantage/disadvantage: the leading "1d20" becomes "2d20kh1"/"2d20kl1". */
+export function withRollMode(formula: string, mode: RollMode): string {
+  const clean = formula.replace(/\s+/g, "");
+  if (mode === "normal") return clean;
+  return clean.replace(/^\+?1d20(?![\dk])/i, mode === "advantage" ? "2d20kh1" : "2d20kl1");
+}
+
+/** True if the formula is a d20 test: starts with one d20 (any roll mode). */
+export const isD20Test = (formula: string) => /^\+?(1d20|2d20k[hl]1)(?![\d])/i.test(formula.replace(/\s+/g, ""));
+
+/** Critical hit damage: every damage die is rolled twice as many times; modifiers stay the same (2014 and 2024). */
+export function critFormula(formula: string): string {
+  return formula.replace(/\s+/g, "").replace(/(\d+)d(\d+)/gi, (_m, n: string, s: string) => `${Number(n) * 2}d${s}`);
+}
+
+/** The kept die of a d20 test (for natural 1 / 20), or undefined if the roll isn't one. */
+export function naturalD20(r: FormulaRoll): number | undefined {
+  const g = r.groups[0];
+  return g && g.sides === 20 && g.kept.length === 1 && isD20Test(r.formula) ? g.kept[0] : undefined;
 }
 
 /** Advantage + disadvantage cancel to normal. */
