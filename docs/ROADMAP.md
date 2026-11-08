@@ -1,4 +1,4 @@
-# Roadmap: Encounter Butler 2.0 — independent of Forge!
+# Roadmap: Encounter Butler 2.0 — independent of Forge! (released 2026-11-08)
 
 Status (2026-11-08):
 - **Phase 0:** done. Live-checked with a GM and a player (background, context menu → card, public/private roll
@@ -53,7 +53,8 @@ Status (2026-11-08):
   right-click menu; search, tags, an editor (name, tags, AC, HP, CR, plus the full stat block as JSON), new blank
   units, put on the list to add with quantities, export/import as a file (newer copies win). Live: Wolf 2 saved from
   its card, edited into "Dire Hound" (AC 13, tags), added to the scene; Wolf 2 kept AC 12. 172 tests.
-- **Next:** release 2.0.0 (pending live check: a real D&D Beyond self-sync by a player).
+- **Released: 2.0.0 (2026-11-08).** One check is still open: a real D&D Beyond self-sync by a player (needs a
+  player logged in to D&D Beyond with the bookmark installed); the receiving side is unit-tested.
 
 ## Goal
 

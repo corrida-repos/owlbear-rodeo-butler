@@ -20,7 +20,7 @@
 <text x="24" y="37" font-size="14" fill="#D5B974" font-weight="700" letter-spacing="2">03 / KEEP MOVING</text>
 <text x="24" y="84" font-size="27" fill="#F5F0DF" font-weight="650">Run the encounter.</text>
 <text x="24" y="123" font-size="18" fill="#CDDACB" >Initiative, turns and HP.</text>
-<text x="24" y="150" font-size="18" fill="#CDDACB" >Combat core in development.</text>
+<text x="24" y="150" font-size="18" fill="#CDDACB" >Conditions, movement, turns.</text>
 <text x="24" y="183" font-size="13" fill="#AFC4A7" >TRACKER / 2.0</text>
 </g>
 </svg>

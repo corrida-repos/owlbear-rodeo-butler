@@ -2,7 +2,7 @@
 
 [← Back to the overview](../README.md) · [Install](../README.md#install-in-owlbear-rodeo) · [Development guide](DEVELOPMENT.md)
 
-This guide follows the developing 2.0 interface in `main`. The hosted release may differ; see the [changelog](../CHANGELOG.md) and [roadmap](ROADMAP.md) for version status.
+This guide covers version 2.0. See the [changelog](../CHANGELOG.md) for what changed and the [roadmap](ROADMAP.md) for how each part was checked.
 
 ## Your first encounter
 
@@ -56,7 +56,7 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 
 ## Run combat in Tracker
 
-The combat core, conditions and the movement tracker are implemented in `main` (phases 3 and 4, live-checked); see the [roadmap](ROADMAP.md) for validation details and the remaining 2.0 work.
+
 
 1. Choose **Roll all** or **Roll creatures**, or type a player's roll into their initiative box.
 2. Press **Start combat**. Use **Next turn** and **Prev** to move through the order; the round advances when the order wraps.

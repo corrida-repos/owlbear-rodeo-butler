@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased (2.0.0, in progress)
+## 2.0.0 — 2026-11-08
 
-- **No more Forge!** Encounter Butler stores each unit's stat block and live state (HP, initiative, party) on the token itself and works on its own. Units created with Forge aren't converted: add them again. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's coming (unit cards with clickable dice, initiative tracker, HP, conditions, player view).
+Encounter Butler now runs a whole D&D combat on its own. If you're upgrading from 1.x and the right-click *View unit card* or turn notices don't appear, remove the extension in Owlbear (**Profile → Extensions**) and add the link again.
+
+- **No more Forge!** Encounter Butler stores each unit's stat block and live state (HP, initiative, party) on the token itself and works on its own. Units created with Forge aren't converted: add them again. See [docs/ROADMAP.md](docs/ROADMAP.md) for how each feature was checked.
 - **Unit cards:** right-click a unit → *View unit card*, or click a name in the Combat tab. The card shows the whole stat block: portrait, AC, HP, initiative, speed, abilities, saves, skills, senses, defences and every trait, action, reaction, legendary action, spell and item.
 - **Clickable dice:** every bonus and damage value on the card rolls. Shift-click for advantage, Ctrl/Cmd-click for disadvantage (or the toggle on the card). After an attack, the card offers its damage, and crit damage (dice doubled) after a natural 20. Rolls are **public** (everyone gets a notification) or **private** (only you; a player's private roll also goes to the GM). Each browser keeps a roll log for the session.
 - **Players:** the Encounter Butler button shows players whose turn it is, the initiative order (names or the GM's aliases, pictures and conditions; hidden tokens never appear) and their own units. On their own units they can change HP and initiative, add or remove conditions from the card, roll death saves and Concentration saves, end their turn and use the movement tracker. A room setting (Combat tab) turns player edits off.
