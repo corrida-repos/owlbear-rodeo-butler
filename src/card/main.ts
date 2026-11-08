@@ -24,6 +24,7 @@ import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty 
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
 import { conditionEditor } from "../extension/conditionEditor";
+import { saveToCollection } from "../extension/collectionPanel";
 import { obrGateway } from "../extension/obrGateway";
 import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
@@ -355,7 +356,18 @@ function editPanel(info: ItemInfo, state: UnitState): Child {
       h("label", { className: "span2" }, "Controlled by", ctrl)),
     h("div", { className: "row", style: "margin-top:8px" },
       h("button", { onclick: () => void saveEdits(name.value, alias.value, portrait.value, ctrl.value) }, "Save"),
-      state.alias ? h("button", { className: "secondary", onclick: () => void saveEdits(name.value, "", portrait.value, ctrl.value) }, "Reveal (clear alias)") : null));
+      state.alias ? h("button", { className: "secondary", onclick: () => void saveEdits(name.value, "", portrait.value, ctrl.value) }, "Reveal (clear alias)") : null,
+      h("button", { className: "secondary", title: "Keep a copy of this unit's stat block and picture in your collection (this browser)", onclick: () => void saveTokenToCollection() }, "Save to collection")));
+}
+
+async function saveTokenToCollection() {
+  const u = item && readUnit(item.metadata);
+  if (!item || !u) return;
+  try {
+    const img = (item as any).image as { url: string; width: number; height: number; mime: string } | undefined;
+    await saveToCollection([u.sheet], img ? { url: img.url, width: img.width, height: img.height, mime: img.mime } : null, `token ${unitName(itemInfo(item), u.sheet, u.state)}`);
+    await OBR.notification.show(`Saved ${u.sheet.name} to your collection.`, "SUCCESS");
+  } catch (e) { showErr(e); }
 }
 
 async function saveEdits(name: string, alias: string, portrait: string, controller: string) {

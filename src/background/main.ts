@@ -25,6 +25,8 @@ import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL 
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
 import { openCard } from "../extension/cardPopover";
+import { saveToCollection } from "../extension/collectionPanel";
+import { readUnit } from "../core/unit";
 import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
 import { pushRollLog } from "../extension/rollLog";
@@ -98,6 +100,22 @@ async function createMenus() {
     icons: [{ icon, label: "Mark as dead", filter: { ...gm, every: [...UNIT_FILTER] } }],
     onClick: async (ctx) => {
       logClick("dead", ctx.items); await markUnitsDead(obrGateway, ids(ctx.items)); },
+  });
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/collect`,
+    icons: [{ icon, label: "Save to collection", filter: { ...gm, every: [...UNIT_FILTER] } }],
+    onClick: async (ctx) => {
+      logClick("collect", ctx.items);
+      let n = 0;
+      for (const it of ctx.items) {
+        const u = readUnit(it.metadata);
+        if (!u) continue;
+        const img = (it as { image?: { url: string; width: number; height: number; mime: string } }).image;
+        await saveToCollection([u.sheet], img ? { url: img.url, width: img.width, height: img.height, mime: img.mime } : null, `token ${(it as { text?: { plainText?: string } }).text?.plainText || it.name}`);
+        n++;
+      }
+      await notify(`Saved ${n} unit${n === 1 ? "" : "s"} to your collection (Add Creatures tab).`, "SUCCESS");
+    },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/party`,

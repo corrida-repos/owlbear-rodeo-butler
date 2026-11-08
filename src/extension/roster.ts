@@ -18,6 +18,7 @@ import type { Statblock } from "../core/schema";
 import { action, h, measure, mimeFromUrl, rerender, showError, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSystem } from "./roomSettings";
+import { createCollectionPanel, saveToCollection } from "./collectionPanel";
 import { searchableSource } from "../core/systems";
 
 // ------------------------------------------------------------------ 5etools index + library (shared, lazy)
@@ -244,7 +245,8 @@ export function createRoster(kind: RosterKind) {
     hb.mode = "json";
   }
 
-  async function addHomebrew() {
+  /** The homebrew form's stat block(s), picture and label (shared by "Put on the list" and "Save to collection"). */
+  async function buildHomebrew(): Promise<{ statblocks: Statblock[]; image: ResolvedImage; imageNote: string; label: string }> {
     const prov = hb.base ? "adapted" : hb.homebrew ? "homebrew" : "user-provided";
     let statblocks: Statblock[];
     if (hb.mode === "json") {
@@ -273,13 +275,32 @@ export function createRoster(kind: RosterKind) {
       statblocks = [sb];
     }
     if (!hb.image) { hb.image = placeholderImage(); hb.imageNote = "placeholder"; }
-    for (const sb of statblocks) {
-      entries.push({ id: nextId++, statblock: sb, image: hb.image, imageNote: hb.imageNote, count: 1,
-        hp: "average", hidden: false, advantage: false,
-        label: hb.base ? `adapted from ${hb.base.name}` : hb.homebrew ? "Homebrew (not official)" : "Your stat block" });
-    }
-    Object.assign(hb, { name: "", json: "", base: null, attacks: "", notes: "", level: "", image: null, imageNote: "", imageUrl: "" });
+    const label = hb.base ? `adapted from ${hb.base.name}` : hb.homebrew ? "Homebrew (not official)" : "Your stat block";
+    return { statblocks, image: hb.image, imageNote: hb.imageNote, label };
   }
+  const clearHomebrew = () => Object.assign(hb, { name: "", json: "", base: null, attacks: "", notes: "", level: "", image: null, imageNote: "", imageUrl: "" });
+
+  async function addHomebrew() {
+    const b = await buildHomebrew();
+    for (const sb of b.statblocks) {
+      entries.push({ id: nextId++, statblock: sb, image: b.image, imageNote: b.imageNote, count: 1, hp: "average", hidden: false, advantage: false, label: b.label });
+    }
+    clearHomebrew();
+  }
+
+  async function saveHomebrew() {
+    const b = await buildHomebrew();
+    await saveToCollection(b.statblocks, b.image, b.label);
+    await OBR.notification.show(`Saved ${b.statblocks.map((x) => x.name).join(", ")} to your collection.`, "SUCCESS");
+    clearHomebrew();
+    collection.reload();
+  }
+
+  // ---- collection (F8)
+  const collection = createCollectionPanel((sheet, image, label) => {
+    entries.push({ id: nextId++, statblock: sheet, image: image ?? placeholderImage(), imageNote: image ? "saved picture" : "placeholder", count: 1, hp: "average", hidden: false, advantage: false, label });
+    rerender();
+  });
 
   // ---- add + undo
   async function viewCenter() {
@@ -386,7 +407,9 @@ export function createRoster(kind: RosterKind) {
       f.image ? h("div", { className: "row small", style: "margin-top:4px" }, h("img", { src: f.image.url, className: "thumb" }), `✔ ${f.imageNote}`) : h("div", { className: "small muted", style: "margin-top:4px" }, "No token chosen: the placeholder is used."),
       h("div", { className: "row", style: "margin-top:8px" },
         f.base ? null : h("label", { className: "small", style: "align-items:center" }, h("input", { type: "checkbox", checked: f.homebrew, onchange: (e: Event) => { f.homebrew = (e.target as HTMLInputElement).checked; } }), "homebrew (not official)")),
-      h("button", { className: "wide", style: "margin-top:8px", onclick: action(addHomebrew) }, "Put on the list"));
+      h("div", { className: "row", style: "margin-top:8px;flex-wrap:nowrap" },
+        h("button", { className: "grow", onclick: action(addHomebrew) }, "Put on the list"),
+        h("button", { className: "secondary", title: "Keep it in your collection (this browser) to add again later", onclick: action(saveHomebrew) }, "Save to collection")));
   }
 
   function renderLastAdd(r: QuickAddReport): Child {
@@ -405,6 +428,7 @@ export function createRoster(kind: RosterKind) {
     return [
       renderPublished(),
       renderHomebrew(),
+      collection.el,
       h("div", { className: "panel" },
         h("h2", {}, `${Many} to add (${total})`),
         entries.length ? h("div", {}, ...entries.map(renderEntry)) : h("div", { className: "small muted" }, `Nothing yet. Pick a published ${one} or put a homebrewed one on the list.`)),

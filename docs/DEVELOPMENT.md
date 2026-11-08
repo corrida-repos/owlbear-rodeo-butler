@@ -174,6 +174,16 @@ broadcast message.
 - Aliases: while one is set, the token label shows the alias (players see the map) and the item name keeps the real
   name; `unitName(item, sheet, state)` reads it accordingly.
 
+## Search filters, 2014 rules, collection (phase 6)
+- [habitat.ts](../src/core/habitat.ts) + `npm run index:build`: every creature in `public/data/monsters.json` gets an
+  environment (5etools, the same creature in another book, or assigned by rules, marked `~`) and a spellcaster flag;
+  [search.ts](../src/core/search.ts) filters the index (CR range, types, environments, sizes, spellcaster).
+- 2014 rules: [combat.ts](../src/core/combat.ts) `difficulty2014` (DMG thresholds × the group multiplier, adjusted
+  for party size) and one `DifficultyView` for both systems; creatures' initiative uses Dex in 2014 rooms
+  (`initiativeSetupFor(…, rules)`); `editionText` swaps the attack wording on cards.
+- Collection: [collection.ts](../src/core/collection.ts) (entries, tags, search, export/import merge) and
+  [collectionStore.ts](../src/extension/collectionStore.ts) (IndexedDB, a BroadcastChannel keeps the pages in step).
+
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
 

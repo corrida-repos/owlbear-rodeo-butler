@@ -20,6 +20,12 @@ Open a scene as GM, add a few creatures in **Add Creatures**, then add your part
    - Click **Put on the list**.
 4. In the list, set how many of each (type a number or use **− / +**), and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the initiative order, each with rolled initiative. **Undo** removes them again.
 
+**Your collection** keeps creatures you made or adjusted, in this browser:
+
+- Save one with **Save to collection** (next to *Put on the list* in the homebrew form), from a unit's card (**Edit unit → Save to collection**) or from its right-click menu (several tokens at once).
+- Search by name, type or tag, and click tags to narrow the list. **+ List** puts a creature on the list above, to add it as usual. **Edit** changes its name, tags, AC, HP and CR, or anything else in **Full stat block (JSON)**; write rolls as `[1d20+4]` to make them clickable. **New** starts a blank one.
+- It lives in this browser only: **Export file** saves a backup (or moves it to another computer with **Import file**). Tokens already in a scene keep their own copy when you edit the collection.
+
 A **Prepared encounter** (map, grid and positioned creatures in one file) can still be imported from the collapsed section at the bottom of this tab. To make your own packages, see the [developer guide](DEVELOPMENT.md#new-encounter-workflow).
 
 Right-click a creature or party token → **View unit card** (or click a name in Tracker or Combat). The card shows the whole stat block, and every bonus and damage value is a button:

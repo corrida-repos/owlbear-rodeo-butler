@@ -49,7 +49,11 @@ Status (2026-11-08):
   level), concentration DC has no cap, no Bloodied. Tested with the 2014 DMG's own example (four 3rd-level
   characters vs a bugbear and three hobgoblins: 1,000 adjusted XP, Hard). Live: switching a room to 5E changed the
   difficulty scale and dropped Bloodied from the badges. 167 tests.
-- **Next:** collection (F8), then release 2.0.0.
+- **F8 collection:** done. Units saved in the GM's browser (IndexedDB) from the homebrew form, a unit's card or the
+  right-click menu; search, tags, an editor (name, tags, AC, HP, CR, plus the full stat block as JSON), new blank
+  units, put on the list to add with quantities, export/import as a file (newer copies win). Live: Wolf 2 saved from
+  its card, edited into "Dire Hound" (AC 13, tags), added to the scene; Wolf 2 kept AC 12. 172 tests.
+- **Next:** release 2.0.0 (pending live check: a real D&D Beyond self-sync by a player).
 
 ## Goal
 
