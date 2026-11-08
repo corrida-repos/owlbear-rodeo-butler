@@ -77,6 +77,8 @@ export interface UnitState {
   maxHpOverride?: number;
   initiative: number | null;
   initiativeRoll?: InitiativeRoll;
+  /** GM's order among units tied on initiative (higher goes first). */
+  initiativeTiebreak?: number;
   /** In the initiative tracker. */
   inEncounter: boolean;
   /** PC, companion or sidekick (the party). */

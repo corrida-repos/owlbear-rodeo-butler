@@ -17,6 +17,9 @@ export interface SceneItemLite {
   /** Current picture (image items only). */
   image?: { url: string; width: number; height: number; mime: string };
   metadata: Record<string, unknown>;
+  /** False for tokens hidden from players (missing = visible). */
+  visible?: boolean;
+  createdUserId?: string;
 }
 
 export interface ImageItemSpec {
@@ -43,7 +46,8 @@ export interface SceneGateway {
   updateImages(updates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: Vec2 } }[]): Promise<void>;
   /** Shallow-merges keys into each item's metadata (other keys untouched). */
   updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]): Promise<void>;
-  /** Merges `patch` into the object stored under `key` (e.g. a unit's state), in one atomic scene update. */
+  /** Merges `patch` into the object stored under `key` (e.g. a unit's state), in one atomic scene update.
+   *  A key set to `undefined` in the patch is removed (see mergePatch). */
   patchMetadata(updates: { id: string; key: string; patch: Record<string, unknown> }[]): Promise<void>;
   getSceneMetadata(): Promise<Record<string, unknown>>;
   setSceneMetadata(update: Record<string, unknown>): Promise<void>;
@@ -51,6 +55,16 @@ export interface SceneGateway {
   getGrid(): Promise<{ dpi: number; scale: string; type: string }>;
   setGridScale(scale: string): Promise<void>;
   setGridType(type: "SQUARE"): Promise<void>;
+}
+
+/** Shallow merge used by patchMetadata: patch keys overwrite, keys whose value is `undefined` are deleted. */
+export function mergePatch(cur: unknown, patch: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...(typeof cur === "object" && cur !== null ? cur : {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete out[k];
+    else out[k] = JSON.parse(JSON.stringify(v));
+  }
+  return out;
 }
 
 /** Initiative modifier and advantage state used to roll a token's initiative. */

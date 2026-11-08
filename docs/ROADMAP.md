@@ -89,6 +89,7 @@ manifest.json
 |---|---|---|
 | Encounter difficulty | XP budget per character (Low/Moderate/High) + Butler's Extreme | XP thresholds (Easy/Medium/Hard/Deadly) × group-size multiplier |
 | Creature search preference | 2024 books first | 2014 books first |
+| Core books in the 5etools search | 2024 PHB, MM, DMG only (XPHB, XMM, XDMG); the 2014 PHB, MM and DMG are left out | 2014 PHB, MM, DMG only; the 2024 ones are left out |
 | Initiative | stat block initiative bonus (incl. proficiency) | Dex modifier |
 | Exhaustion | levels 1–6, −2 per level on d20 tests, −5 ft speed per level | 6-level effects table |
 | Conditions list / wording | 2024 glossary | 2014 PHB appendix |
@@ -163,7 +164,12 @@ manifest.json
 
 ### F9 · Game system support (5E and 5.5E, 5.5E default)
 - Room setting, GM-only. Everything in the GameSystem table above follows it.
-- **Done when:** both systems' difficulty, exhaustion and concentration rules have tests from the books' numbers.
+- **Core books follow the system:** the 5etools search (Add Creatures, and *Start from a published creature*) only
+  offers the Player's Handbook, Monster Manual and Dungeon Master's Guide of the chosen edition: 5.5E hides the 2014
+  PHB, MM and DMG; 5E hides the 2024 ones (XPHB, XMM, XDMG). Every other book and adventure stays available in both.
+  Prepared encounters that name a hidden core book still build (the spec is explicit), with a warning.
+- **Done when:** both systems' difficulty, exhaustion and concentration rules have tests from the books' numbers, and
+  a "wolf" search shows only the Monster Manual of the room's edition. both systems' difficulty, exhaustion and concentration rules have tests from the books' numbers.
 
 ### F10 · Context-menu unit actions and initiative reset
 - On selected token(s): View card · Add to / remove from initiative · Roll initiative · Damage/Heal · Conditions ·

@@ -123,3 +123,31 @@ button.chip-save.prof { background: var(--accent); color: #fff; }
 ul.log li { margin-bottom: 2px; }
 button.linkish { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 600; text-align: left; }
 button.linkish:hover { text-decoration: underline; }
+
+/* ---- 2.0: tracker ---- */
+.tracker { display: flex; flex-direction: column; gap: 4px; padding: 6px; }
+.trow { display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 8px; border: 1px solid transparent; }
+.trow.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.trow.next { border-style: dashed; border-color: var(--border); }
+.trow.down .hpval { color: var(--bad); }
+.thumb.small { width: 30px; height: 30px; }
+.tinit input.initbox { width: 38px; text-align: center; font-weight: 800; padding: 4px 2px; }
+.thp { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.hpval { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hpval.low { color: var(--warn); }
+input.hpbox { width: 64px; padding: 3px 4px; font-size: 12px; }
+.tbtns { display: flex; flex-direction: column; gap: 2px; }
+button.icon.tiny { padding: 0 5px; font-size: 11px; line-height: 1.6; }
+button.icon.danger { border-color: var(--bad); color: var(--bad); }
+button.small { padding: 4px 8px; font-size: 12px; }
+.conds.tight { margin-top: 2px; gap: 3px; }
+.conds.tight .cond { font-size: 10px; padding: 0 5px; }
+.round { color: var(--accent); }
+button.danger-bg { background: var(--bad); }
+button.ok-bg { background: var(--ok); }
+.ring-legend { font-size: 11px; }
+.deathsaves { border-color: var(--bad); }
+.dot { opacity: .25; font-weight: 800; margin-left: 2px; }
+.dot.on { opacity: 1; }
+.stat input.hpbox { width: 100%; margin-top: 2px; }
+.panel.myturn { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }

@@ -1,4 +1,4 @@
-import type { ImageItemSpec, SceneGateway, SceneItemLite } from "../src/core/importer";
+import { mergePatch, type ImageItemSpec, type SceneGateway, type SceneItemLite } from "../src/core/importer";
 
 export interface FakeItem extends SceneItemLite {
   spec?: ImageItemSpec;
@@ -56,8 +56,7 @@ export class FakeScene implements SceneGateway {
     for (const u of updates) {
       const it = this.items.find((i) => i.id === u.id);
       if (!it) continue;
-      const cur = it.metadata[u.key];
-      it.metadata = { ...it.metadata, [u.key]: { ...(typeof cur === "object" && cur !== null ? cur : {}), ...JSON.parse(JSON.stringify(u.patch)) } };
+      it.metadata = { ...it.metadata, [u.key]: mergePatch(it.metadata[u.key], u.patch) };
     }
   }
   async getSceneMetadata() { return structuredClone(this.sceneMeta); }

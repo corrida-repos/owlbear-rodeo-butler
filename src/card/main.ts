@@ -17,11 +17,15 @@ import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
 import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
-import { displayConditions } from "../core/systems";
+import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
+import { parseHpInput } from "../core/hp";
+import { changeHp, makeStable, recordDeathSave, reviveUnits } from "../core/tracker";
+import { obrGateway } from "../extension/obrGateway";
+import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
 import { h, store, type Child } from "../extension/dom";
 import { onRollLog, readRollLog } from "../extension/rollLog";
-import { initRoomSettings, onRoomSettings, roomSystem } from "../extension/roomSettings";
+import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
@@ -39,12 +43,15 @@ let log: RollMessage[] = [];
 let editOpen = false;
 let error = "";
 const closed = new Set<string>(["spells", "inventory"]);
+let renderPending = false;
+document.addEventListener("focusout", () => { if (renderPending) { renderPending = false; setTimeout(render, 0); } });
 
 // ------------------------------------------------------------------ rolling
 
-async function roll(formula: string, label: string, kind: RollMessage["kind"], ev: MouseEvent | null, opts: { builtIn?: RollMode; crit?: boolean; entry?: string; segs?: Segment[]; seg?: RollSegment; followUp?: boolean } = {}) {
+async function roll(formula: string, label: string, kind: RollMessage["kind"], ev: MouseEvent | null, opts: { builtIn?: RollMode; crit?: boolean; entry?: string; segs?: Segment[]; seg?: RollSegment; followUp?: boolean } = {}): Promise<RollMessage | null> {
   const u = item && readUnit(item.metadata);
-  if (!item || !u) return;
+  if (!item || !u) return null;
+  let sent: RollMessage | null = null;
   const clicked: RollMode = ev?.shiftKey ? "advantage" : ev && (ev.ctrlKey || ev.metaKey) ? "disadvantage" : nextMode;
   const mode = combineModes(clicked, opts.builtIn);
   // Public rolls name the unit the way players know it (alias), private ones by its real name.
@@ -59,10 +66,60 @@ async function roll(formula: string, label: string, kind: RollMessage["kind"], e
     last = { msg, entry: opts.entry ?? last?.entry, damage, attackNatural };
     nextMode = "normal";
     error = "";
+    sent = msg;
   } catch (e) {
     error = `Roll failed: ${e instanceof Error ? e.message : String(e)}`;
   }
   render();
+  return sent;
+}
+
+/** Death saving throw: rolled like any d20 (advantage applies), then recorded (by the GM's client for a player). */
+async function deathSave(ev: MouseEvent) {
+  const msg = await roll("1d20", "Death save", "save", ev);
+  if (!msg || msg.natural === undefined) return;
+  try {
+    if (role === "GM") {
+      const outcome = await recordDeathSave(obrGateway, itemId, msg.natural);
+      if (outcome === "dead") error = "Third failure: mark as dead from the tracker or the token's menu.";
+    } else {
+      await sendRequest({ type: "death-save", unitId: itemId, natural: msg.natural });
+    }
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
+  render();
+}
+
+function zeroHpPanel(state: UnitState): Child {
+  const dead = isDead(state);
+  if (dead) {
+    return role === "GM" ? h("div", { className: "panel row between" }, h("strong", {}, "☠ Dead"),
+      h("button", { className: "secondary", onclick: () => void reviveUnits(obrGateway, [itemId]).catch((e) => { error = String(e); render(); }) }, "Revive")) : null;
+  }
+  if (!needsDeathSaves(state)) return null;
+  const ds = state.deathSaves ?? { successes: 0, failures: 0 };
+  const dots = (n: number, ch: string) => Array.from({ length: 3 }, (_, i) => h("span", { className: i < n ? "dot on" : "dot" }, ch));
+  return h("div", { className: "panel deathsaves" },
+    h("div", { className: "row between" }, h("strong", {}, "Death saves"),
+      h("span", {}, h("span", { className: "ok" }, ...dots(ds.successes, "✓")), "  ", h("span", { className: "bad" }, ...dots(ds.failures, "✗")))),
+    h("div", { className: "row", style: "margin-top:6px" },
+      h("button", { onclick: (ev: MouseEvent) => void deathSave(ev), title: "10+ succeeds · natural 1: two failures · natural 20: back to 1 HP" }, "Roll death save"),
+      role === "GM" ? h("button", { className: "secondary", onclick: () => void makeStable(obrGateway, itemId).catch((e) => { error = String(e); render(); }) }, "Stable") : null));
+}
+
+function gmHpBox(): Child {
+  if (role !== "GM") return null;
+  const inp = h("input", { type: "text", className: "hpbox", placeholder: "−7 / +5 / t5", title: "-7 damage · +5 heal · 12 set · t5 temp HP; Enter applies" }) as HTMLInputElement;
+  inp.onkeydown = async (e: KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    const change = parseHpInput(inp.value);
+    if (!change) { error = `"${inp.value}" isn't an HP change: use -7, +5, 12 or t5.`; render(); return; }
+    inp.value = "";
+    inp.blur();
+    try { await changeHp(obrGateway, [itemId], change, { autoDeadAtZero: roomSettings().autoDeadAtZero }); } catch (err) { error = String(err); render(); }
+  };
+  return inp;
 }
 
 const rollStandard = (r: StandardRoll) => (ev: MouseEvent) => void roll(r.formula, r.label, r.kind === "initiative" ? "check" : r.kind, ev, { builtIn: r.mode });
@@ -119,7 +176,8 @@ function statsBar(sheet: UnitSheet, state: UnitState): Child {
     h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),
     h("div", { className: "stat" }, h("span", { className: "k" }, "HP"),
       h("span", { className: `v${state.hp * 2 <= max ? " low" : ""}` }, `${state.hp}/${max}`),
-      state.tempHp ? h("span", { className: "small ok" }, `+${state.tempHp} temp`) : sheet.hp.formula ? h("span", { className: "small muted" }, sheet.hp.formula) : null),
+      state.tempHp ? h("span", { className: "small ok" }, `+${state.tempHp} temp`) : sheet.hp.formula ? h("span", { className: "small muted" }, sheet.hp.formula) : null,
+      gmHpBox()),
     h("div", { className: "stat" }, h("span", { className: "k" }, "Initiative"),
       h("button", { className: "chip chip-check big", title: `${init.formula}${init.mode ? ` (${init.mode})` : ""}`, onclick: rollStandard(init) },
         fmtMod(init.bonus), init.mode === "advantage" ? " adv" : init.mode === "disadvantage" ? " dis" : ""),
@@ -262,7 +320,8 @@ async function saveEdits(name: string, alias: string, portrait: string, controll
 function render() {
   const scrollY = window.scrollY;
   const focused = document.activeElement as HTMLElement | null;
-  if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName) && focused.closest("details")) return; // don't wipe a field the GM is typing in
+  // Don't wipe a field someone is typing in; render once it loses focus.
+  if (focused && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName) && (focused as HTMLInputElement).type !== "checkbox") { renderPending = true; return; }
   const nodes: Child[] = [];
   const u = item ? readUnit(item.metadata) : null;
   if (!item || !u) {
@@ -276,7 +335,7 @@ function render() {
       nodes.push(header(info, u.sheet, u.state, access));
       if (access === "full") {
         
-        nodes.push(statsBar(u.sheet, u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        nodes.push(statsBar(u.sheet, u.state), zeroHpPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
         if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
       } else {
         nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));

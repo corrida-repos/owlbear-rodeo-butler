@@ -1,5 +1,5 @@
 import OBR, { buildImage, type Item } from "@owlbear-rodeo/sdk";
-import type { ImageItemSpec, SceneGateway, SceneItemLite } from "../core/importer";
+import { mergePatch, type ImageItemSpec, type SceneGateway, type SceneItemLite } from "../core/importer";
 
 /** Thin adapter from the core importer to the official Owlbear Rodeo SDK. */
 export const obrGateway: SceneGateway = {
@@ -7,7 +7,7 @@ export const obrGateway: SceneGateway = {
   async getItems() {
     const items = await OBR.scene.items.getItems();
     return items.map((i: Item): SceneItemLite => ({
-      id: i.id, type: i.type, layer: i.layer, name: i.name, metadata: i.metadata,
+      id: i.id, type: i.type, layer: i.layer, name: i.name, metadata: i.metadata, visible: i.visible, createdUserId: i.createdUserId,
       label: (i as any).text?.plainText || undefined,
       image: (i as any).image ? { ...(i as any).image } : undefined,
     }));
@@ -56,8 +56,7 @@ export const obrGateway: SceneGateway = {
     await OBR.scene.items.updateItems([...byId.keys()], (drafts) => {
       for (const d of drafts) {
         for (const { key, patch } of byId.get(d.id)!) {
-          const cur = d.metadata[key];
-          d.metadata[key] = { ...(typeof cur === "object" && cur !== null ? cur : {}), ...patch };
+          d.metadata[key] = mergePatch(d.metadata[key], patch);
         }
       }
     });
