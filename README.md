@@ -1,9 +1,11 @@
 # Encounter Butler for Owlbear Rodeo
 
-An [Owlbear Rodeo](https://www.owlbear.rodeo) extension for Dungeon Masters who run D&D 5e with **D&D Beyond** character sheets and the **Forge!** battle system.
+An [Owlbear Rodeo](https://www.owlbear.rodeo) extension for Dungeon Masters who run D&D 5.5e (2024) or 5e (2014), with or without **D&D Beyond** character sheets. It needs no other extension.
 
-- **Add Creatures:** search any creature from 5etools (2014 and 2024 books), or bring your own stat block and token, choose how many, and drop them on the map. Each one has its own HP, rolled initiative, a full Forge stat block with clickable dice, and a place in the initiative tracker.
-- **Add Party Members:** one button syncs your D&D Beyond campaign's character sheets onto your players' tokens as Forge's Party. Press it again whenever someone levels up. You can also add sidekicks and companions the same way as creatures.
+> **Version 2 is being built.** Encounter Butler no longer uses Forge!: creatures and party members keep their stat block on the token. Unit cards with clickable dice, the initiative tracker, HP and conditions are on the way (see the [roadmap](docs/ROADMAP.md)).
+
+- **Add Creatures:** search any creature from 5etools (2014 and 2024 books), or bring your own stat block and token, choose how many, and drop them on the map. Each one has its own HP, rolled initiative, its full stat block stored on the token, and a place in the initiative order.
+- **Add Party Members:** one button syncs your D&D Beyond campaign's character sheets onto your players' tokens as the party. Press it again whenever someone levels up. You can also add sidekicks and companions the same way as creatures.
 - **Combat:** see whether the fight is Low, Moderate, High or Extreme for your party (2024 rules), and roll initiative for everyone or just the creatures.
 
 It's free: no account, server or subscription beyond the free Owlbear Rodeo and D&D Beyond accounts you already have.
@@ -15,7 +17,6 @@ It's free: no account, server or subscription beyond the free Owlbear Rodeo and 
 ## What you need
 
 - A free **Owlbear Rodeo** account. You must be the GM of the room.
-- The **Forge!** extension, on its default D&D 5E system.
 - A desktop browser (Chrome, Edge, Firefox or Safari) with the bookmarks bar visible. This is only needed for the Party sync.
 - For the Party sync: you must be the **DM of the campaign on D&D Beyond**, with your players' characters joined to it.
 
@@ -23,15 +24,14 @@ Your players don't need to install anything. Extensions you turn on in a room wo
 
 ## Install (about 2 minutes, once)
 
-1. **Add Forge!** Open the [Owlbear Rodeo extension store](https://extensions.owlbear.rodeo), find **Forge!**, and add it to your account.
-2. **Add Encounter Butler.** On the Owlbear Rodeo home page, click your **profile** (top right) → **Extensions** → **Add Custom Extension**, paste this link, and confirm:
+1. **Add Encounter Butler.** On the Owlbear Rodeo home page, click your **profile** (top right) → **Extensions** → **Add Custom Extension**, paste this link, and confirm:
 
    ```
    https://corrida-repos.github.io/owlbear-rodeo-butler/manifest.json
    ```
 
-3. **Turn both on in your room.** Open your room, click the **Extensions** button (the puzzle piece), and enable **Forge!** and **Encounter Butler**.
-4. **Check Forge's system.** In Forge, choose **System → Load Default System**, unless it already shows *Dungeons & Dragons 5E*.
+2. **Turn it on in your room.** Open your room, click the **Extensions** button (the puzzle piece), and enable **Encounter Butler**.
+3. **Pick your rules (optional).** Encounter Butler → **Combat** → **Game system**: *D&D 5.5E (2024 rules)* is the default; choose *D&D 5E (2014 rules)* if your table plays those.
 
 The **Encounter Butler** icon now appears in the room's toolbar at the top left. Click it to open the extension.
 
@@ -45,11 +45,11 @@ The **Encounter Butler** icon now appears in the room's toolbar at the top left.
    - **Name** replaces the stat block's name (or gives one if the JSON has none).
    - **Token:** upload or choose an image in Owlbear's library, use an https image link, the original creature's 5etools token, or the placeholder.
    - Click **Put on the list**.
-4. In the list, set how many of each (type a number or use **− / +**), and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the Forge tracker with rolled initiative. **Undo** removes them again.
+4. In the list, set how many of each (type a number or use **− / +**), and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the initiative order, each with rolled initiative. **Undo** removes them again.
 
 A **Prepared encounter** (map, grid and positioned creatures in one file) can still be imported from the collapsed section at the bottom of this tab. To make your own packages, see the [developer guide](docs/DEVELOPMENT.md#new-encounter-workflow).
 
-Right-click any token → **View …** to open its Forge unit card, with clickable attack and damage dice.
+Right-click a creature or party token → **View unit card**. For now this is a preview with a test roll; the full card with clickable attack and damage dice is coming next.
 
 ### Add Party Members (from D&D Beyond)
 **Once:** open Encounter Butler → **Add Party Members** → *First time: set up the bookmark*, and drag the **⭳ Copy party for Encounter Butler** button to your browser's bookmarks bar. If you set it up before version 1.1, drag it again.
@@ -57,15 +57,15 @@ Right-click any token → **View …** to open its Forge unit card, with clickab
 **Every time a character sheet changes:**
 1. Press **⟳ Sync from D&D Beyond**. Your campaign opens in a new tab (the first time, open the campaign you DM from the list).
 2. Click the **Copy party for Encounter Butler** bookmark in that tab. It sends the party back to Owlbear and closes itself.
-3. The party tokens are updated and marked as Forge's Party. If something needs a look first (two tokens that could match, an error), you see a preview and press **Sync party** yourself. **Undo** removes tokens the sync created and puts back pictures it replaced.
+3. The party tokens are updated and marked as party members. If something needs a look first (two tokens that could match, an error), you see a preview and press **Sync party** yourself. **Undo** removes tokens the sync created and puts back pictures it replaced.
 
-Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync only writes Forge stats: it leaves token positions and owners alone, and it changes images only if you choose to use the D&D Beyond portraits (*Sync options*). If the tab didn't send the party back (some browsers block it), the bookmark also copies it to your clipboard: press **Paste party**.
+Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync only writes the stat block (and HP): it leaves token positions, owners and conditions alone, and it changes images only if you choose to use the D&D Beyond portraits (*Sync options*). If the tab didn't send the party back (some browsers block it), the bookmark also copies it to your clipboard: press **Paste party**.
 
-Below the sync, **Import published / homebrewed party member** work exactly like Add Creatures, for sidekicks, companions or a guest character. They join Forge's Party.
+Below the sync, **Import published / homebrewed party member** work exactly like Add Creatures, for sidekicks, companions or a guest character. They join the party.
 
 ### Combat
 - **Difficulty calculator:** compares the hostile creatures in the scene with your party, using the 2024 Dungeon Master's Guide XP budgets. **Low**, **Moderate** and **High** follow the book. **Extreme** is an extra tier for boss fights, at 1.5× the High budget. Untick a creature that isn't hostile, or a character who isn't in this fight; enter a level for party members without a sheet. The calculator updates as tokens come and go.
-- **Initiatives:** **Roll all initiatives** rolls for every unit in the Forge tracker. **Roll just creatures' initiatives** leaves the party alone, so players can roll their own and you type the results into Forge's tracker. Advantage (e.g. from Alert or a monster trait) is applied.
+- **Initiatives:** **Roll all initiatives** rolls for every unit in the initiative order. **Roll just creatures' initiatives** leaves the party alone, so players can roll their own. Advantage (e.g. from Alert or a monster trait) is applied.
 
 ## Privacy
 - Your D&D Beyond login never leaves the D&D Beyond tab. The bookmark reads your campaign there, using your own session, and copies the result only to **your** clipboard. Nothing is sent to or stored on any server run by this project.
@@ -78,7 +78,6 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 |---|---|
 | "Unable to load extension" | Check the link: it must end in `/manifest.json`. Remove the extension and add it again. |
 | Icon missing in the room | Enable Encounter Butler in the room's **Extensions** list. Custom extensions are per room. |
-| "Forge has a custom system" | In Forge, choose **System → Load Default System**. |
 | "You are not the GM" | Only the room's GM can add creatures, sync the party or roll initiative. |
 | Bookmark says "No characters found" | Open the campaign page itself (`dndbeyond.com/campaigns/<number>`), and make sure you are its DM. |
 | Sync button opens D&D Beyond but nothing comes back | Drag the bookmark to your bar again (older bookmarks can't send the party back), or use **Paste party**. |
@@ -90,10 +89,10 @@ Found a bug or have an idea? [Open an issue](https://github.com/corrida-repos/ow
 ## Known limits
 - Square grids only.
 - Active spell effects (Mage Armor, Shield) aren't applied to party AC, and multiclass spell slots aren't combined.
-- Lair and mythic actions are noted on the card but not turned into Forge actions.
+- Lair actions are noted on the card but not listed as actions. Mythic actions are listed with the legendary actions.
 
 ---
 
-Encounter Butler is an unofficial fan project. It isn't affiliated with or endorsed by Owlbear Rodeo, Battle-System (Forge!), D&D Beyond or Wizards of the Coast.
+Encounter Butler is an unofficial fan project. It isn't affiliated with or endorsed by Owlbear Rodeo, D&D Beyond or Wizards of the Coast.
 
 **Developers:** architecture, build scripts and test notes are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).

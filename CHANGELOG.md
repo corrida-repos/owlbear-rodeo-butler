@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased (1.1.0)
+## Unreleased (2.0.0, in progress)
+
+- **No more Forge!** Encounter Butler stores each unit's stat block and live state (HP, initiative, party) on the token itself and works on its own. Units created with Forge aren't converted: add them again. See [docs/ROADMAP.md](docs/ROADMAP.md) for what's coming (unit cards with clickable dice, initiative tracker, HP, conditions, player view).
+- **Game system setting:** D&D 5.5E (2024 rules, default) or 5E (2014 rules), in the Combat tab. Creature search puts the chosen edition's books first.
+- Mythic actions are now listed with legendary actions. Dice chips accept any die size (e.g. d3).
+- Party files from earlier versions need a fresh sync from D&D Beyond.
+
+## 1.1.0 (unreleased, folded into 2.0.0)
 
 - **New layout: three tabs.** *Add Creatures*, *Add Party Members* and *Combat* replace Monsters / Party / Prepared encounter. Prepared encounters are now a collapsed section at the bottom of Add Creatures.
 - **Import homebrewed creature:** upload a stat block JSON file, or start from any published 5etools creature and edit its stat block before adding it. Name it yourself and give it any token (Owlbear library upload, https link, the original 5etools token or the placeholder).

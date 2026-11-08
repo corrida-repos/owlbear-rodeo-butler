@@ -10,9 +10,11 @@ import { circularTokenUrl } from "../src/core/images";
 import { rollbackImport } from "../src/core/importer";
 import { partyFromDdbExport, syncParty } from "../src/core/party";
 import { nameCreatures, quickAdd } from "../src/core/quickadd";
+import { validateSheet } from "../src/core/sheet";
+import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
 
-const F = (k: string) => `com.battle-system.forge/${k}`;
+const unitOf = (meta: Record<string, unknown>) => readUnit(meta)!;
 const wolf = convertMonster(findMonster(data, "Wolf", "XMM"));
 const img = { url: "https://raw.githubusercontent.com/5etools-mirror-3/5etools-img/main/bestiary/tokens/XMM/Wolf.webp", width: 512, height: 512, mime: "image/webp" };
 let ids = 0;
@@ -29,7 +31,7 @@ describe("quick add", () => {
     expect(nameCreatures("Wolf", 1, ["Wolf"])).toEqual(["Wolf 2"]);
   });
 
-  it("adds tokens around the view centre with Forge stats, HP and individual initiative", async () => {
+  it("adds tokens around the view centre with their stat block, HP and individual initiative", async () => {
     const r = await quickAdd([{ statblock: wolf, image: img, count: 3, hp: "roll", hidden: true }], { x: 1000, y: 1000 }, scene, { rng: seededRng(3), newId });
     expect(r.ok).toBe(true);
     expect(r.creatures.map((c) => c.name)).toEqual(["Wolf 1", "Wolf 2", "Wolf 3"]);
@@ -37,10 +39,12 @@ describe("quick add", () => {
     expect(toks).toHaveLength(3);
     for (const t of toks) {
       const c = r.creatures.find((x) => x.name === t.name)!;
-      expect(t.metadata[F("init")]).toBe(c.initiative.total);
-      expect(t.metadata[F("Z006")]).toBe(c.hp.max);
+      const u = unitOf(t.metadata);
+      expect(u.sheet.name).toBe("Wolf");
+      expect(u.state).toMatchObject({ initiative: c.initiative.total, initiativeRoll: { total: c.initiative.total }, hp: c.hp.current, inEncounter: true, party: false });
+      // rolled HP that differs from the stat block's average is stored as the unit's own max
+      expect(u.state.maxHpOverride ?? u.sheet.hp.max).toBe(c.hp.max);
       expect(c.hp.method).toBe("rolled");
-      expect(t.metadata[F("on-list")]).toBe(true);
       expect(t.spec!.visible).toBe(false);
       expect((t.metadata[BUTLER_ITEM_KEY] as any).initiative.dice).toEqual(c.initiative.dice);
     }
@@ -70,8 +74,9 @@ describe("custom creatures", () => {
   it("quick form makes a valid, clearly non-official stat block with dice chips", () => {
     const sb = quickStatblock({ name: "Brother Garrow", ac: 15, hp: 33, initiative: 1, attacks: "Mace: +4, 1d6+2 bludgeoning" });
     expect(sb.source.provenance).toBe("homebrew");
-    expect(sb.forge.Z007).toBe(15);
-    expect((sb.forge.Z035 as any[])[0]).toEqual({ name: "Mace", description: "+4 [1d20+4], 1d6+2 [1d6+2] bludgeoning" });
+    expect(validateSheet(sb)).toEqual([]);
+    expect(sb.ac).toBe(15);
+    expect(sb.actions[0]).toEqual({ name: "Mace", text: "+4 [1d20+4], 1d6+2 [1d6+2] bludgeoning" });
   });
   it("pasted 5etools JSON (single, array or homebrew file)", () => {
     const raw = findMonster(data, "Wolf", "XMM");

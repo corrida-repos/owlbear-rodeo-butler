@@ -1,5 +1,5 @@
 /**
- * "Combat" tab: Difficulty Calculator (2024 DMG budgets + an invented Extreme tier) over the Forge units in the
+ * "Combat" tab: Difficulty Calculator (2024 DMG budgets + an invented Extreme tier) over the Butler units in the
  * scene, and the Initiatives buttons (roll everyone, or just the creatures when players roll their own).
  */
 import OBR from "@owlbear-rodeo/sdk";
@@ -7,6 +7,8 @@ import { crLabel, EXTREME_FACTOR, listCombatants, rollSceneInitiative, sceneDiff
 import { describeInitiative, fmtMod } from "../core/dice";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
+import { roomSettings, roomSystem, setRoomSettings } from "./roomSettings";
+import { SYSTEMS, type SystemId } from "../core/systems";
 
 let combatants: Combatant[] | null = null;
 let lastRoll: InitiativeReport | null = null;
@@ -87,7 +89,7 @@ function renderDifficulty(cs: Combatant[]): Child {
     d.missingCr.length ? h("div", { className: "small warn", style: "margin-top:4px" }, `⚠ No CR for ${d.missingCr.join(", ")}: not counted.`) : null,
     h("h2", { style: "margin-top:12px" }, `Party members (${party.filter((c) => !c.exclude).length}/${party.length})`),
     party.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Name"), h("th", {}, "Level"))), h("tbody", {}, ...partyRows))
-      : h("div", { className: "small muted" }, "None in this scene. Tokens in Forge's Party show up here."),
+      : h("div", { className: "small muted" }, "None in this scene. Party members (Add Party Members tab) show up here."),
     h("h2", { style: "margin-top:12px" }, `Creatures (${foes.filter((c) => !c.exclude).length} hostile of ${foes.length})`),
     foes.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", { title: "Hostile" }, "Hostile"), h("th", {}, "Name"), h("th", {}, "CR"), h("th", {}, "XP"))), h("tbody", {}, ...foeRows))
       : h("div", { className: "small muted" }, "None in this scene."),
@@ -110,7 +112,7 @@ function renderInitiative(cs: Combatant[]): Child {
     h("div", { className: "row", style: "flex-wrap:nowrap" },
       h("button", { className: "grow", disabled: ui.busy || !onList.length, onclick: action(() => roll("all")) }, "Roll all initiatives"),
       h("button", { className: "grow secondary", disabled: ui.busy || !creatures, onclick: action(() => roll("creatures")) }, "Roll just creatures' initiatives")),
-    h("div", { className: "small muted", style: "margin-top:4px" }, "Players rolling their own? Use the second button, then type their results into Forge's tracker."),
+    h("div", { className: "small muted", style: "margin-top:4px" }, "Players rolling their own? Use the second button; entering their results comes with the initiative tracker."),
     lastRoll ? h("ul", { className: "plain small", style: "margin-top:8px" }, ...lastRoll.rolled.map((r) =>
       h("li", {}, h("strong", {}, `${r.roll.total}`), ` ${r.name}${r.party ? " (party)" : ""}: ${describeInitiative(r.roll)}`))) : null,
     !lastRoll && order.length ? h("div", { style: "margin-top:8px" },
@@ -118,8 +120,20 @@ function renderInitiative(cs: Combatant[]): Child {
       h("ul", { className: "plain small" }, ...order.map((c) => h("li", {}, h("strong", {}, String(c.initiative)), ` ${c.name} (${fmtMod(c.setup.modifier)}${c.setup.advantage ? " adv" : ""})`)))) : null);
 }
 
+function renderSettings(): Child {
+  const sys = roomSystem();
+  return h("div", { className: "panel" },
+    h("h2", {}, "Game system"),
+    h("select", { disabled: ui.busy, onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value as SystemId; void action(() => setRoomSettings({ system: v }))(); } },
+      ...Object.values(SYSTEMS).map((s) => h("option", { value: s.id, selected: s.id === roomSettings().system }, s.label))),
+    h("div", { className: "small muted", style: "margin-top:4px" },
+      sys.rules === "2024"
+        ? "2024 books come first in creature search; Bloodied is shown automatically."
+        : "2014 books come first in creature search. The difficulty above still uses the 2024 budgets for now."));
+}
+
 export function renderCombatTab(): Child[] {
   if (!combatants) { refreshCombat(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
-  return [renderDifficulty(combatants), renderInitiative(combatants)];
+  return [renderDifficulty(combatants), renderInitiative(combatants), renderSettings()];
 }
 export function resetCombatTab() { combatants = null; lastRoll = null; }

@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import data from "./fixtures/5etools-xmm-sample.json";
 import source from "../encounters/wolves-test/encounter.source.json";
+import bundled from "../public/encounters/wolves-test/encounter.json";
 import { buildPackage, type EncounterSource } from "../src/core/builder";
 import { BUTLER_ITEM_KEY, BUTLER_SCENE_KEY } from "../src/core/constants";
 import { seededRng } from "../src/core/dice";
 import { findMonster } from "../src/core/fivetools";
 import { analyse, executeImport, rollbackImport, type ImportOptions } from "../src/core/importer";
 import { validatePackage, type EncounterPackage } from "../src/core/schema";
+import { SHEET_KEY, STATE_KEY } from "../src/core/sheet";
+import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
 
-const F = (k: string) => `com.battle-system.forge/${k}`;
+const ENCOUNTER_KEY = "dev.owlbear-butler/encounter";
 
 function wolvesPackage(): EncounterPackage {
   const src = {
@@ -34,11 +37,16 @@ describe("milestone: one map + five wolves", () => {
   let pkg: EncounterPackage;
   beforeEach(() => {
     scene = new FakeScene();
-    // Pre-existing party token + Forge state that must survive.
+    // Pre-existing party token + encounter state that must survive.
     scene.items.push({ id: "pc-1", type: "IMAGE", layer: "CHARACTER", name: "Aria", position: { x: 0, y: 0 }, size: { w: 150, h: 150 },
-      metadata: { [F("on-list")]: true, [F("in-party")]: true, [F("init")]: 18, [F("name")]: "Aria" } });
-    scene.sceneMeta = { "com.battle-system.forge/currround": 3 };
+      metadata: { [SHEET_KEY]: { placeholder: true }, [STATE_KEY]: { initiative: 18, party: true, inEncounter: true } } });
+    scene.sceneMeta = { [ENCOUNTER_KEY]: { round: 3 } };
     pkg = wolvesPackage();
+  });
+
+  it("the bundled wolves package (public/) is a valid native package without Forge data", () => {
+    expect(validatePackage(bundled)).toMatchObject({ ok: true, errors: [] });
+    expect(JSON.stringify(bundled)).not.toContain("battle-system");
   });
 
   it("builds a valid package with individually rolled initiatives", () => {
@@ -54,14 +62,13 @@ describe("milestone: one map + five wolves", () => {
     expect(new Set(pkg.creatures.map((c) => c.initiative!.dice[0])).size).toBeGreaterThan(1);
   });
 
-  it("previews then imports map, grid, tokens and Forge data without touching existing state", async () => {
+  it("previews then imports map, grid, tokens and unit data without touching existing state", async () => {
     scene.grid.scale = "1.5m";
     const p = await analyse(pkg, scene);
     expect(p.validation.ok).toBe(true);
-    expect(p.system.kind).toBe("default");
     expect(p.duplicates.itemIds).toEqual([]);
     expect(p.grid.differs).toBe(true);
-    expect(p.forgeErrors).toEqual([]);
+    expect(p.sheetErrors).toEqual([]);
     expect(p.creatures[0]!.initiative).toMatch(/d20 \d+ \+2 = \d+/);
 
     const r = await executeImport(pkg, opts(pkg), scene);
@@ -79,30 +86,22 @@ describe("milestone: one map + five wolves", () => {
     expect(new Set(wolves.map((w) => w.id)).size).toBe(5);
     wolves.forEach((w, i) => {
       const c = pkg.creatures[i]!;
-      expect(w.metadata[F("name")]).toBe(c.name);
-      expect(w.metadata[F("fabd")]).toBe(true);
-      expect(w.metadata[F("on-list")]).toBe(true);
-      expect(w.metadata[F("in-party")]).toBe(false);
-      expect(w.metadata[F("init")]).toBe(c.initiative!.total);
-      expect(w.metadata[F("Z005")]).toBe(11);
-      expect(w.metadata[F("Z006")]).toBe(11);
-      expect(w.metadata[F("Z007")]).toBe(12);
-      expect(w.metadata[F("Z042")]).toBe(0);
-      expect((w.metadata[F("Z035")] as any[])[0].description).toContain("[1d6+2]");
+      const { sheet, state } = readUnit(w.metadata)!;
+      expect(state).toMatchObject({ hp: 11, tempHp: 0, initiative: c.initiative!.total, inEncounter: true, party: false, conditions: [] });
+      expect(state.maxHpOverride).toBeUndefined();
+      expect([sheet.name, sheet.ac, sheet.hp.max]).toEqual(["Wolf", 12, 11]);
+      expect(sheet.actions[0]!.text).toContain("[1d6+2]");
+      expect(Object.keys(w.metadata).filter((k) => k.startsWith("com.battle-system.forge"))).toEqual([]); // no Forge data
       expect((w.metadata[BUTLER_ITEM_KEY] as any).initiative.dice).toEqual(c.initiative!.dice);
       // 1-cell Medium token centred on its cell (scene dpi 150)
       expect(w.spec!.position).toEqual({ x: (c.cell.x + 0.5) * 150, y: (c.cell.y + 0.5) * 150 });
       expect(w.spec!.grid.dpi).toBe(280);
       expect(w.spec!.label).toBe(c.name);
     });
-    // each wolf has its own list-entry ids (no shared object identity)
-    const actionIds = wolves.map((w) => (w.metadata[F("Z035")] as any[])[0].id);
-    expect(new Set(actionIds).size).toBe(5);
-
-    // party + Forge round state untouched
+    // party + encounter state untouched
     const pc = scene.items.find((i) => i.id === "pc-1")!;
-    expect(pc.metadata[F("init")]).toBe(18);
-    expect(scene.sceneMeta["com.battle-system.forge/currround"]).toBe(3);
+    expect((pc.metadata[STATE_KEY] as any).initiative).toBe(18);
+    expect(scene.sceneMeta[ENCOUNTER_KEY]).toEqual({ round: 3 });
     expect((scene.sceneMeta[BUTLER_SCENE_KEY] as any[])[0]).toMatchObject({ packageId: "wolves-test", itemIds: r.createdItemIds });
   });
 
@@ -129,13 +128,10 @@ describe("milestone: one map + five wolves", () => {
     expect(map.spec!.position).toEqual({ x: 3300, y: 0 });
   });
 
-  it("aborts before changing anything for players, custom Forge systems or non-public assets", async () => {
+  it("aborts before changing anything for players or non-public assets", async () => {
     scene.role = "PLAYER";
     expect((await executeImport(pkg, opts(pkg), scene)).ok).toBe(false);
     scene.role = "GM";
-    scene.roomMeta = { "com.battle-system.forge/SnapshotPublicId": "xyz", "com.battle-system.forge/SystemName": "My PF2" };
-    expect((await executeImport(pkg, opts(pkg), scene)).error).toMatch(/Custom Forge system/);
-    scene.roomMeta = {};
     const local = opts(pkg);
     local.resolvedAssets.map = { url: "http://localhost:5173/map.png", width: 1400, height: 980, mime: "image/png" };
     expect((await executeImport(pkg, local, scene)).error).toMatch(/https/);
@@ -148,7 +144,7 @@ describe("milestone: one map + five wolves", () => {
     expect(r.rolledAtImport).toHaveLength(1);
     expect(r.rolledAtImport[0]!.roll.rolledBy).toBe("importer");
     const w1 = scene.items.find((i) => i.name === "Wolf 1")!;
-    expect(w1.metadata[F("init")]).toBe(r.rolledAtImport[0]!.roll.total);
+    expect(readUnit(w1.metadata)!.state.initiative).toBe(r.rolledAtImport[0]!.roll.total);
   });
 
   it("reports partial success and can roll back", async () => {

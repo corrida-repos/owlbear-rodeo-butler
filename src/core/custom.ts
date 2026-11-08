@@ -6,6 +6,8 @@ import { SIZE_NAMES } from "./constants";
 import { fmtMod } from "./dice";
 import { convertMonster, diceChip } from "./fivetools";
 import type { ListEntry, Provenance, Statblock } from "./schema";
+import { proficiencyBonusForCr } from "./fivetools-shared";
+import { SHEET_SCHEMA } from "./sheet";
 
 /** Accepts one monster object, `{monster: [...]}` (homebrew file) or an array; returns the raw monsters. */
 export function parseFivetoolsJson(text: string): any[] {
@@ -48,18 +50,32 @@ export function quickStatblock(f: QuickForm, provenance: Provenance = "homebrew"
     let desc = rest;
     if (hit) desc = desc.replace(hit[1]!, `${hit[1]} [1d20${fmtMod(Number(hit[1]))}]`);
     if (dmg && diceChip(dmg[1]!)) desc = desc.replace(dmg[1]!, `${dmg[1]} ${diceChip(dmg[1]!)}`);
-    return { name: name!.trim(), description: desc };
+    return { name: name!.trim(), text: desc };
   });
   return {
+    schema: SHEET_SCHEMA,
     name: f.name.trim(),
+    kind: "creature",
     size: size as Statblock["size"],
-    source: { provenance, notes: [provenance === "homebrew" ? "Quick custom stat block (not official)." : "Stat block supplied by the GM."] },
-    hp: { average: f.hp, formula: f.hpFormula },
+    type: f.type || undefined,
+    ac: f.ac,
+    hp: { max: f.hp, formula: f.hpFormula },
+    speed: { walk: f.speed ?? 30 },
+    abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
+    saves: {},
+    skills: [],
+    defenses: {},
+    cr: f.cr,
+    proficiencyBonus: proficiencyBonusForCr(f.cr ?? 0),
     initiative: { modifier: f.initiative, advantage: false, disadvantage: false, reasons: [`entered ${fmtMod(f.initiative)}`] },
-    forge: {
-      Z002: SIZE_NAMES[size]!, Z004: f.type ?? "", Z007: f.ac, Z008: f.speed ?? 30, Z016: f.cr ?? 0,
-      Z034: f.notes ? [{ name: "Notes", description: f.notes }] : [], Z035: actions,
-    },
-    flags: ["Quick custom creature: only the entered fields are set."],
+    traits: f.notes ? [{ name: "Notes", text: f.notes }] : [],
+    actions,
+    bonusActions: [],
+    reactions: [],
+    legendary: [],
+    spells: [],
+    inventory: [],
+    source: { provenance, notes: [provenance === "homebrew" ? "Quick custom stat block (not official)." : "Stat block supplied by the GM."] },
+    flags: ["Quick custom creature: only the entered fields are set (ability scores default to 10)."],
   };
 }

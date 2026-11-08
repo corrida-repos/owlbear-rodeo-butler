@@ -12,7 +12,7 @@ const put = (x: number, y: number, r: number, g: number, b: number, a = 255) => 
 for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
   const d = Math.hypot(x + 0.5 - c, y + 0.5 - c);
   if (d > c - 1) continue; // transparent outside the disc
-  if (d > c - 12) { put(x, y, 157, 153, 255); continue; } // ring (Forge purple)
+  if (d > c - 12) { put(x, y, 157, 153, 255); continue; } // ring (purple)
   const t = y / S;
   let [r, g, b] = [40 + 30 * t, 46 + 30 * t, 70 + 40 * t]; // background gradient
   const head = Math.hypot(x - c, y - 100) < 38;

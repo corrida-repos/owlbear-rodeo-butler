@@ -18,7 +18,7 @@ let pkgUrl: string | undefined;
 let preview: Preview | null = null;
 let assetState: Record<string, AssetState> = {};
 let lastReport: ImportReport | null = null;
-const options = { applyGrid: true, mapPlacement: "auto" as "auto" | "origin", duplicatePolicy: "abort" as ImportOptions["duplicatePolicy"], acceptCustomSystem: false, allowLocalAssets: false };
+const options = { applyGrid: true, mapPlacement: "auto" as "auto" | "origin", duplicatePolicy: "abort" as ImportOptions["duplicatePolicy"], allowLocalAssets: false };
 
 // ------------------------------------------------------------------ loading
 
@@ -38,7 +38,6 @@ async function setPackage(json: unknown, url?: string) {
   preview = await analyse(json, obrGateway);
   options.applyGrid = preview.grid.differs;
   options.duplicatePolicy = "abort";
-  options.acceptCustomSystem = false;
   rerender();
   if (preview.validation.ok) await resolveAssets();
 }
@@ -119,8 +118,7 @@ function blockingIssues(): string[] {
   if (!pkg || !preview) return ["no package loaded"];
   if (!preview.validation.ok) out.push("package invalid");
   if (!preview.isGM) out.push("only the GM can import");
-  if (preview.forgeErrors.length) out.push("Forge metadata errors");
-  if (preview.system.kind === "custom" && !options.acceptCustomSystem) out.push("confirm custom Forge system");
+  if (preview.sheetErrors.length) out.push("stat block errors");
   if (preview.duplicates.itemIds.length && options.duplicatePolicy === "abort") out.push("choose what to do with the existing copy");
   for (const [k, s] of Object.entries(assetState)) {
     if (s.status !== "ok") out.push(`asset "${k}" not ready`);
@@ -163,18 +161,15 @@ function renderPreview(p: Preview, pk: EncounterPackage) {
   else checks.push(check("bad", "Package invalid:", h("ul", { className: "plain small" }, ...p.validation.errors.map((e) => h("li", {}, e)))));
   for (const w of p.validation.warnings) checks.push(check("warn", w));
   checks.push(check(p.isGM ? "ok" : "bad", p.isGM ? "You are the GM" : "You are not the GM — import disabled"));
-  checks.push(p.system.kind === "default"
-    ? check("ok", `Forge system: ${p.system.name} (built-in; BIDs verified)`)
-    : check("warn", p.systemWarning ?? "custom system"));
   if (p.duplicates.itemIds.length)
     checks.push(check("warn", `Already imported in this scene: ${p.duplicates.itemIds.length} items from ${p.duplicates.importIds.length} earlier import(s) (revision ${p.duplicates.revisions.join(", ")}).`));
   else checks.push(check("ok", "Not yet imported in this scene"));
-  checks.push(check("ok", `Existing scene content kept: ${p.existingMapCount} map(s), ${p.existingForgeUnits} unit(s) in the Forge tracker`));
+  checks.push(check("ok", `Existing scene content kept: ${p.existingMapCount} map(s), ${p.existingUnits} unit(s) in the initiative tracker`));
   checks.push(p.grid.differs
     ? check("warn", `Scene grid ${p.grid.current.type} ${p.grid.current.scale} differs from package ${p.grid.wanted.type} ${p.grid.wanted.scale}`)
     : check("ok", `Grid ${p.grid.current.type} ${p.grid.current.scale} (scene ${p.grid.current.dpi} dpi)`));
   for (const w of p.placementWarnings) checks.push(check("warn", w));
-  for (const e of p.forgeErrors) checks.push(check("bad", e));
+  for (const e of p.sheetErrors) checks.push(check("bad", e));
   for (const [k, s] of Object.entries(assetState)) {
     const a = pk.assets[k]!;
     const label = `${k === pk.map.asset ? "Map" : "Token"} "${k}" (${a.credit ?? "no credit"})`;
@@ -209,8 +204,6 @@ function renderPreview(p: Preview, pk: EncounterPackage) {
       ...(["abort", "replace", "add"] as const).map((v) => h("label", {},
         h("input", { type: "radio", name: "dup", checked: options.duplicatePolicy === v, onchange: () => { options.duplicatePolicy = v; rerender(); } }),
         v === "abort" ? "Don't import" : v === "replace" ? "Replace the earlier copy (only items created by that import)" : "Add another copy"))) : null,
-    p.system.kind === "custom" ? h("label", {}, h("input", { type: "checkbox", checked: options.acceptCustomSystem, onchange: (e: Event) => { options.acceptCustomSystem = (e.target as HTMLInputElement).checked; rerender(); } }),
-      "I confirm my custom Forge system uses the same attribute IDs") : null,
     Object.values(assetState).some((s) => s.local) ? h("label", {}, h("input", { type: "checkbox", checked: options.allowLocalAssets, onchange: (e: Event) => { options.allowLocalAssets = (e.target as HTMLInputElement).checked; rerender(); } }),
       h("span", { className: "warn" }, "Allow non-public image URLs (GM-only test: players will NOT see these images)")) : null,
   );

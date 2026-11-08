@@ -1,4 +1,4 @@
-import { FORGE_DEFAULT_DICTIONARY_ID, PACKAGE_SCHEMA } from "./constants";
+import { PACKAGE_SCHEMA } from "./constants";
 import { resolveRollMode, rollFormula, rollInitiative, type Rng } from "./dice";
 import { convertMonster, fivetoolsArtUrl, fivetoolsTokenUrl } from "./fivetools";
 import type { CatalogEntry } from "./fivetools-shared";
@@ -164,7 +164,6 @@ export function buildPackage(src: EncounterSource, deps: BuildDeps): EncounterPa
     title: src.title,
     description: src.description,
     rules: src.rules ?? "2024",
-    forgeDictionary: FORGE_DEFAULT_DICTIONARY_ID,
     map: {
       name: src.map.name,
       asset: "map",
@@ -187,9 +186,9 @@ export function rollHp(sb: Statblock, method: "average" | "roll", rng: Rng, warn
       const max = Math.max(1, r.total);
       return { max, current: max, temp: 0, method: "rolled", formula: sb.hp.formula, dice: r.dice };
     } catch {
-      const w = `${sb.name}: HP formula "${sb.hp.formula}" can't be rolled; using the average (${sb.hp.average}).`;
+      const w = `${sb.name}: HP formula "${sb.hp.formula}" can't be rolled; using the average (${sb.hp.max}).`;
       if (!warnings.includes(w)) warnings.push(w);
     }
   }
-  return { max: sb.hp.average, current: sb.hp.average, temp: 0, method: "average", formula: sb.hp.formula };
+  return { max: sb.hp.max, current: sb.hp.max, temp: 0, method: "average", formula: sb.hp.formula };
 }

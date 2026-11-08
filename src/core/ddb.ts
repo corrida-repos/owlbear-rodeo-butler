@@ -1,14 +1,15 @@
 /**
- * D&D Beyond character → Forge party member.
+ * D&D Beyond character → Butler party member (native stat block).
  *
  * D&D Beyond's character-service JSON is raw: the sheet computes AC, HP, saves, skills, initiative etc.
  * client-side from base values + "modifiers" (race/class/background/feat/item). This module re-derives
  * them. Values that can't be derived reliably are flagged, never guessed silently.
  */
-import { FORGE_DIE_SIZES } from "./constants";
+import { MAX_DICE, MAX_DIE_SIDES } from "./constants";
 import { fmtMod } from "./dice";
 import { evalMath } from "./fivetools-copy";
 import type { ListEntry } from "./schema";
+import { SHEET_SCHEMA, type UnitSheet } from "./sheet";
 
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
 export type Ability = (typeof ABILITIES)[number];
@@ -40,8 +41,8 @@ export interface PartyMember {
   hp: { max: number; current: number; temp: number };
   ac: number;
   initiative: { modifier: number; advantage: boolean; reasons: string[] };
-  /** Forge default-system attribute values keyed by BID (lists without ids). */
-  forge: Record<string, number | string | ListEntry[]>;
+  /** The character's stat block in Butler's native format. */
+  sheet: UnitSheet;
   flags: string[];
 }
 
@@ -59,12 +60,12 @@ export function htmlToText(html: string | null | undefined): string {
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
 }
 
-/** Forge dice chip for simple formulas, else "". */
+/** Dice chip for simple formulas, else "". */
 export function chip(formula: string): string {
   const f = formula.replace(/\s+/g, "");
   if (!/^\d+d\d+([+-]\d+)?$/i.test(f)) return "";
   const m = /^(\d+)d(\d+)/i.exec(f)!;
-  return Number(m[1]) <= 100 && FORGE_DIE_SIZES.has(Number(m[2])) ? `[${f}]` : "";
+  return Number(m[1]) <= MAX_DICE && Number(m[2]) >= 2 && Number(m[2]) <= MAX_DIE_SIDES ? `[${f}]` : "";
 }
 const withChip = (formula: string) => { const c = chip(formula); return c ? `${formula} ${c}` : formula; };
 
@@ -175,11 +176,10 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     const prof = find("expertise", s).length ? 2 : find("proficiency", s).length ? 1 : find("half-proficiency", s).length || halfAll ? 0.5 : 0;
     return { total: mod(a) + Math.floor(prof * pb) + sumBonus(s) + sumBonus("ability-checks"), prof, bonus: sumBonus(s) };
   };
-  const skillText = Object.keys(SKILLS)
+  const skills = Object.keys(SKILLS)
     .map((s) => ({ s, ...skillVal(s) }))
     .filter((x) => x.prof >= 1 || x.bonus)
-    .map((x) => `${x.s.replace(/-/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase())} ${fmtMod(x.total)}${x.prof === 2 ? " (expertise)" : ""}`)
-    .join(", ");
+    .map((x) => ({ name: `${x.s.replace(/-/g, " ").replace(/\b\w/g, (ch) => ch.toUpperCase())}${x.prof === 2 ? " (expertise)" : ""}`, bonus: x.total }));
   const passive = (s: string) => 10 + skillVal(s).total + sumBonus(`passive-${s}`);
 
   // ---- initiative
@@ -206,7 +206,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     const v = Math.max(0, ...vals, ...custom) + sumBonus(s);
     if (v) senses.push(`${s[0]!.toUpperCase()}${s.slice(1)} ${v} ft.`);
   }
-  senses.push(`Passive Perception ${passive("perception")}`, `Passive Insight ${passive("insight")}`, `Passive Investigation ${passive("investigation")}`);
+  senses.push(`Passive Insight ${passive("insight")}`, `Passive Investigation ${passive("investigation")}`);
 
   const listOf = (type: string) => [...new Set(mods.filter((m) => m.type === type).map((m) => m.friendlySubtypeName as string))];
   const immunities = listOf("immunity");
@@ -246,13 +246,13 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     seen.add(name);
     actions.push({
       name,
-      description: `${ranged ? "Ranged" : props.has("Thrown") ? "Melee or Ranged" : "Melee"} Attack Roll: ${fmtMod(hit)} [1d20${fmtMod(hit)}], ${reach} Hit: ${withChip(dmg)} ${d.damageType ?? ""} damage.` +
+      text: `${ranged ? "Ranged" : props.has("Thrown") ? "Melee or Ranged" : "Melee"} Attack Roll: ${fmtMod(hit)} [1d20${fmtMod(hit)}], ${reach} Hit: ${withChip(dmg)} ${d.damageType ?? ""} damage.` +
         `${versatile ? ` Versatile: ${withChip(`${versatile}${dmgMod ? (dmgMod > 0 ? "+" : "") + dmgMod : ""}`)}.` : ""}${proficient ? "" : " (not proficient)"}` +
         `${(() => { const rest = [...props].filter((p) => !["Finesse", "Thrown", "Reach", "Versatile"].includes(String(p))); return rest.length ? ` Properties: ${rest.join(", ")}.` : ""; })()}`,
     });
   }
   const unarmedHit = mod("str") + pb;
-  actions.push({ name: "Unarmed Strike", description: `Melee Attack Roll: ${fmtMod(unarmedHit)} [1d20${fmtMod(unarmedHit)}], reach 5 ft. Hit: ${Math.max(0, 1 + mod("str"))} Bludgeoning damage.` });
+  actions.push({ name: "Unarmed Strike", text: `Melee Attack Roll: ${fmtMod(unarmedHit)} [1d20${fmtMod(unarmedHit)}], reach 5 ft. Hit: ${Math.max(0, 1 + mod("str"))} Bludgeoning damage.` });
 
   const tpl = (s: string) => renderTemplate(s, { pb, mod, level, score });
   for (const [, list] of Object.entries<any[]>(c.actions ?? {})) {
@@ -264,7 +264,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
       const usesText = uses ? ` (${uses}/${RESET[lu.resetType] ?? "rest"}${lu.numberUsed ? `, ${lu.numberUsed} used` : ""})` : "";
       let desc = tpl(a.snippet || htmlToText(a.description));
       if (a.dice?.diceString) desc += ` ${withChip(a.dice.diceString)}`;
-      const entry = { name: `${a.name}${usesText}`, description: desc };
+      const entry = { name: `${a.name}${usesText}`, text: desc };
       const kind = ACTIVATION[a.activation?.activationType] ?? "other";
       (kind === "action" ? actions : kind === "bonus" ? bonusActions : kind === "reaction" ? reactions : abilities).push(entry);
     }
@@ -276,7 +276,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     if (!name || seen.has(name) || SKIP.test(name)) return;
     seen.add(name);
     const t = tpl(text);
-    abilities.push({ name, description: `${t.length > 700 ? `${t.slice(0, 700)}…` : t}${source ? ` (${source})` : ""}` });
+    abilities.push({ name, text: `${t.length > 700 ? `${t.slice(0, 700)}…` : t}${source ? ` (${source})` : ""}` });
   };
   for (const k of c.classes ?? []) {
     for (const f of k.classFeatures ?? []) if ((f.definition?.requiredLevel ?? 99) <= k.level) addFeature(f.definition.name, f.definition.snippet || htmlToText(f.definition.description), k.definition?.name);
@@ -297,7 +297,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     .filter((i) => i.definition?.name)
     .map((i) => ({
       name: `${i.definition.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}${i.equipped ? " (equipped)" : ""}${i.isAttuned ? " (attuned)" : ""}`,
-      description: htmlToText(i.definition.snippet || i.definition.description).slice(0, 300),
+      text: htmlToText(i.definition.snippet || i.definition.description).slice(0, 300),
     }));
 
   // ---- flags for things we can't compute
@@ -308,35 +308,51 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
   const savesProf = ABILITIES.filter((a) => find("proficiency", `${ABILITY_NAME[a]}-saving-throws`).length);
   const classes = (c.classes ?? []).map((k: any) => `${k.definition?.name} ${k.level}${k.subclassDefinition ? ` (${k.subclassDefinition.name})` : ""}`).join(" / ");
 
-  const forge: PartyMember["forge"] = {
-    Z001: level,
-    Z002: SIZE_NAME[size] ?? "Medium",
-    Z003: ALIGNMENT[c.alignmentId] ?? "",
-    Z004: c.race?.fullName ?? "",
-    Z007: ac,
-    Z008: walk,
-    Z009: innate("swimming", rs.swim),
-    Z010: innate("burrowing", rs.burrow),
-    Z011: innate("climbing", rs.climb),
-    Z012: innate("flying", rs.fly),
-    Z013: senses.join(", "),
-    Z014: skillText,
-    Z015: languages.join(", ") || "—",
-    Z017: score.str, Z018: score.dex, Z019: score.con, Z020: score.int, Z021: score.wis, Z022: score.cha,
-    Z023: saveVal("str"), Z024: saveVal("dex"), Z025: saveVal("con"), Z026: saveVal("int"), Z027: saveVal("wis"), Z028: saveVal("cha"),
-    Z029: level, // Forge's Proficiency roll formula is 1d20 + 1 + ceil(@Z029/4), i.e. it expects the level
-    Z030: listOf("vulnerability").join(", "),
-    Z031: listOf("resistance").join(", "),
-    Z032: immunities.filter((x) => !CONDITIONS.has(x.toLowerCase())).join(", "),
-    Z033: immunities.filter((x) => CONDITIONS.has(x.toLowerCase())).join(", "),
-    Z034: abilities,
-    Z035: actions,
-    Z036: bonusActions,
-    Z037: reactions,
-    Z039: spells,
-    Z040: inventory,
+  const speedOrUndef = (n: number) => n || undefined;
+  const sheet: UnitSheet = {
+    schema: SHEET_SCHEMA,
+    name: c.name,
+    kind: "character",
+    size: (size in SIZE_NAME ? size : "M") as UnitSheet["size"],
+    type: [c.race?.fullName, classes].filter(Boolean).join(" · ") || undefined,
+    alignment: ALIGNMENT[c.alignmentId] || undefined,
+    ac,
+    hp: { max: hp.max },
+    speed: {
+      walk, swim: speedOrUndef(innate("swimming", rs.swim)), fly: speedOrUndef(innate("flying", rs.fly)),
+      climb: speedOrUndef(innate("climbing", rs.climb)), burrow: speedOrUndef(innate("burrowing", rs.burrow)),
+    },
+    abilities: { ...score },
+    saves: Object.fromEntries(ABILITIES.map((a) => [a, saveVal(a)])),
+    skills,
+    senses: senses.join(", ") || undefined,
+    passivePerception: passive("perception"),
+    languages: languages.join(", ") || undefined,
+    defenses: {
+      vulnerable: listOf("vulnerability").join(", ") || undefined,
+      resist: listOf("resistance").join(", ") || undefined,
+      immune: immunities.filter((x) => !CONDITIONS.has(x.toLowerCase())).join(", ") || undefined,
+      conditionImmune: immunities.filter((x) => CONDITIONS.has(x.toLowerCase())).join(", ") || undefined,
+    },
+    level,
+    proficiencyBonus: pb,
+    initiative: { modifier: initiative.modifier, advantage: initiative.advantage, disadvantage: false, reasons: initiative.reasons },
+    traits: abilities,
+    actions,
+    bonusActions,
+    reactions,
+    legendary: [],
+    spells,
+    inventory,
+    source: { provenance: "user-provided", url: `https://www.dndbeyond.com/characters/${c.id}`, notes: ["Synced from D&D Beyond."] },
+    flags: [],
   };
 
+  const allFlags = [
+    `AC ${ac} = ${acNotes.length ? acNotes.join(" + ") : "10 + Dex"}${sumBonus("armor-class") ? ` + ${sumBonus("armor-class")} bonus` : ""}.`,
+    `Saving throw proficiencies: ${savesProf.map((a) => a.toUpperCase()).join(", ") || "none"}.`,
+    ...flags,
+  ];
   return {
     ddbId: c.id,
     name: c.name,
@@ -349,12 +365,8 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     hp,
     ac,
     initiative,
-    forge,
-    flags: [
-      `AC ${ac} = ${acNotes.length ? acNotes.join(" + ") : "10 + Dex"}${sumBonus("armor-class") ? ` + ${sumBonus("armor-class")} bonus` : ""}.`,
-      `Saving throw proficiencies: ${savesProf.map((a) => a.toUpperCase()).join(", ") || "none"}.`,
-      ...flags,
-    ],
+    sheet: { ...sheet, flags: allFlags },
+    flags: allFlags,
   };
 }
 
@@ -424,7 +436,7 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
     const lvl = d.level === 0 ? "Cantrip" : `Level ${d.level}`;
     return {
       name: `${prefix}${d.name} (${lvl})`,
-      description: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.snippet || d.description).slice(0, 260)}`.trim(),
+      text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.snippet || d.description).slice(0, 260)}`.trim(),
     };
   };
 
@@ -438,7 +450,7 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
     if (a) {
       out.push({
         name: `Spellcasting — ${k.definition.name}`,
-        description: `${ABILITY_NAME[a][0]!.toUpperCase()}${ABILITY_NAME[a].slice(1)}; spell save DC ${8 + ctx.pb + ctx.mod(a)}, spell attack ${fmtMod(ctx.pb + ctx.mod(a))} [1d20${fmtMod(ctx.pb + ctx.mod(a))}]. ` +
+        text: `${ABILITY_NAME[a][0]!.toUpperCase()}${ABILITY_NAME[a].slice(1)}; spell save DC ${8 + ctx.pb + ctx.mod(a)}, spell attack ${fmtMod(ctx.pb + ctx.mod(a))} [1d20${fmtMod(ctx.pb + ctx.mod(a))}]. ` +
           `Slots: ${slots.map((n, i) => (n ? `L${i + 1} ${n}${used.get(i + 1) ? ` (${used.get(i + 1)} used)` : ""}` : "")).filter(Boolean).join(", ") || "none"}.`,
       });
     }
@@ -448,7 +460,7 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
       .sort((x: any, y: any) => x.definition.level - y.definition.level || x.definition.name.localeCompare(y.definition.name));
     for (const s of list) out.push(describe(s, abilityId));
     const unprepared = cs.spells.length - list.length;
-    if (unprepared > 0) out.push({ name: `${k.definition.name}: other known spells`, description: cs.spells.filter((s: any) => !list.includes(s)).map((s: any) => s.definition.name).join(", ") });
+    if (unprepared > 0) out.push({ name: `${k.definition.name}: other known spells`, text: cs.spells.filter((s: any) => !list.includes(s)).map((s: any) => s.definition.name).join(", ") });
   }
   for (const [src, list] of Object.entries<any[]>(c.spells ?? {})) {
     for (const s of list ?? []) {

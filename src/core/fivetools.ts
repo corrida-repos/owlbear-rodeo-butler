@@ -1,14 +1,15 @@
-import { FORGE_DIE_SIZES, SIZE_NAMES } from "./constants";
+import { MAX_DICE, MAX_DIE_SIDES, SIZE_NAMES } from "./constants";
 import { fmtMod } from "./dice";
 import { resolveVariables } from "./fivetools-copy";
 import { proficiencyBonusForCr, type CatalogEntry } from "./fivetools-shared";
 import type { ListEntry, Statblock, StatblockInitiative } from "./schema";
+import { ABILITIES, SHEET_SCHEMA, type Ability } from "./sheet";
 
 export { proficiencyBonusForCr };
 
 /**
  * Converts 5etools bestiary JSON (https://github.com/5etools-mirror-3/5etools-src, data/bestiary/*.json)
- * into a package Statblock with Forge default-system attribute values.
+ * into Butler's native stat block (UnitSheet).
  * Books are discovered from 5etools' own data/bestiary/index.json (see fivetools-shared.ts buildCatalog).
  */
 
@@ -33,14 +34,14 @@ const ABIL: Record<string, string> = {
   str: "Strength", dex: "Dexterity", con: "Constitution", int: "Intelligence", wis: "Wisdom", cha: "Charisma",
 };
 
-/** Returns a Forge dice chip like "[1d6+2]" if Forge can roll the formula, else "". */
+/** Returns a dice chip like "[1d6+2]" if the roller can roll the formula, else "". */
 export function diceChip(formula: string): string {
   const f = formula.replace(/\s+/g, "");
   if (!/^[\dd+\-*/()]+$/i.test(f) || !/\d+d\d+/i.test(f) || f.length > 500) return "";
   for (const m of f.matchAll(/(\d+)d(\d+)/gi)) {
     const n = Number(m[1]);
     const s = Number(m[2]);
-    if (n < 1 || n > 100 || !FORGE_DIE_SIZES.has(s)) return "";
+    if (n < 1 || n > MAX_DICE || s < 2 || s > MAX_DIE_SIDES) return "";
   }
   return `[${f}]`;
 }
@@ -177,29 +178,29 @@ function damageList(v: unknown, key: string): string {
 
 function entryList(arr: unknown): ListEntry[] {
   if (!Array.isArray(arr)) return [];
-  return arr.map((a: any) => ({ name: renderTags(String(a.name ?? "")), description: renderEntries(a.entries) }));
+  return arr.map((a: any) => ({ name: renderTags(String(a.name ?? "")), text: renderEntries(a.entries) }));
 }
 
 function spellcastingEntries(sc: any): ListEntry[] {
   const out: ListEntry[] = [];
   const header = renderEntries(sc.headerEntries);
-  out.push({ name: renderTags(String(sc.name ?? "Spellcasting")), description: header });
+  out.push({ name: renderTags(String(sc.name ?? "Spellcasting")), text: header });
   const hidden: string[] = Array.isArray(sc.hidden) ? sc.hidden : [];
   const names = (arr: unknown) => (Array.isArray(arr) ? arr.map((s) => renderEntries(s)).join(", ") : "");
-  if (Array.isArray(sc.will) && !hidden.includes("will")) out.push({ name: "At Will", description: names(sc.will) });
+  if (Array.isArray(sc.will) && !hidden.includes("will")) out.push({ name: "At Will", text: names(sc.will) });
   if (sc.daily && !hidden.includes("daily")) {
     for (const [k, v] of Object.entries(sc.daily)) {
       const n = k.replace("e", "");
-      out.push({ name: `${n}/Day${k.endsWith("e") ? " Each" : ""}`, description: names(v) });
+      out.push({ name: `${n}/Day${k.endsWith("e") ? " Each" : ""}`, text: names(v) });
     }
   }
   if (sc.spells) {
     for (const [lvl, v] of Object.entries<any>(sc.spells)) {
       const slots = v.slots ? ` (${v.slots} slot${v.slots > 1 ? "s" : ""})` : "";
-      out.push({ name: lvl === "0" ? "Cantrips" : `Level ${lvl}${slots}`, description: names(v.spells) });
+      out.push({ name: lvl === "0" ? "Cantrips" : `Level ${lvl}${slots}`, text: names(v.spells) });
     }
   }
-  if (sc.footerEntries) out.push({ name: "Note", description: renderEntries(sc.footerEntries) });
+  if (sc.footerEntries) out.push({ name: "Note", text: renderEntries(sc.footerEntries) });
   return out;
 }
 
@@ -303,63 +304,49 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
   const hpAvg = typeof m.hp?.average === "number" ? m.hp.average : NaN;
   if (!Number.isFinite(hpAvg)) flags.push(`Hit points not numeric (${JSON.stringify(m.hp)}).`);
 
-  const saves: Record<string, number> = {};
-  for (const k of Object.keys(scores)) {
+  // Only saves the stat block lists (proficient ones); the card computes the rest from the ability modifier.
+  const saves: Partial<Record<Ability, number>> = {};
+  for (const k of ABILITIES) {
     const listed = m.save?.[k];
-    const num = listed != null ? /^\s*([+-]?\d+)\s*$/.exec(String(listed)) : null;
-    saves[k] = num ? Number(num[1]) : abilityMod(scores[k]!);
-    if (listed != null && !num) flags.push(`${k.toUpperCase()} save listed as "${renderTags(String(listed))}"; Forge shows the plain ability modifier.`);
+    if (listed == null) continue;
+    const num = /^\s*([+-]?\d+)\s*$/.exec(String(listed));
+    if (num) saves[k] = Number(num[1]);
+    else flags.push(`${k.toUpperCase()} save listed as "${renderTags(String(listed))}"; the card shows the plain ability modifier.`);
   }
 
   const skills = m.skill
-    ? Object.entries(m.skill).filter(([k]) => k !== "other").map(([k, v]) => `${titleCase(k)} ${v}`).join(", ")
-    : "";
-  const senses = [...(m.senses ?? []).map((s: string) => renderTags(s)), m.passive != null ? `Passive Perception ${m.passive}` : ""]
-    .filter(Boolean).join(", ");
+    ? Object.entries(m.skill).filter(([k]) => k !== "other").flatMap(([k, v]) => {
+      const n = /^\s*([+-]?\d+)/.exec(renderTags(String(v)));
+      if (!n) { flags.push(`Skill ${titleCase(k)} listed as "${renderTags(String(v))}"; not included.`); return []; }
+      return [{ name: titleCase(k), bonus: Number(n[1]) }];
+    })
+    : [];
+  const passiveNum = typeof m.passive === "number" ? m.passive : /^\d+$/.test(String(m.passive ?? "")) ? Number(m.passive) : undefined;
+  const senses = [...(m.senses ?? []).map((s: string) => renderTags(s)),
+    m.passive != null && passiveNum === undefined ? `Passive Perception ${renderTags(String(m.passive))}` : ""].filter(Boolean).join(", ");
 
   const sp = m.speed ?? {};
   const actions = entryList(m.action);
   const bonus = entryList(m.bonus);
   const reactions = entryList(m.reaction);
   const legendary = entryList(m.legendary);
-  if (m.legendaryHeader) legendary.unshift({ name: "Legendary Actions", description: renderEntries(m.legendaryHeader) });
+  if (m.legendaryHeader) legendary.unshift({ name: "Legendary Actions", text: renderEntries(m.legendaryHeader) });
+  if (m.mythic) legendary.push({ name: "Mythic Actions", text: renderEntries(m.mythicHeader) || "Mythic actions (see the stat block's mythic trait)." }, ...entryList(m.mythic));
   const traits = entryList(m.trait);
   const spells: ListEntry[] = [];
   for (const sc of m.spellcasting ?? []) spells.push(...spellcastingEntries(sc));
-  if (m.mythic) flags.push("Mythic actions present but not mapped (no Forge default attribute for them).");
   if (m.lairActions || m.legendaryGroup) flags.push("Lair actions/regional effects are not included.");
 
   const initiative = deriveInitiative(m, scores.dex!, pb);
   const typeStr = typeText(m.type);
 
-  const forge: Statblock["forge"] = {
-    Z002: SIZE_NAMES[sizeCode] ?? sizeCode,
-    Z003: alignmentText(m.alignment),
-    Z004: typeStr,
-    Z007: Number.isFinite(ac) ? ac : 10,
-    Z008: speedValue(sp.walk),
-    Z009: speedValue(sp.swim),
-    Z010: speedValue(sp.burrow),
-    Z011: speedValue(sp.climb),
-    Z012: speedValue(sp.fly),
-    Z013: senses,
-    Z014: skills,
-    Z015: Array.isArray(m.languages) && m.languages.length ? m.languages.map(renderTags).join(", ") : "None",
-    Z016: Number.isFinite(cr.value) ? cr.value : 0,
-    Z017: scores.str!, Z018: scores.dex!, Z019: scores.con!, Z020: scores.int!, Z021: scores.wis!, Z022: scores.cha!,
-    Z023: saves.str!, Z024: saves.dex!, Z025: saves.con!, Z026: saves.int!, Z027: saves.wis!, Z028: saves.cha!,
-    Z030: damageList(m.vulnerable, "vulnerable"),
-    Z031: damageList(m.resist, "resist"),
-    Z032: damageList(m.immune, "immune"),
-    Z033: damageList(m.conditionImmune, "conditionImmune"),
-    Z034: traits,
-    Z035: actions,
-    Z036: bonus,
-    Z037: reactions,
-    Z038: legendary,
-    Z039: spells,
+  const speedOrUndef = (v: unknown) => speedValue(v) || undefined;
+  const defenses = {
+    vulnerable: damageList(m.vulnerable, "vulnerable") || undefined,
+    resist: damageList(m.resist, "resist") || undefined,
+    immune: damageList(m.immune, "immune") || undefined,
+    conditionImmune: damageList(m.conditionImmune, "conditionImmune") || undefined,
   };
-  if (cr.text.includes("/")) flags.push(`CR ${cr.text} stored as ${cr.value} (Forge CR is numeric).`);
   if (sp.fly && typeof sp.fly === "object" && sp.fly.condition) flags.push(`Fly speed note: ${renderTags(sp.fly.condition)}.`);
   if (m.speed?.alternate || m.speed?.choose) flags.push("Alternate speeds not represented.");
   if (Array.isArray(m.ac) && typeof acRaw === "object" && acRaw.from) flags.push(`AC source: ${acRaw.from.map(renderTags).join(", ")}.`);
@@ -377,8 +364,35 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
   notes.push(...(opts.notes ?? []));
 
   return {
+    schema: SHEET_SCHEMA,
     name: m.name,
+    kind: "creature",
     size: sizeCode as Statblock["size"],
+    type: typeStr || undefined,
+    alignment: alignmentText(m.alignment) || undefined,
+    ac: Number.isFinite(ac) ? ac : 10,
+    hp: { max: Number.isFinite(hpAvg) ? hpAvg : 1, formula: m.hp?.formula },
+    speed: {
+      walk: speedValue(sp.walk), swim: speedOrUndef(sp.swim), fly: speedOrUndef(sp.fly), climb: speedOrUndef(sp.climb),
+      burrow: speedOrUndef(sp.burrow), ...(sp.canHover ? { hover: true } : {}),
+    },
+    abilities: scores as Record<Ability, number>,
+    saves,
+    skills,
+    senses: senses || undefined,
+    passivePerception: passiveNum,
+    languages: Array.isArray(m.languages) && m.languages.length ? m.languages.map(renderTags).join(", ") : undefined,
+    defenses,
+    cr: Number.isFinite(cr.value) ? cr.value : undefined,
+    proficiencyBonus: pb,
+    initiative,
+    traits,
+    actions,
+    bonusActions: bonus,
+    reactions,
+    legendary,
+    spells,
+    inventory: [],
     source: {
       provenance: "official",
       book: m.source,
@@ -387,9 +401,6 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
       url: `https://5e.tools/bestiary.html#${encodeURIComponent(m.name.toLowerCase())}_${m.source.toLowerCase()}`,
       notes,
     },
-    hp: { average: Number.isFinite(hpAvg) ? hpAvg : 1, formula: m.hp?.formula },
-    initiative,
-    forge,
     flags,
   };
 }

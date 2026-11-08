@@ -9,7 +9,7 @@ describe("Owlbear manifest limits", () => {
     expect(manifest.description.length).toBeLessThanOrEqual(128);
     const allowed = ["clipboard-write", "clipboard-read", "autoplay", "bluetooth", "camera", "microphone", "usb", "display-capture", "hid"];
     for (const p of manifest.permissions ?? []) expect(allowed).toContain(p.name);
-    for (const path of [manifest.icon, manifest.action.icon, manifest.action.popover]) expect(path.startsWith("/")).toBe(true);
+    for (const path of [manifest.icon, manifest.action.icon, manifest.action.popover, manifest.background_url]) expect(path.startsWith("/")).toBe(true);
   });
 
   it("manifest version matches package.json (release tags use it)", () => {

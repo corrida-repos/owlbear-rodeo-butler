@@ -52,6 +52,14 @@ export class FakeScene implements SceneGateway {
       if (it) it.metadata = { ...it.metadata, ...JSON.parse(JSON.stringify(u.metadata)) };
     }
   }
+  async patchMetadata(updates: { id: string; key: string; patch: Record<string, unknown> }[]) {
+    for (const u of updates) {
+      const it = this.items.find((i) => i.id === u.id);
+      if (!it) continue;
+      const cur = it.metadata[u.key];
+      it.metadata = { ...it.metadata, [u.key]: { ...(typeof cur === "object" && cur !== null ? cur : {}), ...JSON.parse(JSON.stringify(u.patch)) } };
+    }
+  }
   async getSceneMetadata() { return structuredClone(this.sceneMeta); }
   async setSceneMetadata(u: Record<string, unknown>) { this.sceneMeta = { ...this.sceneMeta, ...u }; }
   async getRoomMetadata() { return structuredClone(this.roomMeta); }

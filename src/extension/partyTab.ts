@@ -1,8 +1,8 @@
 /**
  * "Add Party Members" tab:
  *  - Sync from D&D Beyond: opens your campaign on dndbeyond.com; the bookmark there reads the sheets and posts
- *    them straight back here, then the party tokens are updated (Forge's Party) — press it whenever a sheet changes.
- *  - Import published / homebrewed party members (shared roster flow, flagged as Forge's Party).
+ *    them straight back here, then the party tokens are updated — press it whenever a sheet changes.
+ *  - Import published / homebrewed party members (shared roster flow, flagged as party members).
  */
 import OBR from "@owlbear-rodeo/sdk";
 import bookmarkletSource from "../../scripts/ddb-export.browser.js?raw";
@@ -72,7 +72,7 @@ async function loadParty(data: unknown) {
 }
 
 function canSync(pv: PartyPreview) {
-  return pv.isGM && !pv.errors.length && !pv.forgeErrors.length && pv.system.kind === "default" && pv.rows.some((r) => r.item || opts.createMissing);
+  return pv.isGM && !pv.errors.length && pv.rows.some((r) => r.item || opts.createMissing);
 }
 
 /** Auto-sync after the bookmark posts back, unless something needs a look first (ambiguous tokens, errors). */
@@ -149,7 +149,7 @@ function renderSync(): Child {
     h("h2", {}, "Sync from D&D Beyond"),
     h("button", { className: "wide big", disabled: ui.busy, onclick: openDdb }, "⟳ Sync from D&D Beyond"),
     h("div", { className: "small muted", style: "margin-top:4px" },
-      c ? `Opens “${c.name}” on D&D Beyond. Click the bookmark there and the party is updated here, ready for Forge.`
+      c ? `Opens “${c.name}” on D&D Beyond. Click the bookmark there and the party is updated here.`
         : "Opens your campaigns on D&D Beyond. Open the campaign you DM, click the bookmark, and the party is updated here."),
     waiting ? h("div", { className: "small warn", style: "margin-top:6px" }, "Waiting for the bookmark on the D&D Beyond tab…") : null,
     h("details", { open: setupOpen, ontoggle: (e: Event) => { setupOpen = (e.target as HTMLDetailsElement).open; }, style: "margin-top:8px" },
@@ -170,8 +170,7 @@ function renderSync(): Child {
 function renderPreview(p: PartyPackage, pv: PartyPreview): Child[] {
   const checks: HTMLElement[] = [];
   if (!pv.isGM) checks.push(check("bad", "You are not the GM — sync disabled"));
-  if (pv.system.kind !== "default") checks.push(check("warn", `Forge has a custom system ("${pv.system.name}"): switch to the default system first`));
-  for (const e of [...pv.errors, ...pv.forgeErrors]) checks.push(check("bad", e));
+  for (const e of pv.errors) checks.push(check("bad", e));
 
   const rows = pv.rows.map((r) => {
     const m = r.member;

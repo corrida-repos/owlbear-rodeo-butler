@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import data from "./fixtures/5etools-xmm-sample.json";
-import { COMBAT_KEY, encounterDifficulty, INIT_KEY, listCombatants, partyBudgets, rollSceneInitiative, sceneDifficulty, setCombatSettings, xpForCr } from "../src/core/combat";
+import { COMBAT_KEY, encounterDifficulty, listCombatants, partyBudgets, rollSceneInitiative, sceneDifficulty, setCombatSettings, xpForCr } from "../src/core/combat";
 import { seededRng } from "../src/core/dice";
 import { convertMonster, findMonster } from "../src/core/fivetools";
 import { quickAdd } from "../src/core/quickadd";
+import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
 
-const F = (k: string) => `com.battle-system.forge/${k}`;
 const wolf = convertMonster(findMonster(data, "Wolf", "XMM"));
 const img = { url: "https://raw.githubusercontent.com/5etools-mirror-3/5etools-img/main/bestiary/tokens/XMM/Wolf.webp", width: 512, height: 512, mime: "image/webp" };
 let ids = 0;
@@ -41,17 +41,17 @@ describe("difficulty (2024 DMG budgets + Extreme)", () => {
 
 describe("combat in the scene", () => {
   let scene: FakeScene;
+  const stateOf = (name: string) => readUnit(scene.items.find((i) => i.name === name)!.metadata)!.state;
   beforeEach(async () => {
     scene = new FakeScene();
     await quickAdd([{ statblock: wolf, image: img, count: 3, hp: "average" }], { x: 0, y: 0 }, scene, { rng: seededRng(1), newId });
-    const hero = { ...wolf, name: "Ayla", forge: { ...wolf.forge, Z001: 3, Z016: 0 } };
+    const hero = { ...wolf, name: "Ayla", kind: "character" as const, level: 3, cr: undefined };
     await quickAdd([{ statblock: hero, image: img, count: 1, hp: "average" }], { x: 0, y: 0 }, scene, { rng: seededRng(2), newId, inParty: true });
   });
 
-  it("quick add can put tokens in Forge's Party", () => {
-    const ayla = scene.items.find((i) => i.name === "Ayla")!;
-    expect(ayla.metadata[F("in-party")]).toBe(true);
-    expect(scene.items.filter((i) => i.metadata[F("in-party")] === false)).toHaveLength(3);
+  it("quick add can put tokens in the party", () => {
+    expect(stateOf("Ayla").party).toBe(true);
+    expect(scene.items.filter((i) => readUnit(i.metadata)!.state.party === false)).toHaveLength(3);
   });
 
   it("lists party members (with level) and creatures, and excluded creatures stop counting", async () => {
@@ -73,15 +73,16 @@ describe("combat in the scene", () => {
   });
 
   it("rolls only creatures, or everyone, with each token's own modifier", async () => {
-    const before = scene.items.find((i) => i.name === "Ayla")!.metadata[F("init")];
+    const before = stateOf("Ayla").initiative;
     const r = await rollSceneInitiative(scene, "creatures", { rng: seededRng(9) });
     expect(r.rolled.map((x) => x.party)).toEqual([false, false, false]);
-    expect(scene.items.find((i) => i.name === "Ayla")!.metadata[F("init")]).toBe(before);
+    expect(stateOf("Ayla").initiative).toBe(before);
     for (const x of r.rolled) {
-      const t = scene.items.find((i) => i.id === x.id)!;
-      expect(t.metadata[F("init")]).toBe(x.roll.total);
+      const st = readUnit(scene.items.find((i) => i.id === x.id)!.metadata)!.state;
+      expect(st.initiative).toBe(x.roll.total);
+      expect(st.initiativeRoll).toMatchObject({ total: x.roll.total });
+      expect(st.hp).toBe(11); // rolling initiative only patches initiative fields
       expect(x.roll.modifier).toBe(wolf.initiative.modifier);
-      expect(t.metadata[INIT_KEY]).toMatchObject({ total: x.roll.total });
     }
     const all = await rollSceneInitiative(scene, "all", { rng: seededRng(10) });
     expect(all.rolled).toHaveLength(4);

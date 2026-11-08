@@ -2,43 +2,46 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
 import { BUTLER_ITEM_KEY } from "../src/core/constants";
 import { convertDdbCharacter, htmlToText, renderTemplate } from "../src/core/ddb";
-import { validateForgeMetadata } from "../src/core/forge";
-import { makePartyPackage, matchParty, partyForgeMetadata, previewParty, syncParty } from "../src/core/party";
+import { makePartyPackage, matchParty, previewParty, syncParty, validateParty } from "../src/core/party";
+import { SHEET_KEY, STATE_KEY, validateSheet, type UnitState } from "../src/core/sheet";
+import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
 
-const F = (k: string) => `com.battle-system.forge/${k}`;
 const brann = convertDdbCharacter(fighter);
+const sh = brann.sheet;
 
 describe("D&D Beyond character conversion (synthetic Fighter 3)", () => {
   it("ability scores include race bonuses; HP includes Con and Tough per level", () => {
-    expect([brann.forge.Z017, brann.forge.Z019]).toEqual([16, 16]);
+    expect([sh.abilities.str, sh.abilities.con]).toEqual([16, 16]);
     expect(brann.hp).toEqual({ max: 22 + (3 + 2) * 3, current: 37 - 5, temp: 3 });
+    expect(sh.hp.max).toBe(37);
   });
   it("AC: heavy armor + shield + Defense + attuned ring; unequipped and condition modifiers ignored", () => {
     expect(brann.ac).toBe(16 + 2 + 1 + 1);
-    expect(brann.forge.Z007).toBe(20);
+    expect(sh.ac).toBe(20);
   });
   it("initiative, saves, skills, senses, languages, resistances", () => {
     expect(brann.initiative.modifier).toBe(1 + 5);
     expect(brann.initiative.reasons.join(" ")).toMatch(/\+5 from "Alert"/);
-    expect([brann.forge.Z023, brann.forge.Z024, brann.forge.Z025]).toEqual([5, 1, 5]);
-    expect(brann.forge.Z014).toBe("Athletics +5");
-    expect(brann.forge.Z013).toContain("Darkvision 60 ft.");
-    expect(brann.forge.Z013).toContain("Passive Perception 11");
-    expect(brann.forge.Z015).toBe("Common, Dwarvish");
-    expect(brann.forge.Z031).toBe("Poison");
-    expect([brann.forge.Z001, brann.forge.Z029, brann.forge.Z008]).toEqual([3, 3, 25]);
+    expect(sh.initiative).toMatchObject({ modifier: 6, advantage: false });
+    expect([sh.saves.str, sh.saves.dex, sh.saves.con]).toEqual([5, 1, 5]);
+    expect(sh.skills).toEqual([{ name: "Athletics", bonus: 5 }]);
+    expect(sh.senses).toContain("Darkvision 60 ft.");
+    expect(sh.passivePerception).toBe(11);
+    expect(sh.languages).toBe("Common, Dwarvish");
+    expect(sh.defenses.resist).toBe("Poison");
+    expect([sh.kind, sh.level, sh.proficiencyBonus, sh.speed.walk]).toEqual(["character", 3, 2, 25]);
   });
   it("weapon attacks with to-hit, damage and versatile dice chips", () => {
-    const sword = (brann.forge.Z035 as any[]).find((a) => a.name === "Longsword");
-    expect(sword.description).toContain("+5 [1d20+5]");
-    expect(sword.description).toContain("1d8+3 [1d8+3] Slashing");
-    expect(sword.description).toContain("Versatile: 1d10+3 [1d10+3]");
-    expect(sword.description).toContain("Properties: Sap");
+    const sword = sh.actions.find((a) => a.name === "Longsword")!;
+    expect(sword.text).toContain("+5 [1d20+5]");
+    expect(sword.text).toContain("1d8+3 [1d8+3] Slashing");
+    expect(sword.text).toContain("Versatile: 1d10+3 [1d10+3]");
+    expect(sword.text).toContain("Properties: Sap");
   });
   it("D&D Beyond actions go to the right list with uses; features up to current level only", () => {
-    expect((brann.forge.Z036 as any[]).map((a) => a.name)).toEqual(["Second Wind (2/Long Rest, 1 used)"]);
-    const feats = (brann.forge.Z034 as any[]).map((a) => a.name);
+    expect(sh.bonusActions.map((a) => a.name)).toEqual(["Second Wind (2/Long Rest, 1 used)"]);
+    const feats = sh.traits.map((a) => a.name);
     expect(feats).toEqual(expect.arrayContaining(["Fighting Style", "Improved Critical", "Darkvision", "Dwarven Resilience", "Tough", "Alert"]));
     expect(feats).not.toContain("Extra Attack");
     expect(feats).not.toContain("Speed");
@@ -48,9 +51,9 @@ describe("D&D Beyond character conversion (synthetic Fighter 3)", () => {
     expect(renderTemplate("uses: {{proficiency}}, DC {{savedc:con}}, +{{modifier:wis@min:1}} {{(classlevel*5)}}", ctx)).toBe("uses: 2, DC 13, +3 15");
     expect(htmlToText("<p>Take the [action]Attack[/action] action.</p><ul><li>One</li></ul>")).toBe("Take the Attack action.\n• One");
   });
-  it("produces Forge metadata valid against the default dictionary", () => {
-    let n = 0;
-    expect(validateForgeMetadata(partyForgeMetadata(brann, () => `i${n++}`))).toEqual([]);
+  it("produces a valid native sheet; old party files are rejected with a hint", () => {
+    expect(validateSheet(sh)).toEqual([]);
+    expect(validateParty({ schema: "owlbear-butler/party@1", members: [{ name: "x", hp: { max: 1 }, forge: {} }] }).join(" ")).toMatch(/party@2/);
   });
 });
 
@@ -59,14 +62,19 @@ describe("party sync", () => {
   const pkg = makePartyPackage("test", { name: "Test" }, "2026-11-04T00:00:00Z", [brann, { ...brann, ddbId: 1002, name: "Isolde Nobody" }]);
   let ids = 0;
   const newId = () => `n${++ids}`;
+  const tok = (id: string, label: string, metadata: Record<string, unknown> = {}) =>
+    ({ id, type: "IMAGE", layer: "CHARACTER", name: "Token image", label, position: { x: 0, y: 0 }, size: { w: 150, h: 150 }, metadata });
+  /** A token that already is a Butler unit, mid-session. */
+  const existingUnit = (state: Partial<UnitState>) => ({
+    [SHEET_KEY]: sh,
+    [STATE_KEY]: { hp: 10, tempHp: 0, initiative: 14, inEncounter: true, party: true, conditions: [{ id: "c1", key: "prone" }], ...state },
+    "other.ext/keep": "yes",
+  });
+  const unitOf = (id: string) => readUnit(scene.items.find((i) => i.id === id)!.metadata)!;
 
   beforeEach(() => {
     scene = new FakeScene();
-    scene.items.push(
-      { id: "tok-brann", type: "IMAGE", layer: "CHARACTER", name: "Token image", label: "Brann", position: { x: 0, y: 0 }, size: { w: 150, h: 150 },
-        metadata: { [F("init")]: 14, [F("Z005")]: 10, "other.ext/keep": "yes" } },
-      { id: "wolf", type: "IMAGE", layer: "CHARACTER", name: "Wolf 1", position: { x: 0, y: 0 }, size: { w: 150, h: 150 }, metadata: {} },
-    );
+    scene.items.push(tok("tok-brann", "Brann", { "other.ext/keep": "yes" }), { ...tok("wolf", ""), name: "Wolf 1", label: undefined });
   });
 
   it("matches by first name and reports unmatched characters", async () => {
@@ -74,30 +82,30 @@ describe("party sync", () => {
     expect(rows[0]).toMatchObject({ item: { id: "tok-brann" }, by: "first name" });
     expect(rows[1]!.item).toBeNull();
     const pv = await previewParty(pkg, scene);
-    expect(pv.forgeErrors).toEqual([]);
+    expect(pv.errors).toEqual([]);
   });
 
-  it("writes Forge data onto the existing token without touching other state", async () => {
+  it("writes the sheet and state onto a plain token without touching other data", async () => {
     const r = await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);
     expect(r.ok).toBe(true);
     expect(r.updated).toHaveLength(1);
     expect(r.skipped[0]).toMatch(/Isolde Nobody: no matching token/);
     const t = scene.items.find((i) => i.id === "tok-brann")!;
-    expect(t.metadata[F("Z006")]).toBe(37);
-    expect(t.metadata[F("Z005")]).toBe(32);
-    expect(t.metadata[F("Z007")]).toBe(20);
-    expect(t.metadata[F("in-party")]).toBe(true);
-    expect(t.metadata[F("fabd")]).toBe(true);
-    expect(t.metadata[F("init")]).toBe(14); // initiative untouched
+    const { sheet, state } = unitOf("tok-brann");
+    expect([sheet.hp.max, sheet.ac]).toEqual([37, 20]);
+    expect(state).toMatchObject({ hp: 32, tempHp: 3, party: true, inEncounter: true, initiative: null, conditions: [] });
     expect(t.metadata["other.ext/keep"]).toBe("yes"); // other extensions' data untouched
     expect((t.metadata[BUTLER_ITEM_KEY] as any).ddbId).toBe(1001);
     expect(scene.items.find((i) => i.id === "wolf")!.metadata).toEqual({});
   });
 
-  it('"keep" preserves the token\'s current HP; re-sync matches by D&D Beyond id', async () => {
+  it("re-sync keeps the token's conditions and initiative; \"keep\" also keeps HP; matches by D&D Beyond id", async () => {
+    scene.items[0]!.metadata = existingUnit({});
     await syncParty(pkg, { hp: "keep", createMissing: false, newId }, scene);
-    expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("Z005")]).toBe(10);
-    scene.items.find((i) => i.id === "tok-brann")!.label = "Renamed";
+    expect(unitOf("tok-brann").state).toMatchObject({ hp: 10, initiative: 14, conditions: [{ key: "prone" }] });
+    await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);
+    expect(unitOf("tok-brann").state).toMatchObject({ hp: 32, tempHp: 3, initiative: 14, conditions: [{ key: "prone" }] });
+    scene.items[0]!.label = "Renamed";
     expect(matchParty(pkg.members, await scene.getItems())[0]).toMatchObject({ by: "D&D Beyond id" });
   });
 
@@ -107,8 +115,7 @@ describe("party sync", () => {
     const r = await syncParty(pkg, { hp: "ddb", createMissing: true, newId, avatars: { 1002: { url: "https://cdn.example.org/isolde.png", width: 256, height: 256, mime: "image/png" } } }, scene);
     expect(r.created).toHaveLength(1);
     const t = scene.items.find((i) => i.name === "Isolde Nobody")!;
-    expect(t.metadata[F("in-party")]).toBe(true);
-    expect(t.metadata[F("on-list")]).toBe(true);
+    expect(readUnit(t.metadata)!.state).toMatchObject({ party: true, inEncounter: true, hp: 32 });
   });
 
   describe("party initiative", () => {
@@ -118,27 +125,26 @@ describe("party sync", () => {
       { ...brann, ddbId: 1002, name: "Isolde Swift", initiative: { modifier: 3, advantage: true, reasons: [] } }, // token at 0
     ]);
     beforeEach(() => {
-      scene.items.push({ id: "tok-isolde", type: "IMAGE", layer: "CHARACTER", name: "x", label: "Isolde", position: { x: 0, y: 0 }, size: { w: 150, h: 150 },
-        metadata: { [F("init")]: 0 } });
+      scene.items[0]!.metadata = existingUnit({});
+      scene.items.push(tok("tok-isolde", "Isolde", existingUnit({ initiative: 0 })));
     });
 
     it('"unset" rolls only for tokens without initiative (missing or 0), with advantage when the sheet has it', async () => {
       const r = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "unset", rng: fixed(4, 17), newId }, scene);
       expect(r.rolled.map((x) => x.name)).toEqual(["Isolde Swift"]);
       expect(r.rolled[0]!.roll).toMatchObject({ dice: [4, 17], kept: 17, modifier: 3, mode: "advantage", total: 20 });
-      const isolde = scene.items.find((i) => i.id === "tok-isolde")!;
-      expect(isolde.metadata[F("init")]).toBe(20);
-      expect((isolde.metadata[BUTLER_ITEM_KEY] as any).initiative.dice).toEqual([4, 17]);
-      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(14);
+      expect(unitOf("tok-isolde").state).toMatchObject({ initiative: 20, initiativeRoll: { dice: [4, 17] } });
+      expect((scene.items.find((i) => i.id === "tok-isolde")!.metadata[BUTLER_ITEM_KEY] as any).initiative.dice).toEqual([4, 17]);
+      expect(unitOf("tok-brann").state.initiative).toBe(14);
     });
 
     it('"all" re-rolls everyone; "keep" touches nothing', async () => {
       const r = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "all", rng: fixed(10), newId }, scene);
       expect(r.rolled).toHaveLength(2);
-      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(10 + 6);
+      expect(unitOf("tok-brann").state.initiative).toBe(10 + 6);
       const k = await syncParty(pkg2, { hp: "ddb", createMissing: false, initiative: "keep", newId }, scene);
       expect(k.rolled).toEqual([]);
-      expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("init")]).toBe(16);
+      expect(unitOf("tok-brann").state.initiative).toBe(16);
     });
 
     it("new tokens get rolled initiative too (unless keep)", async () => {
@@ -146,7 +152,7 @@ describe("party sync", () => {
       const r = await syncParty(pkg3, { hp: "ddb", createMissing: true, initiative: "unset", rng: fixed(7), newId,
         avatars: { 1003: { url: "https://cdn.example.org/n.png", width: 64, height: 64, mime: "image/png" } } }, scene);
       expect(r.created).toHaveLength(1);
-      expect(scene.items.find((i) => i.name === "Nobody New")!.metadata[F("init")]).toBe(7 + 6);
+      expect(readUnit(scene.items.find((i) => i.name === "Nobody New")!.metadata)!.state.initiative).toBe(7 + 6);
     });
   });
 
@@ -154,6 +160,6 @@ describe("party sync", () => {
     scene.role = "PLAYER";
     const r = await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);
     expect(r.ok).toBe(false);
-    expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[F("Z006")]).toBeUndefined();
+    expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[SHEET_KEY]).toBeUndefined();
   });
 });

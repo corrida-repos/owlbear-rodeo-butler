@@ -1,30 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FORGE_DEFAULT_DND5E } from "../src/core/constants";
-import { detectForgeSystem, validateForgeMetadata } from "../src/core/forge";
 import { chooseMapOrigin, mapGeometry, tokenCenter, tokenImageGrid } from "../src/core/layout";
 import { checkAssetUrl } from "../src/core/importer";
-
-describe("Forge dictionary", () => {
-  it("covers Z001..Z042 exactly once", () => {
-    const bids = FORGE_DEFAULT_DND5E.map((a) => a.bid).sort();
-    expect(bids).toEqual(Array.from({ length: 42 }, (_, i) => `Z${String(i + 1).padStart(3, "0")}`));
-  });
-  it("rejects unknown BIDs and wrong types", () => {
-    const errs = validateForgeMetadata({
-      "com.battle-system.forge/Z999": 1,
-      "com.battle-system.forge/Z005": "11",
-      "com.battle-system.forge/Z035": [{ name: "Bite" }],
-      "com.battle-system.forge/name": "Wolf 1",
-      "other.ext/x": 1,
-    });
-    expect(errs).toHaveLength(3);
-  });
-  it("detects custom systems from room metadata", () => {
-    expect(detectForgeSystem({}).kind).toBe("default");
-    expect(detectForgeSystem({ "com.battle-system.forge/SnapshotPublicId": "abc", "com.battle-system.forge/SystemName": "PF2" }))
-      .toEqual({ kind: "custom", name: "PF2", snapshotId: "abc" });
-  });
-});
 
 describe("layout", () => {
   it("token centers and image grid", () => {

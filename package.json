@@ -2,7 +2,7 @@
   "name": "owlbear-rodeo-butler",
   "private": true,
   "version": "1.0.0",
-  "description": "Encounter package builder + Owlbear Rodeo importer extension with Forge! integration",
+  "description": "Owlbear Rodeo extension: creatures, D&D Beyond party, unit cards, initiative, HP and conditions for D&D 5E/5.5E",
   "type": "module",
   "scripts": {
     "dev": "vite",

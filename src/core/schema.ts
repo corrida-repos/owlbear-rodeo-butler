@@ -1,4 +1,5 @@
-import { FORGE_DEFAULT_DICTIONARY_ID, PACKAGE_SCHEMA, SIZE_CELLS } from "./constants";
+import { PACKAGE_SCHEMA } from "./constants";
+import { validateSheet, type SheetEntry, type UnitSheet } from "./sheet";
 
 /**
  * Encounter package: the per-encounter data file the importer consumes.
@@ -27,10 +28,8 @@ export interface AssetInfo {
   candidates?: string[];
 }
 
-export interface ListEntry {
-  name: string;
-  description: string;
-}
+/** A named block of stat block text (trait, action, spell…). */
+export type ListEntry = SheetEntry;
 
 export interface InitiativeRoll {
   /** All d20 results rolled (1 for normal, 2 for adv/dis). */
@@ -65,25 +64,8 @@ export interface StatblockInitiative {
   conditional?: string[];
 }
 
-export interface Statblock {
-  name: string;
-  /** Size code T/S/M/L/H/G — drives token footprint. */
-  size: keyof typeof SIZE_CELLS;
-  source: {
-    provenance: Provenance;
-    book?: string; // e.g. "XMM"
-    bookTitle?: string; // e.g. "Monster Manual (2025)"
-    page?: number;
-    url?: string;
-    notes?: string[];
-  };
-  hp: { average: number; formula?: string };
-  initiative: StatblockInitiative;
-  /** Forge attribute values keyed by BID (without namespace). Lists are arrays of ListEntry. */
-  forge: Record<string, number | string | ListEntry[]>;
-  /** Missing/uncertain information the GM should know about. */
-  flags: string[];
-}
+/** A creature/character stat block: Butler's native sheet (see sheet.ts). `hp.max` is the stat block's average. */
+export type Statblock = UnitSheet;
 
 export interface Creature {
   /** Stable key within the package, e.g. "wolf-1". */
@@ -123,7 +105,6 @@ export interface EncounterPackage {
   title: string;
   description?: string;
   rules: "2024" | "2014" | "mixed";
-  forgeDictionary: string;
   map: MapSpec;
   assets: Record<string, AssetInfo>;
   statblocks: Record<string, Statblock>;
@@ -154,8 +135,6 @@ export function validatePackage(input: unknown): ValidationResult {
   if (!isStr(p.id) || !/^[a-z0-9][a-z0-9-]*$/.test(p.id)) err("id", "must be a lowercase slug");
   if (!isStr(p.revision)) err("revision", "missing");
   if (!isStr(p.title)) err("title", "missing");
-  if (p.forgeDictionary !== FORGE_DEFAULT_DICTIONARY_ID)
-    warnings.push(`forgeDictionary "${String(p.forgeDictionary)}" is not the verified default (${FORGE_DEFAULT_DICTIONARY_ID})`);
 
   const assets = isObj(p.assets) ? p.assets : (err("assets", "missing"), {});
   for (const [k, a] of Object.entries(assets)) {
@@ -187,12 +166,7 @@ export function validatePackage(input: unknown): ValidationResult {
   for (const [k, s] of Object.entries(statblocks)) {
     const path = `statblocks.${k}`;
     if (!isObj(s)) { err(path, "not an object"); continue; }
-    if (!isStr(s.name)) err(`${path}.name`, "missing");
-    if (!isStr(s.size) || !(s.size in SIZE_CELLS)) err(`${path}.size`, "must be T/S/M/L/H/G");
-    if (!isObj(s.source) || !isStr(s.source.provenance)) err(`${path}.source.provenance`, "missing");
-    if (!isObj(s.hp) || !isNum(s.hp.average)) err(`${path}.hp.average`, "missing");
-    if (!isObj(s.initiative) || !isNum(s.initiative.modifier)) err(`${path}.initiative.modifier`, "missing");
-    if (!isObj(s.forge)) err(`${path}.forge`, "missing");
+    for (const e of validateSheet(s)) err(path, e);
     if (isObj(s.source) && s.source.provenance === "homebrew" && isStr(s.source.book))
       warnings.push(`${path}: homebrew stat block names a book (${s.source.book}); make sure it is not presented as official`);
   }

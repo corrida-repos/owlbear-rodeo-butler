@@ -49,6 +49,19 @@ export const obrGateway: SceneGateway = {
       for (const d of drafts) Object.assign(d.metadata, byId.get(d.id));
     });
   },
+  async patchMetadata(updates) {
+    if (!updates.length) return;
+    const byId = new Map<string, { key: string; patch: Record<string, unknown> }[]>();
+    for (const u of updates) byId.set(u.id, [...(byId.get(u.id) ?? []), u]);
+    await OBR.scene.items.updateItems([...byId.keys()], (drafts) => {
+      for (const d of drafts) {
+        for (const { key, patch } of byId.get(d.id)!) {
+          const cur = d.metadata[key];
+          d.metadata[key] = { ...(typeof cur === "object" && cur !== null ? cur : {}), ...patch };
+        }
+      }
+    });
+  },
   getSceneMetadata: () => OBR.scene.getMetadata(),
   setSceneMetadata: (u) => OBR.scene.setMetadata(u),
   getRoomMetadata: () => OBR.room.getMetadata(),

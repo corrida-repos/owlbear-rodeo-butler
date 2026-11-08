@@ -1,6 +1,7 @@
-import { BUTLER_ITEM_KEY, BUTLER_SCENE_KEY, FORGE_KEYS, SIZE_CELLS } from "./constants";
+import { BUTLER_ITEM_KEY, BUTLER_SCENE_KEY, SIZE_CELLS } from "./constants";
 import { cryptoRng, describeInitiative, rollForStatblock, type Rng } from "./dice";
-import { buildForgeMetadata, detectForgeSystem, validateForgeMetadata, type ForgeSystemStatus } from "./forge";
+import { metadataBytes, readUnit, unitMetadata, unitState } from "./unit";
+import { validateSheet } from "./sheet";
 import { checkPlacements, chooseMapOrigin, mapGeometry, tokenCenter, tokenImageGrid, type Bounds, type Vec2 } from "./layout";
 import { validatePackage, type EncounterPackage, type InitiativeRoll } from "./schema";
 
@@ -42,6 +43,8 @@ export interface SceneGateway {
   updateImages(updates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: Vec2 } }[]): Promise<void>;
   /** Shallow-merges keys into each item's metadata (other keys untouched). */
   updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]): Promise<void>;
+  /** Merges `patch` into the object stored under `key` (e.g. a unit's state), in one atomic scene update. */
+  patchMetadata(updates: { id: string; key: string; patch: Record<string, unknown> }[]): Promise<void>;
   getSceneMetadata(): Promise<Record<string, unknown>>;
   setSceneMetadata(update: Record<string, unknown>): Promise<void>;
   getRoomMetadata(): Promise<Record<string, unknown>>;
@@ -117,15 +120,14 @@ export interface CreatureRow {
 export interface Preview {
   validation: { ok: boolean; errors: string[]; warnings: string[] };
   isGM: boolean;
-  system: ForgeSystemStatus;
-  systemWarning: string | null;
   duplicates: { importIds: string[]; revisions: string[]; itemIds: string[] };
   grid: { current: { dpi: number; scale: string; type: string }; wanted: { scale: string; type: string }; differs: boolean };
   existingMapCount: number;
-  existingForgeUnits: number;
+  /** Butler units already in the initiative tracker. */
+  existingUnits: number;
   placementWarnings: string[];
   creatures: CreatureRow[];
-  forgeErrors: string[];
+  sheetErrors: string[];
 }
 
 function provenanceLabel(p: string): string {
@@ -135,12 +137,7 @@ function provenanceLabel(p: string): string {
 export async function analyse(pkgInput: unknown, gw: SceneGateway): Promise<Preview> {
   const validation = validatePackage(pkgInput);
   const pkg = pkgInput as EncounterPackage;
-  const [role, items, room, grid] = await Promise.all([gw.getRole(), gw.getItems(), gw.getRoomMetadata(), gw.getGrid()]);
-  const system = detectForgeSystem(room);
-  const systemWarning =
-    system.kind === "custom"
-      ? `Forge has a custom system loaded ("${system.name}", snapshot ${system.snapshotId}). This package targets the built-in "${pkg.forgeDictionary}" attribute IDs; values may land in the wrong fields. Load the default system (Forge → System → Load Default System) or confirm the BIDs match.`
-      : null;
+  const [role, items, grid] = await Promise.all([gw.getRole(), gw.getItems(), gw.getGrid()]);
 
   const prev = validation.ok ? items.filter((i) => (i.metadata[BUTLER_ITEM_KEY] as ButlerItemRecord | undefined)?.packageId === pkg.id) : [];
   const duplicates = {
@@ -150,14 +147,12 @@ export async function analyse(pkgInput: unknown, gw: SceneGateway): Promise<Prev
   };
 
   const creatures: CreatureRow[] = [];
-  const forgeErrors: string[] = [];
+  const sheetErrors: string[] = [];
   let placementWarnings: string[] = [];
   if (validation.ok) {
     placementWarnings = checkPlacements(pkg);
-    let n = 0;
     for (const c of pkg.creatures) {
       const sb = pkg.statblocks[c.statblock]!;
-      const ac = sb.forge.Z007;
       creatures.push({
         key: c.key,
         name: c.name,
@@ -167,22 +162,18 @@ export async function analyse(pkgInput: unknown, gw: SceneGateway): Promise<Prev
         size: sb.size,
         cell: c.cell,
         hp: `${c.hp.current}/${c.hp.max} (${c.hp.method}${c.hp.dice ? ` ${c.hp.formula}: [${c.hp.dice.join(",")}]` : ""})`,
-        ac: typeof ac === "number" ? ac : "?",
+        ac: sb.ac,
         initiative: c.initiative ? `${describeInitiative(c.initiative)}` : `will roll at import (${sb.initiative.modifier >= 0 ? "+" : ""}${sb.initiative.modifier})`,
         initiativeTotal: c.initiative?.total ?? null,
         flags: sb.flags,
       });
-      const fake = c.initiative ?? { total: 0 } as InitiativeRoll;
-      const errs = validateForgeMetadata(buildForgeMetadata(c, sb, fake, () => `x${n++}`));
-      for (const e of errs) forgeErrors.push(`${c.name}: ${e}`);
+      for (const e of validateSheet(sb)) sheetErrors.push(`${sb.name}: ${e}`);
     }
   }
 
   return {
     validation,
     isGM: role === "GM",
-    system,
-    systemWarning,
     duplicates,
     grid: {
       current: grid,
@@ -190,10 +181,10 @@ export async function analyse(pkgInput: unknown, gw: SceneGateway): Promise<Prev
       differs: validation.ok && (normScale(grid.scale) !== normScale(pkg.map.grid.scale) || grid.type !== pkg.map.grid.type),
     },
     existingMapCount: items.filter((i) => i.layer === "MAP").length,
-    existingForgeUnits: items.filter((i) => i.metadata[FORGE_KEYS.ON_LIST] === true).length,
+    existingUnits: items.filter((i) => readUnit(i.metadata)?.state.inEncounter).length,
     placementWarnings,
     creatures,
-    forgeErrors: [...new Set(forgeErrors)],
+    sheetErrors: [...new Set(sheetErrors)],
   };
 }
 
@@ -205,8 +196,6 @@ export interface ImportOptions {
   applyGrid: boolean;
   mapPlacement: "auto" | "origin";
   duplicatePolicy: "abort" | "replace" | "add";
-  /** Required if the package's Forge system check said "custom". */
-  acceptCustomSystem?: boolean;
   allowLocalAssets?: boolean;
   resolvedAssets: Record<string, ResolvedImage>;
   rng?: Rng;
@@ -243,9 +232,6 @@ export async function executeImport(pkg: EncounterPackage, opts: ImportOptions, 
     const v = validatePackage(pkg);
     if (!v.ok) throw new ImportAborted(`Package invalid:\n${v.errors.join("\n")}`);
     if ((await gw.getRole()) !== "GM") throw new ImportAborted("Only the GM can import encounters.");
-    const sys = detectForgeSystem(await gw.getRoomMetadata());
-    if (sys.kind === "custom" && !opts.acceptCustomSystem)
-      throw new ImportAborted(`Custom Forge system "${sys.name}" loaded; confirm BID compatibility before importing.`);
 
     for (const key of new Set([pkg.map.asset, ...pkg.creatures.map((c) => c.token)])) {
       const r = opts.resolvedAssets[key];
@@ -291,9 +277,8 @@ export async function executeImport(pkg: EncounterPackage, opts: ImportOptions, 
         rolledAtImport.push({ name: c.name, roll: initiative });
       }
       const size = SIZE_CELLS[sb.size] ?? 1;
-      const forge = buildForgeMetadata(c, sb, initiative, newId);
-      const errs = validateForgeMetadata(forge);
-      if (errs.length) throw new ImportAborted(`${c.name}: Forge metadata invalid:\n${errs.join("\n")}`);
+      let unit: Record<string, unknown>;
+      try { unit = unitMetadata(sb, unitState(sb, c.hp, initiative)); } catch (e) { throw new ImportAborted(`${c.name}: ${e instanceof Error ? e.message : e}`); }
       const record: ButlerItemRecord = {
         ...baseRecord,
         role: "creature",
@@ -313,11 +298,11 @@ export async function executeImport(pkg: EncounterPackage, opts: ImportOptions, 
         visible: !c.hidden,
         locked: false,
         label: c.showLabel === false ? undefined : c.name,
-        metadata: { ...forge, [BUTLER_ITEM_KEY]: record },
+        metadata: { ...unit, [BUTLER_ITEM_KEY]: record },
       };
     });
-    const metaSize = Math.max(...tokenSpecs.map((t) => JSON.stringify(t.metadata).length));
-    steps.push({ step: "Preflight", ok: true, detail: `package valid, Forge system "${sys.name}", ${tokenSpecs.length} tokens built (largest metadata ${(metaSize / 1024).toFixed(1)} KB)` });
+    const metaSize = Math.max(0, ...tokenSpecs.map((t) => metadataBytes(t.metadata)));
+    steps.push({ step: "Preflight", ok: true, detail: `package valid, ${tokenSpecs.length} tokens built (largest metadata ${(metaSize / 1024).toFixed(1)} KB)` });
 
     // ---------------- scene changes
     if (opts.applyGrid && (normScale(grid.scale) !== normScale(pkg.map.grid.scale) || grid.type !== pkg.map.grid.type)) {
@@ -334,7 +319,7 @@ export async function executeImport(pkg: EncounterPackage, opts: ImportOptions, 
 
     await gw.addImages(tokenSpecs);
     created.push(...tokenSpecs.map((t) => t.id));
-    steps.push({ step: "Tokens", ok: true, detail: `${tokenSpecs.length} creatures added to the scene and Forge tracker` });
+    steps.push({ step: "Tokens", ok: true, detail: `${tokenSpecs.length} creatures added to the scene and the initiative tracker` });
 
     // ---------------- verify
     const after = new Set((await gw.getItems()).map((i) => i.id));

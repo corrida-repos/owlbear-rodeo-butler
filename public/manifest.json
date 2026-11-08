@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "manifest_version": 1,
   "author": "Diogo Correia",
-  "description": "Add 5etools or homebrew creatures, sync your D&D Beyond party into Forge!, and check encounter difficulty and initiative.",
+  "description": "Add 5etools or homebrew creatures, sync your D&D Beyond party, and run initiative, HP and conditions. No other extension needed.",
   "homepage_url": "https://github.com/corrida-repos/owlbear-rodeo-butler",
   "icon": "/owlbear-rodeo-butler/icon.svg",
   "action": {
@@ -13,6 +13,7 @@
     "width": 440,
     "height": 760
   },
+  "background_url": "/owlbear-rodeo-butler/background.html",
   "permissions": [
     {
       "name": "clipboard-read",

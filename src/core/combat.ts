@@ -1,17 +1,16 @@
 /**
  * Combat tab: encounter difficulty (2024 / "5.5e" DMG XP budgets, plus an invented Extreme tier for boss
- * fights) and initiative rolling for the Forge units already in the scene.
+ * fights) and initiative rolling for the Butler units already in the scene.
  */
-import { BUTLER_ITEM_KEY, BUTLER_NS, FORGE_KEYS } from "./constants";
+import { BUTLER_ITEM_KEY, BUTLER_NS } from "./constants";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
-import { forgeKey } from "./forge";
+import { STATE_KEY, type UnitSheet, type UnitState } from "./sheet";
+import { isUnitItem, readUnit } from "./unit";
 import type { InitiativeSetup, SceneGateway, SceneItemLite } from "./importer";
 import type { InitiativeRoll } from "./schema";
 
 /** Per-token Combat settings, stored on the token so they persist and every GM tab sees them. */
 export const COMBAT_KEY = `${BUTLER_NS}/combat`;
-/** Last initiative rolled from the Combat tab. */
-export const INIT_KEY = `${BUTLER_NS}/initiative`;
 export interface CombatSettings { exclude?: boolean; level?: number }
 
 // ------------------------------------------------------------------ XP tables
@@ -77,10 +76,10 @@ export interface Combatant {
   id: string;
   name: string;
   party: boolean;
-  /** In Forge's tracker. */
+  /** In the initiative tracker. */
   onList: boolean;
   cr: number | null;
-  /** Level used for the budget (setting, else Forge level, else guessed from CR); null if unknown. */
+  /** Level used for the budget (setting, else sheet level, else guessed from CR); null if unknown. */
   level: number | null;
   levelSource: "set" | "sheet" | "cr" | null;
   exclude: boolean;
@@ -90,26 +89,28 @@ export interface Combatant {
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-export const isForgeUnit = (i: SceneItemLite) =>
-  i.layer === "CHARACTER" && i.type === "IMAGE" && (FORGE_KEYS.UNIT_NAME in i.metadata || FORGE_KEYS.FABRICATED in i.metadata || forgeKey("Z005") in i.metadata);
+export { isUnitItem };
 
-/** How to roll this token: recorded setup, else its last recorded roll, else its Forge Dexterity. */
-export function initiativeSetupFor(meta: Record<string, unknown>): InitiativeSetup {
-  const rec = meta[BUTLER_ITEM_KEY] as { initiativeSetup?: InitiativeSetup; initiative?: InitiativeRoll } | undefined;
+/** How to roll this token: recorded setup (import/party sync), else the stat block's initiative, else its last roll. */
+export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState): InitiativeSetup {
+  const rec = meta[BUTLER_ITEM_KEY] as { initiativeSetup?: InitiativeSetup } | undefined;
   if (rec?.initiativeSetup) return rec.initiativeSetup;
-  const last = (meta[INIT_KEY] as InitiativeRoll | undefined) ?? rec?.initiative;
+  if (sheet) return { modifier: sheet.initiative.modifier, advantage: sheet.initiative.advantage, disadvantage: sheet.initiative.disadvantage };
+  const last = state?.initiativeRoll;
   if (last && typeof last.modifier === "number") return { modifier: last.modifier, advantage: last.mode === "advantage", disadvantage: last.mode === "disadvantage" };
-  const dex = num(meta[forgeKey("Z018")]);
-  return { modifier: dex === null ? 0 : Math.floor((dex - 10) / 2), advantage: false, disadvantage: false };
+  return { modifier: 0, advantage: false, disadvantage: false };
 }
 
 export function listCombatants(items: SceneItemLite[]): Combatant[] {
-  return items.filter(isForgeUnit).map((i) => {
+  return items.filter(isUnitItem).flatMap((i) => {
     const m = i.metadata;
+    const unit = readUnit(m);
+    if (!unit) return [];
+    const { sheet, state } = unit;
     const s = (m[COMBAT_KEY] as CombatSettings | undefined) ?? {};
-    const party = m[FORGE_KEYS.IN_PARTY] === true;
-    const cr = num(m[forgeKey("Z016")]);
-    const sheetLevel = num(m[forgeKey("Z001")]);
+    const party = state.party;
+    const cr = num(sheet.cr);
+    const sheetLevel = num(sheet.level);
     let level: number | null = null;
     let levelSource: Combatant["levelSource"] = null;
     if (party) {
@@ -117,14 +118,14 @@ export function listCombatants(items: SceneItemLite[]): Combatant[] {
       else if (sheetLevel && sheetLevel > 0) { level = sheetLevel; levelSource = "sheet"; }
       else if (cr !== null) { level = clampLevel(Math.max(1, cr)); levelSource = "cr"; }
     }
-    return {
+    return [{
       id: i.id,
-      name: i.label || (m[FORGE_KEYS.UNIT_NAME] as string | undefined) || i.name,
-      party, onList: m[FORGE_KEYS.ON_LIST] !== false, cr, level, levelSource,
+      name: i.label || i.name || sheet.name,
+      party, onList: state.inEncounter, cr, level, levelSource,
       exclude: s.exclude === true,
-      initiative: num(m[FORGE_KEYS.INITIATIVE]),
-      setup: initiativeSetupFor(m),
-    };
+      initiative: state.initiative,
+      setup: initiativeSetupFor(m, sheet, state),
+    }];
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
 
@@ -147,17 +148,17 @@ export async function setCombatSettings(gw: SceneGateway, id: string, patch: Com
 
 export interface InitiativeReport { rolled: { id: string; name: string; party: boolean; roll: InitiativeRoll }[] }
 
-/** Rolls initiative for every unit in Forge's tracker ("all") or only the non-party ones ("creatures"). */
+/** Rolls initiative for every unit in the initiative tracker ("all") or only the non-party ones ("creatures"). */
 export async function rollSceneInitiative(gw: SceneGateway, scope: "all" | "creatures", opts: { rng?: Rng; now?: () => Date } = {}): Promise<InitiativeReport> {
   if ((await gw.getRole()) !== "GM") throw new Error("Only the GM can roll initiative.");
   const rng = opts.rng ?? cryptoRng;
   const targets = listCombatants(await gw.getItems()).filter((c) => c.onList && (scope === "all" || !c.party));
-  if (!targets.length) throw new Error(scope === "all" ? "No units in the Forge tracker." : "No creatures in the Forge tracker.");
+  if (!targets.length) throw new Error(scope === "all" ? "No units in the initiative tracker." : "No creatures in the initiative tracker.");
   const rolled = targets.map((c) => ({
     id: c.id, name: c.name, party: c.party,
     roll: rollInitiative(c.setup.modifier, resolveRollMode(c.setup.advantage, c.setup.disadvantage), rng, "importer", opts.now),
   }));
-  await gw.updateMetadata(rolled.map((r) => ({ id: r.id, metadata: { [FORGE_KEYS.INITIATIVE]: r.roll.total, [INIT_KEY]: r.roll } })));
+  await gw.patchMetadata(rolled.map((r) => ({ id: r.id, key: STATE_KEY, patch: { initiative: r.roll.total, initiativeRoll: r.roll } satisfies Partial<UnitState> })));
   rolled.sort((a, b) => b.roll.total - a.roll.total || b.roll.modifier - a.roll.modifier);
   return { rolled };
 }

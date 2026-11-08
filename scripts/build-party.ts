@@ -26,8 +26,8 @@ writeFileSync(out, JSON.stringify(pkg, null, 2));
 
 console.log(`${exp.campaign?.name} → ${out} (${(JSON.stringify(pkg).length / 1024).toFixed(0)} KB, D&D Beyond data from ${exp.fetchedAt})`);
 for (const m of members) {
-  const f = m.forge as any;
+  const f = m.sheet;
   console.log(`  ${m.name.padEnd(22)} ${m.classes.padEnd(22)} HP ${m.hp.current}/${m.hp.max}  AC ${m.ac}  init ${m.initiative.modifier >= 0 ? "+" : ""}${m.initiative.modifier}${m.initiative.advantage ? " (adv)" : ""}  ` +
-    `actions ${f.Z035.length}, spells ${f.Z039.length}, features ${f.Z034.length}`);
+    `actions ${f.actions.length}, spells ${f.spells.length}, features ${f.traits.length}`);
   for (const fl of m.flags) console.log(`      · ${fl}`);
 }

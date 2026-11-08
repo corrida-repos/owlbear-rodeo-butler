@@ -1,17 +1,18 @@
 /**
- * Party sync: write D&D Beyond-derived Forge stat blocks onto the party's existing Owlbear tokens.
- * Never moves, replaces or deletes tokens; only merges Forge keys (and an optional new token for
- * characters that have none, if asked).
+ * Party sync: write D&D Beyond-derived stat blocks onto the party's existing Owlbear tokens.
+ * Never moves, replaces or deletes tokens; only writes Butler's unit keys (and an optional new token for
+ * characters that have none, if asked). A token's live state (conditions, initiative…) is kept.
  */
-import { BUTLER_ITEM_KEY, FORGE_DEFAULT_DICTIONARY_ID, FORGE_KEYS, SIZE_CELLS } from "./constants";
+import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
 import { convertDdbCharacter, type PartyMember } from "./ddb";
-import { detectForgeSystem, forgeKey, validateForgeMetadata, type ForgeSystemStatus } from "./forge";
+import { validateSheet, type UnitState } from "./sheet";
+import { readUnit, unitMetadata, unitState } from "./unit";
 import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type InitiativeSetup, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
-import type { InitiativeRoll, ListEntry } from "./schema";
+import type { InitiativeRoll } from "./schema";
 
-export const PARTY_SCHEMA = "owlbear-butler/party@1";
+export const PARTY_SCHEMA = "owlbear-butler/party@2";
 
 export interface PartyPackage {
   schema: typeof PARTY_SCHEMA;
@@ -19,12 +20,11 @@ export interface PartyPackage {
   campaign: { id?: number; name: string };
   fetchedAt: string;
   builtAt: string;
-  forgeDictionary: string;
   members: PartyMember[];
 }
 
 export function makePartyPackage(id: string, campaign: PartyPackage["campaign"], fetchedAt: string, members: PartyMember[], now = new Date()): PartyPackage {
-  return { schema: PARTY_SCHEMA, id, campaign, fetchedAt, builtAt: now.toISOString(), forgeDictionary: FORGE_DEFAULT_DICTIONARY_ID, members };
+  return { schema: PARTY_SCHEMA, id, campaign, fetchedAt, builtAt: now.toISOString(), members };
 }
 
 export const DDB_EXPORT_SCHEMA = "owlbear-butler/ddb-export@1";
@@ -44,7 +44,8 @@ export function validateParty(input: any): string[] {
   for (const [i, m] of (input?.members ?? []).entries()) {
     if (typeof m?.name !== "string") errors.push(`members[${i}].name missing`);
     if (typeof m?.hp?.max !== "number") errors.push(`members[${i}].hp.max missing`);
-    if (typeof m?.forge !== "object") errors.push(`members[${i}].forge missing`);
+    if (typeof m?.sheet !== "object") errors.push(`members[${i}].sheet missing (party file from an older version: sync again from D&D Beyond)`);
+    else for (const e of validateSheet(m.sheet)) errors.push(`members[${i}].sheet: ${e}`);
   }
   return errors;
 }
@@ -63,7 +64,7 @@ export interface MatchRow {
   ambiguous: string[];
 }
 
-const labels = (i: SceneItemLite) => [i.label, i.name, i.metadata[FORGE_KEYS.UNIT_NAME] as string | undefined].filter((x): x is string => !!x);
+const labels = (i: SceneItemLite) => [i.label, i.name].filter((x): x is string => !!x);
 
 export function matchParty(members: PartyMember[], items: SceneItemLite[]): MatchRow[] {
   const tokens = items.filter((i) => i.layer === "CHARACTER" && i.type === "IMAGE");
@@ -94,29 +95,15 @@ export function matchParty(members: PartyMember[], items: SceneItemLite[]): Matc
 export interface PartyPreview {
   errors: string[];
   isGM: boolean;
-  system: ForgeSystemStatus;
   rows: MatchRow[];
-  forgeErrors: string[];
-}
-
-export function partyForgeMetadata(m: PartyMember, newId: () => string): Record<string, unknown> {
-  const meta: Record<string, unknown> = {};
-  for (const [bid, v] of Object.entries(m.forge)) {
-    meta[forgeKey(bid)] = Array.isArray(v) ? (v as ListEntry[]).map((e) => ({ id: newId(), name: e.name, description: e.description })) : v;
-  }
-  meta[forgeKey("Z006")] = m.hp.max;
-  meta[forgeKey("Z042")] = m.hp.temp;
-  return meta;
 }
 
 export async function previewParty(pkg: unknown, gw: SceneGateway): Promise<PartyPreview> {
   const errors = validateParty(pkg);
-  const [role, items, room] = await Promise.all([gw.getRole(), gw.getItems(), gw.getRoomMetadata()]);
+  const [role, items] = await Promise.all([gw.getRole(), gw.getItems()]);
   const p = pkg as PartyPackage;
   const rows = errors.length ? [] : matchParty(p.members, items);
-  let n = 0;
-  const forgeErrors = errors.length ? [] : p.members.flatMap((m) => validateForgeMetadata(partyForgeMetadata(m, () => `x${n++}`)).map((e) => `${m.name}: ${e}`));
-  return { errors, isGM: role === "GM", system: detectForgeSystem(room), rows, forgeErrors };
+  return { errors, isGM: role === "GM", rows };
 }
 
 export interface PartySyncOptions {
@@ -127,10 +114,9 @@ export interface PartySyncOptions {
   avatars?: Record<number, ResolvedImage>;
   /** Pictures to put on EXISTING matched tokens (e.g. circular D&D Beyond portraits); never placeholders. */
   replaceWith?: Record<number, ResolvedImage>;
-  acceptCustomSystem?: boolean;
   /**
    * "keep": never touch party initiative. "unset": roll only for members whose token has no initiative yet
-   * (missing or 0, e.g. after Forge's "Reset Round & Initiative"). "all": re-roll everyone.
+   * (missing or 0, e.g. after "Reset round & initiative"). "all": re-roll everyone.
    */
   initiative?: "keep" | "unset" | "all";
   rng?: Rng;
@@ -159,18 +145,16 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
   const report: PartySyncReport = { ok: false, steps, updated: [], created: [], skipped: [], createdItemIds: [], rolled: [], previousImages: {} };
   const rng = opts.rng ?? cryptoRng;
   /** Rolls 1d20 (2d20 keep high/low with adv/dis) + the character's initiative modifier and records it. */
-  const roll = (m: PartyMember, meta: Record<string, unknown>, record: PartyRecord) => {
+  const roll = (m: PartyMember, record: PartyRecord): InitiativeRoll => {
     const r = rollInitiative(m.initiative.modifier, resolveRollMode(m.initiative.advantage, false), rng, "importer", now);
-    meta[FORGE_KEYS.INITIATIVE] = r.total;
     record.initiative = r;
     report.rolled.push({ name: m.name, roll: r });
+    return r;
   };
   try {
     const errors = validateParty(pkg);
     if (errors.length) throw new Error(`Party file invalid: ${errors.join("; ")}`);
     if ((await gw.getRole()) !== "GM") throw new Error("Only the GM can sync the party.");
-    const sys = detectForgeSystem(await gw.getRoomMetadata());
-    if (sys.kind === "custom" && !opts.acceptCustomSystem) throw new Error(`Custom Forge system "${sys.name}" loaded; confirm BID compatibility first.`);
 
     const items = await gw.getItems();
     const rows = matchParty(pkg.members, items);
@@ -182,23 +166,26 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
 
     for (const r of rows) {
       const m = r.member;
-      const meta = partyForgeMetadata(m, newId);
-      const errs = validateForgeMetadata(meta);
-      if (errs.length) throw new Error(`${m.name}: ${errs.join("; ")}`);
       const record: PartyRecord = { role: "party", ddbId: m.ddbId, partyId: pkg.id, syncedAt: now().toISOString(),
         initiativeSetup: { modifier: m.initiative.modifier, advantage: m.initiative.advantage, disadvantage: false } };
       if (r.item) {
-        const existing = r.item.metadata;
-        const hasHp = typeof existing[forgeKey("Z005")] === "number";
-        meta[forgeKey("Z005")] = opts.hp === "keep" && hasHp ? Math.min(existing[forgeKey("Z005")] as number, m.hp.max) : m.hp.current;
-        meta[FORGE_KEYS.UNIT_NAME] = (existing[FORGE_KEYS.UNIT_NAME] as string | undefined) ?? m.name;
-        meta[FORGE_KEYS.FABRICATED] = true;
-        meta[FORGE_KEYS.IN_PARTY] = true;
-        meta[FORGE_KEYS.ON_LIST] = existing[FORGE_KEYS.ON_LIST] ?? true;
-        const cur = existing[FORGE_KEYS.INITIATIVE];
-        const unset = typeof cur !== "number" || cur === 0;
-        if (opts.initiative === "all" || (opts.initiative === "unset" && unset)) roll(m, meta, record);
-        meta[BUTLER_ITEM_KEY] = record;
+        const prev = readUnit(r.item.metadata)?.state;
+        const keepHp = opts.hp === "keep" && prev !== undefined;
+        const state: UnitState = {
+          ...(prev ?? unitState(m.sheet, m.hp, null)),
+          hp: keepHp ? Math.min(prev.hp, m.hp.max) : m.hp.current,
+          tempHp: keepHp ? prev.tempHp : m.hp.temp,
+          party: true,
+          inEncounter: prev?.inEncounter ?? true,
+        };
+        delete state.maxHpOverride; // the sheet's max HP is the character's real max
+        const unset = state.initiative === null || state.initiative === 0;
+        if (opts.initiative === "all" || (opts.initiative === "unset" && unset)) {
+          const rolled = roll(m, record);
+          state.initiative = rolled.total;
+          state.initiativeRoll = rolled;
+        }
+        const meta = { ...unitMetadata(m.sheet, state), [BUTLER_ITEM_KEY]: record };
         updates.push({ id: r.item.id, metadata: meta });
         report.updated.push(`${m.name} → token "${r.item.label ?? r.item.name}" (matched by ${r.by})`);
       } else if (opts.createMissing) {
@@ -208,13 +195,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
         if (problem) { report.skipped.push(`${m.name}: avatar ${problem}`); continue; }
         const size = SIZE_CELLS[m.size] ?? 1;
         const idx = creates.length;
-        meta[forgeKey("Z005")] = m.hp.current;
-        meta[FORGE_KEYS.UNIT_NAME] = m.name;
-        meta[FORGE_KEYS.FABRICATED] = true;
-        meta[FORGE_KEYS.IN_PARTY] = true;
-        meta[FORGE_KEYS.ON_LIST] = true;
-        if (opts.initiative === "all" || opts.initiative === "unset") roll(m, meta, record);
-        meta[BUTLER_ITEM_KEY] = record;
+        const rolled = opts.initiative === "all" || opts.initiative === "unset" ? roll(m, record) : null;
+        const meta = { ...unitMetadata(m.sheet, unitState(m.sheet, m.hp, rolled, { party: true })), [BUTLER_ITEM_KEY]: record };
         creates.push({
           id: newId(), name: m.name, layer: "CHARACTER", image: img,
           grid: tokenImageGrid(img.width, img.height, size),
@@ -231,7 +213,7 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
 
     if (updates.length) {
       await gw.updateMetadata(updates);
-      steps.push({ step: "Update tokens", ok: true, detail: `Forge stat blocks written to ${updates.length} existing token(s); position, image and ownership untouched` });
+      steps.push({ step: "Update tokens", ok: true, detail: `stat blocks written to ${updates.length} existing token(s); position, image, ownership and conditions untouched` });
     }
     if (opts.replaceWith) {
       const imgUpdates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }[] = [];

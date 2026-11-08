@@ -23,24 +23,24 @@ describe("5etools _copy resolution", () => {
     const { r, sb } = convert("Bitter Breath", "BGDIA");
     expect(r.chain).toEqual(["copy of Horned Devil (MM)"]);
     expect(sb.name).toBe("Bitter Breath");
-    expect(sb.forge.Z007).toBe(18);
-    expect(sb.hp.average).toBe(178);
-    expect(text(sb.forge.Z035)).toContain("Bitter Breath makes three melee attacks");
-    expect(text(sb.forge.Z035)).not.toMatch(/the devil makes/i);
+    expect(sb.ac).toBe(18);
+    expect(sb.hp.max).toBe(178);
+    expect(text(sb.actions)).toContain("Bitter Breath makes three melee attacks");
+    expect(text(sb.actions)).not.toMatch(/the devil makes/i);
     expect(sb.source.notes!.join(" ")).toContain("Horned Devil (MM)");
   });
 
   it("replaceArr swaps a named action (Archduke Zariel)", () => {
     const { sb } = convert("Archduke Zariel of Avernus", "BGDIA");
-    const multi = (sb.forge.Z035 as any[]).find((a) => a.name === "Multiattack");
-    expect(multi.description).toContain("She can substitute Horrid Touch for Matalotok");
+    const multi = (sb.actions as any[]).find((a) => a.name === "Multiattack");
+    expect(multi.text).toContain("She can substitute Horrid Touch for Matalotok");
   });
 
   it("own props override the base and replaceSpells swaps spells (Traxigor the otter)", () => {
     const { sb } = convert("Traxigor", "BGDIA");
     expect(sb.size).toBe("T");
-    expect(sb.forge.Z004).toBe("Beast");
-    const spells = text(sb.forge.Z039);
+    expect(sb.type).toBe("Beast");
+    const spells = text(sb.spells);
     expect(spells).toContain("Plane Shift");
     expect(spells).not.toMatch(/Level 7[^}]*Teleport/);
   });
@@ -48,32 +48,32 @@ describe("5etools _copy resolution", () => {
   it("templates add root props/senses; setProp null removes (Cat Skeleton)", () => {
     const { r, sb } = convert("Cat Skeleton", "CoS");
     expect(r.chain).toEqual(["copy of Cat (MM)", "template Skeleton (DMG)"]);
-    expect(sb.forge.Z004).toBe("Undead");
-    expect(sb.forge.Z013).toContain("darkvision 60 ft.");
-    expect(sb.forge.Z030).toBe("");
-    expect(sb.forge.Z015).toBe("None");
+    expect(sb.type).toBe("Undead");
+    expect(sb.senses).toContain("darkvision 60 ft.");
+    expect(sb.defenses.vulnerable).toBeUndefined();
+    expect(sb.languages).toBeUndefined();
   });
 
   it('"remove" deletes a property (Arabelle has no Commoner actions)', () => {
     const { sb } = convert("Arabelle", "CoS");
-    expect(sb.forge.Z035).toEqual([]);
+    expect(sb.actions).toEqual([]);
   });
 
   it("template scalarAddHit and halved HP (Reduced-Threat Aboleth)", () => {
     const { sb } = convert("Reduced-Threat Aboleth", "TftYP");
     const base = convertMonster(get("Aboleth", "MM"));
-    expect(names(sb.forge.Z034)).toContain("Reduced Threat");
-    expect(text(base.forge.Z035)).toContain("+9 [1d20+9]");
-    expect(text(sb.forge.Z035)).toContain("+7 [1d20+7]");
-    expect(sb.hp.average).toBe(67);
+    expect(names(sb.traits)).toContain("Reduced Threat");
+    expect(text(base.actions)).toContain("+9 [1d20+9]");
+    expect(text(sb.actions)).toContain("+7 [1d20+7]");
+    expect(sb.hp.max).toBe(67);
   });
 
   it("template + addSkills (Sylvira Savikas = Archmage + Tiefling)", () => {
     const { sb } = convert("Sylvira Savikas", "BGDIA");
-    expect(sb.forge.Z004).toBe("Humanoid (Tiefling)");
-    expect(sb.forge.Z015).toContain("Infernal");
-    expect(sb.forge.Z013).toContain("darkvision 60 ft.");
-    expect(sb.forge.Z014).toContain("Investigation +13"); // INT 20 (+5) + 2 × PB 4
+    expect(sb.type).toBe("Humanoid (Tiefling)");
+    expect(sb.languages).toContain("Infernal");
+    expect(sb.senses).toContain("darkvision 60 ft.");
+    expect(sb.skills).toContainEqual({ name: "Investigation", bonus: 13 }); // INT 20 (+5) + 2 × PB 4
   });
 
   it("errors clearly when a base creature isn't loaded", () => {

@@ -1,15 +1,15 @@
 /**
- * Quick add: put creatures into the current scene (no map/grid changes) with Forge stats, separate HP and
+ * Quick add: put creatures into the current scene (no map/grid changes) with their stat block, separate HP and
  * individually rolled initiative. Tokens are laid out around a point (the GM's view centre), one row per
  * creature type, snapped to the grid; the GM then drags them where they belong.
  */
-import { BUTLER_ITEM_KEY, FORGE_KEYS, SIZE_CELLS } from "./constants";
+import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
 import { rollHp } from "./builder";
 import { cryptoRng, rollForStatblock, type Rng } from "./dice";
-import { buildForgeMetadata, detectForgeSystem, validateForgeMetadata } from "./forge";
+import { unitMetadata, unitState } from "./unit";
 import { checkAssetUrl, type ButlerItemRecord, type ImageItemSpec, type ResolvedImage, type SceneGateway, type StepResult } from "./importer";
 import { tokenImageGrid, type Vec2 } from "./layout";
-import type { Creature, HpRecord, InitiativeRoll, Statblock } from "./schema";
+import type { HpRecord, InitiativeRoll, Statblock } from "./schema";
 
 export interface QuickEntry {
   statblock: Statblock;
@@ -44,7 +44,7 @@ export function nameCreatures(base: string, count: number, existing: string[]): 
 }
 
 export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGateway,
-  opts: { rng?: Rng; newId?: () => string; now?: () => Date; acceptCustomSystem?: boolean; inParty?: boolean } = {}): Promise<QuickAddReport> {
+  opts: { rng?: Rng; newId?: () => string; now?: () => Date; inParty?: boolean } = {}): Promise<QuickAddReport> {
   const newId = opts.newId ?? (() => globalThis.crypto.randomUUID());
   const rng = opts.rng ?? cryptoRng;
   const now = opts.now ?? (() => new Date());
@@ -53,8 +53,6 @@ export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGat
   try {
     if (!entries.length) throw new Error("Nothing to add.");
     if ((await gw.getRole()) !== "GM") throw new Error(`Only the GM can add ${opts.inParty ? "party members" : "creatures"}.`);
-    const sys = detectForgeSystem(await gw.getRoomMetadata());
-    if (sys.kind === "custom" && !opts.acceptCustomSystem) throw new Error(`Custom Forge system "${sys.name}" loaded; switch Forge to its default system first.`);
     for (const e of entries) {
       const problem = checkAssetUrl(e.image.url);
       if (problem) throw new Error(`${e.statblock.name}: image ${problem}`);
@@ -79,11 +77,7 @@ export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGat
         const hp = rollHp(e.statblock, e.hp, rng, report.warnings);
         const sb = e.advantage ? { ...e.statblock, initiative: { ...e.statblock.initiative, advantage: true } } : e.statblock;
         const initiative = rollForStatblock(sb.initiative, rng, "importer");
-        const creature: Creature = { key: name, name, statblock: "", token: "", cell: { x: 0, y: 0 }, hp, initiative };
-        const forge = buildForgeMetadata(creature, e.statblock, initiative, newId);
-        if (opts.inParty) forge[FORGE_KEYS.IN_PARTY] = true; // shows in Forge's Party
-        const errs = validateForgeMetadata(forge);
-        if (errs.length) throw new Error(`${name}: ${errs.join("; ")}`);
+        const unit = unitMetadata(e.statblock, unitState(e.statblock, hp, initiative, { party: !!opts.inParty }));
         const record: ButlerItemRecord = {
           packageId: "quick-add", revision: now().toISOString(), importId, role: "creature", creatureKey: name, initiative,
           initiativeSetup: { modifier: sb.initiative.modifier, advantage: sb.initiative.advantage, disadvantage: sb.initiative.disadvantage },
@@ -95,19 +89,19 @@ export async function quickAdd(entries: QuickEntry[], center: Vec2, gw: SceneGat
           grid: tokenImageGrid(e.image.width, e.image.height, size),
           position: { x: origin.x + (i * step + size / 2) * dpi, y: origin.y + (rowY + size / 2) * dpi },
           visible: !e.hidden, locked: false, label: name,
-          metadata: { ...forge, [BUTLER_ITEM_KEY]: record },
+          metadata: { ...unit, [BUTLER_ITEM_KEY]: record },
         });
         report.creatures.push({ name, hp, initiative });
       });
       rowY += step;
     }
-    report.steps.push({ step: "Prepare", ok: true, detail: `${specs.length} creature(s), Forge system "${sys.name}"` });
+    report.steps.push({ step: "Prepare", ok: true, detail: `${specs.length} creature(s)` });
     await gw.addImages(specs);
     report.createdItemIds = specs.map((s) => s.id);
     const present = new Set((await gw.getItems()).map((i) => i.id));
     const missing = report.createdItemIds.filter((id) => !present.has(id));
     if (missing.length) throw new Error(`${missing.length} token(s) missing after adding`);
-    report.steps.push({ step: "Add", ok: true, detail: `${specs.length} token(s) added to the scene and the Forge tracker` });
+    report.steps.push({ step: "Add", ok: true, detail: `${specs.length} token(s) added to the scene and the initiative tracker` });
     report.ok = true;
     return report;
   } catch (e) {

@@ -11,6 +11,6 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    rollupOptions: { input: { main: "index.html" } },
+    rollupOptions: { input: { main: "index.html", background: "background.html", card: "card.html" } },
   },
 });

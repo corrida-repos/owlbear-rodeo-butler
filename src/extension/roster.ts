@@ -4,7 +4,7 @@
  *  - Import Homebrewed …: a stat block from pasted/uploaded JSON, from a published creature (editable), or quick
  *    stats; any token (Owlbear library upload, https link, the 5etools token, or the placeholder); a custom name.
  * Both feed one list with quantities, then one button adds everything (with Undo). Party members are flagged as
- * Forge's Party.
+ * party members.
  */
 import OBR from "@owlbear-rodeo/sdk";
 import { customFromFivetools, parseFivetoolsJson, quickStatblock } from "../core/custom";
@@ -17,6 +17,7 @@ import { quickAdd, type QuickAddReport } from "../core/quickadd";
 import type { Statblock } from "../core/schema";
 import { action, h, measure, mimeFromUrl, rerender, showError, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
+import { roomSystem } from "./roomSettings";
 
 // ------------------------------------------------------------------ 5etools index + library (shared, lazy)
 
@@ -48,7 +49,9 @@ function search(q: string): IndexRow[] {
     const s = name === n ? 0 : name.startsWith(n) ? 1 : name.split(/[\s,(]+/).some((w) => w.startsWith(n)) ? 2 : name.includes(n) ? 3 : 9;
     return { r, s };
   }).filter((x) => x.s < 9);
-  scored.sort((a, b) => a.s - b.s || (b.r.rules === "2024" ? 1 : 0) - (a.r.rules === "2024" ? 1 : 0) || a.r.name.localeCompare(b.r.name));
+  // The room's game system decides which edition comes first when a creature exists in both (5.5E → 2024 books).
+  const pref = roomSystem().rules;
+  scored.sort((a, b) => a.s - b.s || (b.r.rules === pref ? 1 : 0) - (a.r.rules === pref ? 1 : 0) || a.r.name.localeCompare(b.r.name));
   return scored.slice(0, 12).map((x) => x.r);
 }
 
@@ -197,7 +200,7 @@ export function createRoster(kind: RosterKind) {
         name: hb.name, size: hb.size, type: hb.type, ac: Number(hb.ac), hp: Number(hb.hp), initiative: Number(hb.init),
         speed: Number(hb.speed) || 30, cr: hb.cr ? Number(hb.cr) : undefined, attacks: hb.attacks, notes: hb.notes,
       }, prov);
-      if (kind === "party" && Number(hb.level) > 0) sb.forge.Z001 = Number(hb.level);
+      if (kind === "party" && Number(hb.level) > 0) sb.level = Number(hb.level);
       statblocks = [sb];
     }
     if (!hb.image) { hb.image = placeholderImage(); hb.imageNote = "placeholder"; }
@@ -220,7 +223,7 @@ export function createRoster(kind: RosterKind) {
     lastAdd = await quickAdd(ready.map((e) => ({ statblock: e.statblock, image: e.image!, count: e.count, hp: e.hp, hidden: e.hidden, advantage: e.advantage })),
       await viewCenter(), obrGateway, { inParty: kind === "party" });
     if (lastAdd.ok) {
-      await OBR.notification.show(`Added ${lastAdd.creatures.length} ${lastAdd.creatures.length === 1 ? one : many}${kind === "party" ? " to Forge's Party" : ""}.`, "SUCCESS");
+      await OBR.notification.show(`Added ${lastAdd.creatures.length} ${lastAdd.creatures.length === 1 ? one : many}${kind === "party" ? " to the party" : ""}.`, "SUCCESS");
       entries.splice(0, entries.length);
     } else {
       await OBR.notification.show(`Couldn't add the ${many} — see the panel.`, "ERROR");
@@ -246,7 +249,7 @@ export function createRoster(kind: RosterKind) {
         h("div", { className: "row between" },
           h("strong", {}, sb.name),
           h("button", { className: "icon", title: "Remove", onclick: () => { entries.splice(entries.indexOf(e), 1); rerender(); } }, "✕")),
-        h("div", { className: "small muted" }, `AC ${sb.forge.Z007 ?? "?"} · HP ${sb.hp.average}${sb.hp.formula ? ` (${sb.hp.formula})` : ""} · Init ${fmtMod(sb.initiative.modifier)}${sb.initiative.advantage ? " adv" : ""} · ${e.label}`),
+        h("div", { className: "small muted" }, `AC ${sb.ac} · HP ${sb.hp.max}${sb.hp.formula ? ` (${sb.hp.formula})` : ""} · Init ${fmtMod(sb.initiative.modifier)}${sb.initiative.advantage ? " adv" : ""} · ${e.label}`),
         h("div", { className: "row", style: "margin-top:4px" },
           h("button", { className: "icon", title: "Fewer", onclick: () => { e.count = Math.max(1, e.count - 1); rerender(); } }, "−"),
           h("span", { className: "small" }, "×"),
@@ -338,7 +341,7 @@ export function createRoster(kind: RosterKind) {
         entries.length ? h("div", {}, ...entries.map(renderEntry)) : h("div", { className: "small muted" }, `Nothing yet. Pick a published ${one} or put a homebrewed one on the list.`)),
       h("button", { className: "wide big", disabled: ui.busy || !total || notReady > 0, onclick: action(addToScene) },
         total ? `Add ${total} ${total === 1 ? one : many} to the scene` : `Add ${many} to the scene`),
-      h("div", { className: "small muted center" }, `Placed at the centre of your view, each with its own HP and rolled initiative${kind === "party" ? ", in Forge's Party" : ", in the Forge tracker"}.`),
+      h("div", { className: "small muted center" }, `Placed at the centre of your view, each with its own HP and rolled initiative${kind === "party" ? ", in the party" : ", in the initiative tracker"}.`),
       lastAdd ? renderLastAdd(lastAdd) : null,
     ];
   }

@@ -5,6 +5,7 @@ import { h, rerender, setRerender, store, ui, type Child } from "./dom";
 import { renderPackageTab, resetPackageTab } from "./packageTab";
 import { renderPartyTab, resetPartyTab } from "./partyTab";
 import { createRoster } from "./roster";
+import { initRoomSettings, onRoomSettings } from "./roomSettings";
 
 type Tab = "creatures" | "party" | "combat";
 const TABS: [Tab, string][] = [["creatures", "Add Creatures"], ["party", "Add Party Members"], ["combat", "Combat"]];
@@ -43,6 +44,8 @@ setRerender(render);
 
 if (OBR.isAvailable) {
   OBR.onReady(async () => {
+    await initRoomSettings();
+    onRoomSettings(() => render());
     sceneReady = await OBR.scene.isReady();
     render();
     OBR.scene.onReadyChange((r) => {
@@ -51,7 +54,7 @@ if (OBR.isAvailable) {
       else if (tab === "combat") refreshCombat(true);
       render();
     });
-    // Combat tab follows the scene live (tokens added, removed, initiative changed in Forge…)
+    // Combat tab follows the scene live (tokens added, removed, initiative changed…)
     OBR.scene.items.onChange(() => { if (tab === "combat") refreshCombat(); });
   });
 } else {
