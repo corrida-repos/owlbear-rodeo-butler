@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="256" viewBox="0 0 1080 256" fill="none">
+<title>An encounter, served in three steps</title>
+<desc>Add creatures and party, open cards and roll, then track initiative and HP. Combat core is in 2.0 development.</desc>
+<rect width="1080" height="256" rx="20" fill="#172D24"/>
+<g transform="translate(24 24)" font-family="system-ui, -apple-system, Segoe UI, sans-serif"><rect width="328" height="208" rx="12" fill="#20392D" stroke="#54735C" stroke-width="1.5"/>
+<text x="24" y="37" font-size="14" fill="#D5B974" font-weight="700" letter-spacing="2">01 / GATHER</text>
+<text x="24" y="84" font-size="27" fill="#F5F0DF" font-weight="650">Bring your cast.</text>
+<text x="24" y="123" font-size="18" fill="#CDDACB" >Creatures, homebrew</text>
+<text x="24" y="150" font-size="18" fill="#CDDACB" >and your party.</text>
+<text x="24" y="183" font-size="13" fill="#AFC4A7" >ADD CREATURES / ADD PARTY</text>
+</g>
+<g transform="translate(376 24)" font-family="system-ui, -apple-system, Segoe UI, sans-serif"><rect width="328" height="208" rx="12" fill="#20392D" stroke="#54735C" stroke-width="1.5"/>
+<text x="24" y="37" font-size="14" fill="#D5B974" font-weight="700" letter-spacing="2">02 / PLAY</text>
+<text x="24" y="84" font-size="27" fill="#F5F0DF" font-weight="650">Open a card.</text>
+<text x="24" y="123" font-size="18" fill="#CDDACB" >Stat blocks at hand.</text>
+<text x="24" y="150" font-size="18" fill="#CDDACB" >Click to roll.</text>
+<text x="24" y="183" font-size="13" fill="#AFC4A7" >UNIT CARDS / DICE</text>
+</g>
+<g transform="translate(728 24)" font-family="system-ui, -apple-system, Segoe UI, sans-serif"><rect width="328" height="208" rx="12" fill="#20392D" stroke="#54735C" stroke-width="1.5"/>
+<text x="24" y="37" font-size="14" fill="#D5B974" font-weight="700" letter-spacing="2">03 / KEEP MOVING</text>
+<text x="24" y="84" font-size="27" fill="#F5F0DF" font-weight="650">Run the encounter.</text>
+<text x="24" y="123" font-size="18" fill="#CDDACB" >Initiative, turns and HP.</text>
+<text x="24" y="150" font-size="18" fill="#CDDACB" >Combat core in development.</text>
+<text x="24" y="183" font-size="13" fill="#AFC4A7" >TRACKER / 2.0</text>
+</g>
+</svg>

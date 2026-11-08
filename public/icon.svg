@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><path d="M12 12V9"/><circle cx="12" cy="7" r="2"/><path d="M3 9l3 2M21 9l-3 2"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <title>Encounter Butler</title>
+  <!-- Faceted game die: bold geometry stays clear at toolbar sizes. -->
+  <g stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 3 24.5 7.75v9.5L16 22l-8.5-4.75v-9.5Z"/>
+    <path d="M16 3v9.5m-8.5 4.75L16 12.5l8.5 4.75"/>
+  </g>
+  <!-- The butler's bow tie and serving tray. -->
+  <path fill="white" d="M9.5 22.5a.75.75 0 0 1 1.1-.66L15 24.2h2l4.4-2.36a.75.75 0 0 1 1.1.66V27a.75.75 0 0 1-1.1.66L17 25.3h-2l-4.4 2.36A.75.75 0 0 1 9.5 27Z"/>
+  <path d="M5 28.5c.75 1.25 2 1.5 4 1.5h14c2 0 3.25-.25 4-1.5" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+</svg>
