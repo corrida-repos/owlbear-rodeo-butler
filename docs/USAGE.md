@@ -12,6 +12,7 @@ Open a scene as GM, add a few creatures in **Add Creatures**, then add your part
 
 1. Open a scene, then open Encounter Butler → **Add Creatures**.
 2. **Import published creature:** type a name (*goblin*, *young red dragon*…). Results from 2024 books are marked. Pick a creature to put it on the list; pick it again for one more.
+   **Filters** narrows the results by **CR** (from–to), **type**, **environment**, **size** and **spellcaster**. With filters set and no name typed, you get every match, lowest CR first. Environments marked ≈ were assigned by Encounter Butler because 5etools gives none for that creature. Your filters are remembered in this browser.
 3. **Import homebrewed creature:**
    - **Stat block (JSON):** upload or paste a 5etools-format stat block, or *start from a published creature*: its stat block is loaded into the box so you can edit anything. **Quick stats** is a short form for simple NPCs.
    - **Name** replaces the stat block's name (or gives one if the JSON has none).

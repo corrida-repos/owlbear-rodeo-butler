@@ -22,7 +22,21 @@ import { searchableSource } from "../core/systems";
 
 // ------------------------------------------------------------------ 5etools index + library (shared, lazy)
 
-interface IndexRow { name: string; source: string; cr: string; type: string; size: string; token: boolean; book: string; rules: string }
+import { activeFilterCount, browse, CR_STEPS, CREATURE_TYPES, matchesFilters, NO_FILTERS, SIZES, type IndexRow, type SearchFilters } from "../core/search";
+import { decodeEnvs, ENV_LABEL, ENVS } from "../core/habitat";
+import { SIZE_NAMES } from "../core/constants";
+import { store } from "./dom";
+
+/** Search filters (F16), shared by every search box and remembered per browser. */
+let filters: SearchFilters = (() => {
+  try { return { ...NO_FILTERS, ...JSON.parse(store.get("butler.searchFilters") ?? "{}") }; } catch { return { ...NO_FILTERS }; }
+})();
+const filterListeners = new Set<() => void>();
+function setFilters(f: SearchFilters) {
+  filters = f;
+  store.set("butler.searchFilters", JSON.stringify(f));
+  for (const fn of filterListeners) fn();
+}
 let index: IndexRow[] | null = null;
 let indexLoading: Promise<void> | null = null;
 const indexListeners = new Set<() => void>();
@@ -31,9 +45,10 @@ function loadIndex() {
     const res = await fetch(new URL("data/monsters.json", location.href));
     if (!res.ok) throw new Error(`monster index: HTTP ${res.status}`);
     const j = await res.json();
-    index = (j.rows as any[]).map(([name, source, cr, type, size, token]) => ({
-      name, source, cr, type, size, token: !!token, book: j.books[source]?.[0] ?? source, rules: j.books[source]?.[1] ?? "",
-    }));
+    index = (j.rows as any[]).map(([name, source, cr, type, size, token, env, caster]) => {
+      const e = decodeEnvs(String(env ?? "*"));
+      return { name, source, cr, type, size, token: !!token, book: j.books[source]?.[0] ?? source, rules: j.books[source]?.[1] ?? "", envs: e.envs, envAssigned: e.assigned, caster: caster === 1 };
+    });
     for (const f of indexListeners) f(); // only the result lists: a full re-render would steal focus from a search box
   })().catch((e) => { indexLoading = null; showError(e); });
   return indexLoading;
@@ -42,12 +57,19 @@ let lib: Promise<FivetoolsLibrary> | null = null;
 const getLib = () => (lib ??= new FivetoolsLibrary().init());
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-function search(q: string): IndexRow[] {
-  if (!index || q.trim().length < 2) return [];
-  const n = norm(q.trim());
+/** Text search (2+ letters), narrowed by the filters; with filters and no text, every match by CR then name. */
+function search(q: string): { rows: IndexRow[]; total: number } {
+  if (!index) return { rows: [], total: 0 };
   const system = roomSystem();
   // Only the room edition's PHB / MM / DMG are offered (F9); every other book stays in both.
-  const scored = index.filter((r) => searchableSource(system, r.source)).map((r) => {
+  const pool = index.filter((r) => searchableSource(system, r.source) && matchesFilters(r, filters));
+  if (q.trim().length < 2) {
+    if (!activeFilterCount(filters)) return { rows: [], total: 0 };
+    const all = browse(pool, filters);
+    return { rows: all.slice(0, 100), total: all.length };
+  }
+  const n = norm(q.trim());
+  const scored = pool.map((r) => {
     const name = norm(r.name);
     const s = name === n ? 0 : name.startsWith(n) ? 1 : name.split(/[\s,(]+/).some((w) => w.startsWith(n)) ? 2 : name.includes(n) ? 3 : 9;
     return { r, s };
@@ -55,28 +77,72 @@ function search(q: string): IndexRow[] {
   // The room's game system decides which edition comes first when a creature exists in both (5.5E → 2024 books).
   const pref = system.rules;
   scored.sort((a, b) => a.s - b.s || (b.r.rules === pref ? 1 : 0) - (a.r.rules === pref ? 1 : 0) || a.r.name.localeCompare(b.r.name));
-  return scored.slice(0, 12).map((x) => x.r);
+  return { rows: scored.slice(0, activeFilterCount(filters) ? 50 : 12).map((x) => x.r), total: scored.length };
+}
+
+/** The filter panel under a search box; changes refresh the result lists only (focus stays put). */
+function filterPanel(): HTMLElement {
+  const toggleIn = <T extends string>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  const chips = <T extends string>(all: readonly T[], on: T[], label: (v: T) => string, set: (next: T[]) => void) =>
+    h("div", { className: "chips" }, ...all.map((v) => h("button", { className: `fchip${on.includes(v) ? " on" : ""}`, onclick: () => set(toggleIn(on, v)) }, label(v))));
+  const crSel = (value: string | undefined, set: (v: string | undefined) => void, placeholder: string) =>
+    h("select", { className: "crsel", onchange: (e: Event) => set((e.target as HTMLSelectElement).value || undefined) },
+      h("option", { value: "", selected: !value }, placeholder), ...CR_STEPS.map((c) => h("option", { value: c, selected: c === value }, c)));
+  const cap = (x: string) => x[0]!.toUpperCase() + x.slice(1);
+  const panel = h("div", { className: "filters stack tight" });
+  // A CR select changes on every arrow key: redrawing then would take its focus (and close its list).
+  const draw = () => (panel.contains(document.activeElement) && document.activeElement?.tagName === "SELECT") ? undefined : panel.replaceChildren(
+    h("div", { className: "row" }, h("strong", { className: "small" }, "CR"),
+      crSel(filters.crMin, (v) => setFilters({ ...filters, crMin: v }), "min"), h("span", { className: "small muted" }, "to"),
+      crSel(filters.crMax, (v) => setFilters({ ...filters, crMax: v }), "max"),
+      h("span", { className: "grow" }),
+      h("button", { className: "linkish small", onclick: () => setFilters({ ...NO_FILTERS }) }, "Clear filters")),
+    h("strong", { className: "small" }, "Type"), chips(CREATURE_TYPES, filters.types as (typeof CREATURE_TYPES)[number][], cap, (t) => setFilters({ ...filters, types: t })),
+    h("strong", { className: "small" }, "Environment"), chips(ENVS, filters.envs, (e) => ENV_LABEL[e], (e) => setFilters({ ...filters, envs: e })),
+    h("strong", { className: "small" }, "Size"), chips(SIZES, filters.sizes as (typeof SIZES)[number][], (z) => SIZE_NAMES[z] ?? z, (z) => setFilters({ ...filters, sizes: z })),
+    h("div", { className: "row" }, h("strong", { className: "small" }, "Spellcaster"),
+      h("div", { className: "seg" }, ...(["any", "yes", "no"] as const).map((c) => h("button", { className: filters.caster === c ? "on" : "", onclick: () => setFilters({ ...filters, caster: c }) }, c === "any" ? "Any" : c === "yes" ? "Yes" : "No")))),
+    h("div", { className: "small muted" }, "Environments marked ≈ in the results were assigned by Butler (5etools gives none for that creature)."));
+  filterListeners.add(draw);
+  draw();
+  return panel;
 }
 
 /** A persistent search box: typing only refreshes its results list (no full re-render, so focus is kept). */
 function createSearchBox(placeholder: string, onPick: (r: IndexRow) => Promise<void>) {
   let query = "";
+  let filtersOpen = false;
   const input = h("input", { type: "text", autocomplete: "off", oninput: (e: Event) => { query = (e.target as HTMLInputElement).value; update(); } }) as HTMLInputElement;
   const results = h("div");
+  const filterBtn = h("button", { className: "secondary small", title: "Filter by CR, type, environment, size, spellcaster" }) as HTMLButtonElement;
+  const panelWrap = h("div");
+  filterBtn.onclick = () => {
+    filtersOpen = !filtersOpen;
+    panelWrap.replaceChildren(...(filtersOpen ? [filterPanel()] : []));
+    update();
+  };
+  const envText = (r: IndexRow) => (r.envs === "any" ? "any environment" : `${r.envAssigned ? "≈" : ""}${r.envs.map((e) => ENV_LABEL[e]).join(", ")}`);
   function update() {
     input.placeholder = index ? placeholder : "Loading the 5etools list…";
-    const rows = search(query);
+    const n = activeFilterCount(filters);
+    filterBtn.textContent = n ? `Filters (${n})` : "Filters";
+    filterBtn.classList.toggle("on", n > 0);
+    const { rows, total } = search(query);
+    const browsing = query.trim().length < 2;
     results.replaceChildren(
-      rows.length ? h("ul", { className: "results" }, ...rows.map((r) =>
-        h("li", { onclick: action(async () => { await onPick(r); query = ""; input.value = ""; update(); input.focus(); }), title: "Choose" },
-          h("span", { className: "rname" }, r.name),
-          h("span", { className: "muted small" }, ` CR ${r.cr || "—"} · ${r.type} · ${r.book}`),
-          r.rules === "2024" ? h("span", { className: "badge" }, "2024") : null,
-          h("span", { className: "add" }, "+"))))
-        : query.trim().length >= 2 && index ? h("div", { className: "small muted", style: "margin-top:6px" }, "No match. Try another spelling.") : "");
+      rows.length ? h("div", {},
+        n ? h("div", { className: "small muted", style: "margin-top:6px" }, total > rows.length ? `${total} matches, showing the first ${rows.length}${browsing ? " (by CR)" : ""}` : `${total} match${total === 1 ? "" : "es"}`) : null,
+        h("ul", { className: "results" }, ...rows.map((r) =>
+          h("li", { onclick: action(async () => { await onPick(r); query = ""; input.value = ""; update(); input.focus(); }), title: "Choose" },
+            h("span", { className: "rname" }, r.name),
+            h("span", { className: "muted small" }, ` CR ${r.cr || "—"} · ${r.type} · ${r.book}${n ? ` · ${envText(r)}${r.caster ? " · spellcaster" : ""}` : ""}`),
+            r.rules === "2024" ? h("span", { className: "badge" }, "2024") : null,
+            h("span", { className: "add" }, "+")))))
+        : (query.trim().length >= 2 || n) && index ? h("div", { className: "small muted", style: "margin-top:6px" }, n ? "No creature matches these filters." : "No match. Try another spelling.") : "");
   }
   indexListeners.add(update);
-  const el = h("div", {}, input, results);
+  filterListeners.add(update);
+  const el = h("div", {}, h("div", { className: "row", style: "flex-wrap:nowrap" }, input, filterBtn), panelWrap, results);
   return { el, refresh: () => { if (!index) void loadIndex(); update(); } };
 }
 

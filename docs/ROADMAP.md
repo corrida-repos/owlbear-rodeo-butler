@@ -39,7 +39,11 @@ Status (2026-11-08):
   Live: player HP edit applied by the GM, player edits off hides the boxes, limited card, alias shown to the player
   and on the token, party view. **Pending live:** a real D&D Beyond self-sync (needs a player logged in to D&D Beyond
   with the bookmark installed). 153 tests.
-- **Next:** phase 6 (collection, 2014 rules, search filters, release).
+- **F16 search filters:** done. CR range, creature types, environments, sizes and spellcaster, on both search boxes,
+  remembered per browser; filters alone list every match by CR. The index gives every creature an environment: 1,461
+  from 5etools, 146 from the same creature in another book, 2,967 assigned by rules (marked ≈). Live: CR 1–3 undead
+  swamp spellcasters in a 5.5E room. 160 tests.
+- **Next:** rest of phase 6 (collection F8, 2014 rules side of F9, release).
 
 ## Goal
 
