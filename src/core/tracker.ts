@@ -144,13 +144,13 @@ export async function setInitiative(gw: SceneGateway, id: string, value: number 
 }
 
 /** Rolls initiative for the given units (stat block modifier and advantage); they join the encounter. */
-export async function rollInitiativeFor(gw: SceneGateway, ids: string[], opts: { rng?: Rng } = {}) {
+export async function rollInitiativeFor(gw: SceneGateway, ids: string[], opts: { rng?: Rng; rules?: "2024" | "2014" } = {}) {
   await requireGm(gw);
   const items = (await gw.getItems()).filter((i) => ids.includes(i.id));
   const patches = items.flatMap((i) => {
     const u = readUnit(i.metadata);
     if (!u) return [];
-    const setup = initiativeSetupFor(i.metadata, u.sheet, u.state);
+    const setup = initiativeSetupFor(i.metadata, u.sheet, u.state, opts.rules);
     const roll = rollInitiative(setup.modifier, resolveRollMode(setup.advantage, setup.disadvantage), opts.rng ?? cryptoRng, "manual");
     return [{ id: i.id, key: STATE_KEY, patch: { initiative: roll.total, initiativeRoll: roll, initiativeTiebreak: undefined, inEncounter: true } }];
   });

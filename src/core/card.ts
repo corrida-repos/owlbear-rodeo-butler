@@ -93,10 +93,18 @@ export function abilityRows(sheet: UnitSheet): AbilityRow[] {
 export const skillRolls = (sheet: UnitSheet): StandardRoll[] =>
   sheet.skills.map((s) => ({ label: `${s.name} check`, formula: d20(s.bonus), bonus: s.bonus, kind: "check" }));
 
-export function initiativeRoll(sheet: UnitSheet): StandardRoll {
+/** 2014 rules: creatures roll initiative with their Dexterity modifier (2024 stat blocks add proficiency). */
+export function initiativeRoll(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): StandardRoll {
   const i = sheet.initiative;
   const mode = resolveRollMode(i.advantage, i.disadvantage);
-  return { label: "Initiative", formula: d20(i.modifier), bonus: i.modifier, kind: "initiative", ...(mode !== "normal" ? { mode } : {}) };
+  const mod = rules === "2014" && sheet.kind === "creature" ? abilityMod(sheet.abilities.dex) : i.modifier;
+  return { label: "Initiative", formula: d20(mod), bonus: mod, kind: "initiative", ...(mode !== "normal" ? { mode } : {}) };
+}
+
+/** Attack wording of the room's edition on the card: 2024 "Melee Attack Roll: +4", 2014 "Melee Weapon Attack: +4". */
+export function editionText(text: string, rules: "2024" | "2014"): string {
+  if (rules === "2014") return text.replace(/\b(Melee|Ranged|Melee or Ranged) Attack Roll:/g, "$1 Weapon Attack:");
+  return text.replace(/\b(Melee|Ranged|Melee or Ranged) (?:Weapon|Spell) Attack:/g, "$1 Attack Roll:");
 }
 
 /** The roll mode to use: the click's modifier keys / toggle, combined with a built-in mode (initiative advantage). */

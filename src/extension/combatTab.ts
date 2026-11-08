@@ -3,7 +3,7 @@
  * scene, and the Initiatives buttons (roll everyone, or just the creatures when players roll their own).
  */
 import OBR from "@owlbear-rodeo/sdk";
-import { crLabel, EXTREME_FACTOR, listCombatants, rollSceneInitiative, sceneDifficulty, setCombatSettings, xpForCr, type Combatant, type InitiativeReport, type Tier } from "../core/combat";
+import { crLabel, EXTREME_FACTOR, listCombatants, rollSceneInitiative, sceneDifficultyFor, setCombatSettings, xpForCr, type Combatant, type InitiativeReport } from "../core/combat";
 import { describeInitiative, fmtMod } from "../core/dice";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
@@ -21,7 +21,7 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 export function refreshCombat(immediate = false) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
-    try { combatants = listCombatants(await obrGateway.getItems()); } catch { return; }
+    try { combatants = listCombatants(await obrGateway.getItems(), roomSystem().rules); } catch { return; }
     const a = document.activeElement;
     if (a && a.closest("#app") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && (a as HTMLInputElement).type !== "checkbox") { pending = true; return; }
     rerender();
@@ -32,36 +32,39 @@ document.addEventListener("focusout", () => { if (pending) { pending = false; se
 const fmt = (n: number) => n.toLocaleString("en-US");
 /** A unit's name that opens its card. */
 const cardLink = (c: Combatant) => h("button", { className: "linkish", title: "Open the unit card", onclick: () => void openCard(c.id) }, c.name);
-const TIER_TEXT: Record<Tier, string> = {
+const TIER_TEXT: Record<string, string> = {
   Low: "Low: the party should win without much trouble, though it may spend some resources.",
   Moderate: "Moderate: expect the party to spend real resources (spell slots, Hit Points), with a chance of a character going down.",
   High: "High: a dangerous fight. One or more characters may drop, and smart tactics or luck may be needed.",
   Extreme: "Extreme: a boss-level fight, beyond the DMG's High. Party wipes are possible: give the party an edge, an escape route or a reason to fight anyway.",
+  Easy: "Easy: no real threat; the party may spend a few resources.",
+  Medium: "Medium: one or two scary moments, but the party should win without casualties.",
+  Hard: "Hard: things could go badly; weaker characters may drop, and there's a slim chance of one dying.",
+  Deadly: "Deadly: could be lethal for one or more characters. Survival needs good tactics and quick thinking.",
 };
 
 function renderDifficulty(cs: Combatant[]): Child {
   const party = cs.filter((c) => c.party);
   const foes = cs.filter((c) => !c.party);
-  const d = sceneDifficulty(cs);
-  const b = d.budgets;
-  const max = Math.max(b.extreme * 1.15, d.xp, 1);
+  const d = sceneDifficultyFor(cs, roomSystem().rules);
+  const top = d.scale[d.scale.length - 1]!.xp;
+  const max = Math.max(top * 1.15, d.xp, 1);
   const pct = (v: number) => `${Math.min(100, (v / max) * 100)}%`;
+  const first = d.scale[0]!;
 
   const result = d.tier
-    ? h("div", { className: `tier tier-${d.tier.toLowerCase()}` },
+    ? h("div", { className: `tier tier-${d.tierCls}` },
       h("div", { className: "row between" },
         h("span", { className: "tier-name" }, d.tier),
-        h("span", { className: "small" }, `${fmt(d.xp)} XP`)),
+        h("span", { className: "small" }, d.multiplier !== 1 ? `${fmt(d.xp)} XP (${fmt(d.rawXp)} × ${d.multiplier})` : `${fmt(d.xp)} XP`)),
       h("div", { className: "meter" },
         h("div", { className: "fill", style: `width:${pct(d.xp)}` }),
-        ...([["Low", b.low], ["Moderate", b.moderate], ["High", b.high], ["Extreme", b.extreme]] as const).map(([n, v]) =>
-          h("div", { className: "mark", style: `left:${pct(v)}`, title: `${n}: ${fmt(v)} XP` }))),
-      h("div", { className: "small budgets" },
-        h("span", {}, `Low ${fmt(b.low)}`), h("span", {}, `Moderate ${fmt(b.moderate)}`), h("span", {}, `High ${fmt(b.high)}`), h("span", {}, `Extreme ${fmt(b.extreme)}`)),
-      h("div", { className: "small", style: "margin-top:6px" }, TIER_TEXT[d.tier]),
-      d.belowLow ? h("div", { className: "small muted" }, `This is under even the Low budget (${fmt(b.low)} XP): barely a speed bump.`) : null)
+        ...d.scale.map((st) => h("div", { className: "mark", style: `left:${pct(st.xp)}`, title: `${st.name}: ${fmt(st.xp)} XP` }))),
+      h("div", { className: "small budgets" }, ...d.scale.map((st) => h("span", {}, `${st.name} ${fmt(st.xp)}`))),
+      h("div", { className: "small", style: "margin-top:6px" }, TIER_TEXT[d.tier] ?? ""),
+      d.belowFirst ? h("div", { className: "small muted" }, `This is under even the ${first.name} threshold (${fmt(first.xp)} XP): barely a speed bump.`) : null)
     : h("div", { className: "small muted" },
-      !party.filter((c) => !c.exclude).length ? "Add party members (Add Party Members tab) to compare against." : "No hostile creatures in the scene yet (Add Creatures tab).");
+      !party.filter((c) => !c.exclude).length ? "Add party members (Add Party tab) to compare against." : "No hostile creatures in the scene yet (Add Creatures tab).");
 
   const levelInput = (c: Combatant) => {
     const inp = h("input", { type: "text", inputmode: "numeric", className: "lvl", value: c.level ? String(c.level) : "", placeholder: "?" }) as HTMLInputElement;
@@ -98,12 +101,14 @@ function renderDifficulty(cs: Combatant[]): Child {
     foes.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", { title: "Hostile" }, "Hostile"), h("th", {}, "Name"), h("th", {}, "CR"), h("th", {}, "XP"))), h("tbody", {}, ...foeRows))
       : h("div", { className: "small muted" }, "None in this scene."),
     h("details", { className: "small", style: "margin-top:8px" }, h("summary", {}, "How it's calculated"),
-      h("p", {}, "2024 Dungeon Master's Guide: each character adds an XP budget for their level (Low, Moderate, High). The hostile creatures' XP (from their CR) is compared to the party's total. There are no group multipliers in these rules."),
-      h("p", {}, `Extreme is an extra tier for boss-level fights, not from the DMG: ${EXTREME_FACTOR}× the High budget. The tier shown is the highest budget the encounter reaches. Untick a creature that isn't hostile, or a character who isn't in this fight.`)));
+      d.rules === "2014"
+        ? h("p", {}, "2014 Dungeon Master's Guide: each character adds XP thresholds for their level (Easy, Medium, Hard, Deadly). The hostile creatures' XP (from their CR) is multiplied by the group-size multiplier (×1 for one creature, ×1.5 for two, ×2 for 3–6, ×2.5 for 7–10, ×3 for 11–14, ×4 for 15 or more; one step higher for fewer than 3 characters, one lower for 6 or more) and compared to the party's total. Untick a creature that isn't hostile, or a character who isn't in this fight.")
+        : h("p", {}, "2024 Dungeon Master's Guide: each character adds an XP budget for their level (Low, Moderate, High). The hostile creatures' XP (from their CR) is compared to the party's total. There are no group multipliers in these rules."),
+      d.rules === "2024" ? h("p", {}, `Extreme is an extra tier for boss-level fights, not from the DMG: ${EXTREME_FACTOR}× the High budget. The tier shown is the highest budget the encounter reaches. Untick a creature that isn't hostile, or a character who isn't in this fight.`) : null));
 }
 
 async function roll(scope: "all" | "creatures") {
-  lastRoll = await rollSceneInitiative(obrGateway, scope);
+  lastRoll = await rollSceneInitiative(obrGateway, scope, { rules: roomSystem().rules });
   await OBR.notification.show(`Rolled initiative for ${lastRoll.rolled.length} ${scope === "all" ? "units" : "creatures"}.`, "SUCCESS");
 }
 
@@ -133,7 +138,7 @@ function renderSettings(): Child {
     h("div", { className: "small muted", style: "margin-top:4px" },
       sys.rules === "2024"
         ? "2024 books come first in creature search; Bloodied is shown automatically."
-        : "2014 books come first in creature search. The difficulty above still uses the 2024 budgets for now."),
+        : "2014 books come first in creature search; difficulty uses the 2014 thresholds and multipliers; creatures roll initiative with their Dexterity modifier."),
     h("h2", { style: "margin-top:12px" }, "Room settings"),
     h("label", { className: "small" }, h("input", { type: "checkbox", checked: roomSettings().playerEdits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ playerEdits: (e.target as HTMLInputElement).checked }))() }),
       "Players may change their own units' HP, conditions and initiative, end their own turn and re-sync from D&D Beyond"),

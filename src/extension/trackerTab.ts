@@ -116,8 +116,8 @@ function controls(v: TrackerView): Child {
           h("button", { disabled: ui.busy || !v.order.length, onclick: act("next") }, "Next turn ▶"))
         : h("button", { disabled: ui.busy || !v.order.length, onclick: act("start") }, "Start combat")),
     h("div", { className: "row" },
-      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "all"); }) }, "Roll all"),
-      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "creatures"); }) }, "Roll creatures"),
+      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "all", { rules: roomSystem().rules }); }) }, "Roll all"),
+      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "creatures", { rules: roomSystem().rules }); }) }, "Roll creatures"),
       h("button", { className: "secondary small", disabled: ui.busy, title: "Clear initiative values and the round; units stay in the encounter", onclick: act("reset") }, "Reset round & initiative"),
       e.started ? h("button", { className: "secondary small", disabled: ui.busy, onclick: act("end") }, "End combat") : null),
     followToggle());
@@ -146,7 +146,7 @@ export function renderTrackerTab(): Child[] {
         h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name),
         h("div", { className: "row" },
           h("button", { className: "secondary small", onclick: action(() => setInEncounter(obrGateway, [u.id], true)) }, "Add"),
-          h("button", { className: "secondary small", onclick: action(async () => { await rollInitiativeFor(obrGateway, [u.id]); }) }, "Add + roll")))),
+          h("button", { className: "secondary small", onclick: action(async () => { await rollInitiativeFor(obrGateway, [u.id], { rules: roomSystem().rules }); }) }, "Add + roll")))),
       ...dead.map((u) => h("div", { className: "row between small", style: "margin-top:6px" },
         h("span", {}, "☠ ", h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name)),
         h("button", { className: "secondary small", onclick: action(() => reviveUnits(obrGateway, [u.id])) }, "Revive")))));

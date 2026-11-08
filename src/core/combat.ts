@@ -91,8 +91,14 @@ const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : n
 
 export { isUnitItem };
 
-/** How to roll this token: recorded setup (import/party sync), else the stat block's initiative, else its last roll. */
-export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState): InitiativeSetup {
+/**
+ * How to roll this token: recorded setup (import/party sync), else the stat block's initiative, else its last roll.
+ * 2014 rules: creatures use their Dexterity modifier (2024 stat blocks add proficiency); advantage still applies.
+ */
+export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState, rules: "2024" | "2014" = "2024"): InitiativeSetup {
+  if (rules === "2014" && sheet?.kind === "creature") {
+    return { modifier: Math.floor((sheet.abilities.dex - 10) / 2), advantage: sheet.initiative.advantage, disadvantage: sheet.initiative.disadvantage };
+  }
   const rec = meta[BUTLER_ITEM_KEY] as { initiativeSetup?: InitiativeSetup } | undefined;
   if (rec?.initiativeSetup) return rec.initiativeSetup;
   if (sheet) return { modifier: sheet.initiative.modifier, advantage: sheet.initiative.advantage, disadvantage: sheet.initiative.disadvantage };
@@ -101,7 +107,7 @@ export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSh
   return { modifier: 0, advantage: false, disadvantage: false };
 }
 
-export function listCombatants(items: SceneItemLite[]): Combatant[] {
+export function listCombatants(items: SceneItemLite[], rules: "2024" | "2014" = "2024"): Combatant[] {
   return items.filter(isUnitItem).flatMap((i) => {
     const m = i.metadata;
     const unit = readUnit(m);
@@ -124,7 +130,7 @@ export function listCombatants(items: SceneItemLite[]): Combatant[] {
       party, onList: state.inEncounter, cr, level, levelSource,
       exclude: s.exclude === true,
       initiative: state.initiative,
-      setup: initiativeSetupFor(m, sheet, state),
+      setup: initiativeSetupFor(m, sheet, state, rules),
     }];
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 }
@@ -149,10 +155,10 @@ export async function setCombatSettings(gw: SceneGateway, id: string, patch: Com
 export interface InitiativeReport { rolled: { id: string; name: string; party: boolean; roll: InitiativeRoll }[] }
 
 /** Rolls initiative for every unit in the initiative tracker ("all") or only the non-party ones ("creatures"). */
-export async function rollSceneInitiative(gw: SceneGateway, scope: "all" | "creatures", opts: { rng?: Rng; now?: () => Date } = {}): Promise<InitiativeReport> {
+export async function rollSceneInitiative(gw: SceneGateway, scope: "all" | "creatures", opts: { rng?: Rng; now?: () => Date; rules?: "2024" | "2014" } = {}): Promise<InitiativeReport> {
   if ((await gw.getRole()) !== "GM") throw new Error("Only the GM can roll initiative.");
   const rng = opts.rng ?? cryptoRng;
-  const targets = listCombatants(await gw.getItems()).filter((c) => c.onList && (scope === "all" || !c.party));
+  const targets = listCombatants(await gw.getItems(), opts.rules).filter((c) => c.onList && (scope === "all" || !c.party));
   if (!targets.length) throw new Error(scope === "all" ? "No units in the initiative tracker." : "No creatures in the initiative tracker.");
   const rolled = targets.map((c) => ({
     id: c.id, name: c.name, party: c.party,
@@ -161,4 +167,78 @@ export async function rollSceneInitiative(gw: SceneGateway, scope: "all" | "crea
   await gw.patchMetadata(rolled.map((r) => ({ id: r.id, key: STATE_KEY, patch: { initiative: r.roll.total, initiativeRoll: r.roll } satisfies Partial<UnitState> })));
   rolled.sort((a, b) => b.roll.total - a.roll.total || b.roll.modifier - a.roll.modifier);
   return { rolled };
+}
+
+// ------------------------------------------------------------------ 2014 rules (F9) + one shape for both systems
+
+/** 2014 Dungeon Master's Guide, "XP Thresholds by Character Level" (Easy / Medium / Hard / Deadly), levels 1–20. */
+export const XP_THRESHOLDS_2014: [number, number, number, number][] = [
+  [25, 50, 75, 100], [50, 100, 150, 200], [75, 150, 225, 400], [125, 250, 375, 500], [250, 500, 750, 1100],
+  [300, 600, 900, 1400], [350, 750, 1100, 1700], [450, 900, 1400, 2100], [550, 1100, 1600, 2400], [600, 1200, 1900, 2800],
+  [800, 1600, 2400, 3600], [1000, 2000, 3000, 4500], [1100, 2200, 3400, 5100], [1250, 2500, 3800, 5700], [1400, 2800, 4300, 6400],
+  [1600, 3200, 4800, 7200], [2000, 3900, 5900, 8800], [2100, 4200, 6300, 9500], [2400, 4900, 7300, 10900], [2800, 5700, 8500, 12700],
+];
+
+/**
+ * 2014 DMG encounter multiplier: ×1 for one monster, ×1.5 for two, ×2 for 3–6, ×2.5 for 7–10, ×3 for 11–14, ×4 for 15+.
+ * Fewer than 3 characters use the next higher multiplier (up to ×5), 6 or more the next lower (down to ×0.5).
+ */
+export function multiplier2014(monsters: number, characters: number): number {
+  if (monsters <= 0) return 1;
+  const steps = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5];
+  let i = monsters === 1 ? 1 : monsters === 2 ? 2 : monsters <= 6 ? 3 : monsters <= 10 ? 4 : monsters <= 14 ? 5 : 6;
+  if (characters < 3) i++;
+  else if (characters >= 6) i--;
+  return steps[Math.max(0, Math.min(steps.length - 1, i))]!;
+}
+
+export interface ScaleStep { name: string; xp: number; cls: "low" | "moderate" | "high" | "extreme" }
+
+/** Difficulty in one shape for both systems: the steps of the scale, the (adjusted) XP compared to them, the tier. */
+export interface DifficultyView {
+  rules: "2024" | "2014";
+  /** XP compared to the scale (2014: adjusted by the multiplier). */
+  xp: number;
+  rawXp: number;
+  multiplier: number;
+  scale: ScaleStep[];
+  tier: string | null;
+  tierCls: ScaleStep["cls"] | null;
+  belowFirst: boolean;
+  warnings: string[];
+}
+
+export function difficulty2014(levels: number[], creatures: { name: string; cr: number }[]): DifficultyView {
+  const t = levels.reduce((acc, l) => { const r = XP_THRESHOLDS_2014[clampLevel(l) - 1]!; return acc.map((v, i) => v + r[i]!); }, [0, 0, 0, 0]);
+  const scale: ScaleStep[] = [
+    { name: "Easy", xp: t[0]!, cls: "low" }, { name: "Medium", xp: t[1]!, cls: "moderate" },
+    { name: "Hard", xp: t[2]!, cls: "high" }, { name: "Deadly", xp: t[3]!, cls: "extreme" },
+  ];
+  const rawXp = creatures.reduce((s, c) => s + xpForCr(c.cr), 0);
+  const multiplier = multiplier2014(creatures.length, levels.length);
+  const xp = Math.round(rawXp * multiplier);
+  const base = encounterDifficulty(levels, creatures); // same warnings as 2024 (CR above the party, big groups)
+  if (!levels.length || !creatures.length) return { rules: "2014", xp, rawXp, multiplier, scale, tier: null, tierCls: null, belowFirst: false, warnings: base.warnings };
+  const reached = [...scale].reverse().find((s) => xp >= s.xp) ?? scale[0]!;
+  return { rules: "2014", xp, rawXp, multiplier, scale, tier: reached.name, tierCls: reached.cls, belowFirst: xp < scale[0]!.xp, warnings: base.warnings };
+}
+
+export function difficulty2024(levels: number[], creatures: { name: string; cr: number }[]): DifficultyView {
+  const d = encounterDifficulty(levels, creatures);
+  const b = d.budgets;
+  const scale: ScaleStep[] = [
+    { name: "Low", xp: b.low, cls: "low" }, { name: "Moderate", xp: b.moderate, cls: "moderate" },
+    { name: "High", xp: b.high, cls: "high" }, { name: "Extreme", xp: b.extreme, cls: "extreme" },
+  ];
+  return { rules: "2024", xp: d.xp, rawXp: d.xp, multiplier: 1, scale, tier: d.tier, tierCls: d.tier ? (d.tier.toLowerCase() as ScaleStep["cls"]) : null, belowFirst: d.belowLow, warnings: d.warnings };
+}
+
+/** The scene's difficulty under the room's rules (included party members vs non-excluded creatures). */
+export function sceneDifficultyFor(cs: Combatant[], rules: "2024" | "2014"): DifficultyView & { missingLevels: string[]; missingCr: string[] } {
+  const party = cs.filter((c) => c.party && !c.exclude);
+  const foes = cs.filter((c) => !c.party && !c.exclude);
+  const levels = party.flatMap((c) => (c.level ? [c.level] : []));
+  const creatures = foes.flatMap((c) => (c.cr !== null ? [{ name: c.name, cr: c.cr }] : []));
+  const d = rules === "2014" ? difficulty2014(levels, creatures) : difficulty2024(levels, creatures);
+  return { ...d, missingLevels: party.filter((c) => !c.level).map((c) => c.name), missingCr: foes.filter((c) => c.cr === null).map((c) => c.name) };
 }

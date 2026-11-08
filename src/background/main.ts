@@ -28,7 +28,7 @@ import { openCard } from "../extension/cardPopover";
 import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
 import { pushRollLog } from "../extension/rollLog";
-import { initRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
+import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -73,7 +73,7 @@ async function createMenus() {
     id: `${BUTLER_NS}/roll-initiative`,
     icons: [{ icon, label: "Roll initiative", filter: { ...gm, every: [...UNIT_FILTER] } }],
     onClick: async (ctx) => {
-      logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items)); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
+      logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items), { rules: roomSystem().rules }); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/hp`,
@@ -285,4 +285,6 @@ OBR.onReady(async () => {
   OBR.scene.onReadyChange(() => void onSceneChange());
   OBR.scene.onMetadataChange(() => void onSceneChange());
   OBR.scene.items.onChange(() => void onSceneChange());
+  // Badges depend on the game system (Bloodied is 5.5E only).
+  onRoomSettings(() => void onSceneChange());
 });

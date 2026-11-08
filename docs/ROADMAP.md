@@ -43,7 +43,13 @@ Status (2026-11-08):
   remembered per browser; filters alone list every match by CR. The index gives every creature an environment: 1,461
   from 5etools, 146 from the same creature in another book, 2,967 assigned by rules (marked ≈). Live: CR 1–3 undead
   swamp spellcasters in a 5.5E room. 160 tests.
-- **Next:** rest of phase 6 (collection F8, 2014 rules side of F9, release).
+- **F9 rules side:** done. 5E rooms use the 2014 DMG XP thresholds (Easy / Medium / Hard / Deadly) with the group-size
+  multiplier adjusted for party size, creatures roll initiative with their Dexterity modifier, cards use the
+  edition's attack wording, exhaustion shows the 2014 effects table (5.5E: −2 per level on d20 rolls, −5 ft speed per
+  level), concentration DC has no cap, no Bloodied. Tested with the 2014 DMG's own example (four 3rd-level
+  characters vs a bugbear and three hobgoblins: 1,000 adjusted XP, Hard). Live: switching a room to 5E changed the
+  difficulty scale and dropped Bloodied from the badges. 167 tests.
+- **Next:** collection (F8), then release 2.0.0.
 
 ## Goal
 

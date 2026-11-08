@@ -9,7 +9,7 @@
 import "../extension/devlog";
 import OBR, { type Item, type Player } from "@owlbear-rodeo/sdk";
 import {
-  abilityRows, cardAccess, challengeLine, combineModes, controls, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
+  abilityRows, cardAccess, challengeLine, combineModes, controls, editionText, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
   speedLine, typeLine, unitName, type CardAccess, type StandardRoll,
 } from "../core/card";
 import { damageAfter, parseChips, rollLabel, type RollSegment, type Segment } from "../core/chips";
@@ -20,7 +20,7 @@ import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } fro
 import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
 import { addConditionTo, changeHp, makeStable, recordDeathSave, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
-import { conditionText, d20Penalty, durationText, speedPenalty } from "../core/conditions";
+import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
 import { conditionEditor } from "../extension/conditionEditor";
@@ -137,7 +137,9 @@ function conditionsPanel(state: UnitState): Child {
   return h("div", { className: "panel stack tight" },
     h("strong", { className: "small" }, "Conditions"),
     own.length ? h("div", { className: "stack tight" }, ...own.map((c) => h("div", { className: "row between small" },
-      h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null),
+      h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null,
+        // 2014 exhaustion works by levels of effects (5.5E applies its flat penalties to rolls and speed instead).
+        c.key === "exhaustion" && sys.rules === "2014" && c.level ? h("div", { className: "muted" }, EXHAUSTION_2014.slice(0, c.level).join("; ")) : null),
       edit ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void (role === "GM" ? removeConditionFrom(obrGateway, itemId, c.id) : sendRequest({ type: "condition-remove", unitId: itemId, conditionId: c.id })).catch(showErr) }, "✕") : null)))
       : h("div", { className: "small muted" }, "None."),
     edit ? h("details", { open: addOpen, ontoggle: (e: Event) => { addOpen = (e.target as HTMLDetailsElement).open; } },
@@ -195,7 +197,7 @@ function chipButton(entry: SheetEntry, segs: Segment[], seg: RollSegment): HTMLE
 }
 
 function entryText(entry: SheetEntry, canRoll: boolean): Child[] {
-  const segs = parseChips(entry.text);
+  const segs = parseChips(editionText(entry.text, roomSystem().rules));
   const out: Child[] = [];
   for (const s of segs) {
     if (s.t === "text") {
@@ -232,7 +234,7 @@ function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, 
 }
 
 function statsBar(sheet: UnitSheet, state: UnitState): Child {
-  const init = initiativeRoll(sheet);
+  const init = initiativeRoll(sheet, roomSystem().rules);
   const max = maxHp(sheet, state);
   return h("div", { className: "statbar" },
     h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),

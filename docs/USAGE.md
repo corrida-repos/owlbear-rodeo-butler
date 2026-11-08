@@ -45,7 +45,7 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 
 ## Assess encounter difficulty
 
-- **Difficulty calculator:** compares the hostile creatures in the scene with your party, using the 2024 Dungeon Master's Guide XP budgets. **Low**, **Moderate** and **High** follow the book. **Extreme** is an extra tier for boss fights, at 1.5× the High budget. Untick a creature that isn't hostile, or a character who isn't in this fight; enter a level for party members without a sheet. The calculator updates as tokens come and go.
+- **Difficulty calculator:** compares the hostile creatures in the scene with your party. In a 5.5E room it uses the 2024 Dungeon Master's Guide XP budgets: **Low**, **Moderate** and **High** follow the book, and **Extreme** is an extra tier for boss fights, at 1.5× the High budget. In a 5E room it uses the 2014 thresholds (**Easy**, **Medium**, **Hard**, **Deadly**) and multiplies the creatures' XP for their number, as the 2014 book does. Untick a creature that isn't hostile, or a character who isn't in this fight; enter a level for party members without a sheet. The calculator updates as tokens come and go.
 - **Initiatives:** **Roll all initiatives** rolls for every unit in the initiative order. **Roll just creatures' initiatives** leaves the party alone, so players can roll their own. Advantage (e.g. from Alert or a monster trait) is applied.
 
 ## Run combat in Tracker
@@ -114,7 +114,6 @@ Found a bug or have an idea? [Open an issue](https://github.com/corrida-repos/ow
 
 ## Known limits
 
-- The 2014 rules setting is still being completed; see the [roadmap](ROADMAP.md#gamesystem-interface-what-differs-between-5e-and-55e).
 - Square grids only.
 - Active spell effects (Mage Armor, Shield) aren't applied to party AC, and multiclass spell slots aren't combined.
 - Lair actions are noted on the card but not listed as actions. Mythic actions are listed with the legendary actions.
