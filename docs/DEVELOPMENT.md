@@ -134,6 +134,22 @@ broadcast message.
   extension pages share one origin).
 - `controlledBy` stores the Owlbear user id (`Player.id`, the same across tabs and reconnects).
 
+## Tracker, turns and HP (phase 3)
+- [encounter.ts](../src/core/encounter.ts): the scene's encounter record (`dev.owlbear-butler/encounter`: started,
+  round, active unit, its index, turn history) and pure turn logic. Order: initiative, then the GM's tie order
+  (`state.initiativeTiebreak`), initiative modifier, Dex, name. If the active unit leaves, the unit that takes its
+  place goes next; `passTurnFrom` is used before Mark as dead / Remove from initiative.
+- [hp.ts](../src/core/hp.ts): damage/heal/set/temp rules and the 0-HP statuses (Death Saves, Stable, Dead); returns
+  a state patch plus events for the UI. [tracker.ts](../src/core/tracker.ts): the GM operations on the gateway.
+- Players can only change tokens they own and can't write scene metadata, so a player's *End my turn* and death
+  saves go to the GM's client over broadcast ([turns.ts](../src/core/turns.ts)). Only one GM client applies them
+  (the one with the smallest connection id), so two GM tabs don't double-advance.
+- The background page watches the encounter and items on every client: turn notices for the unit's controller, the
+  active-turn ring (a local `CIRCLE` shape attached to the token, so each client draws its own and hidden tokens
+  get none for players), and optionally moving the view to the active unit.
+- Context-menu items for the GM are filtered by `roles: ["GM"]`; their labels toggle with nested metadata filters
+  (`["metadata", STATE_KEY, "inEncounter"]`).
+
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
 

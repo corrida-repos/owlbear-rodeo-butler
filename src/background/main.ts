@@ -31,15 +31,21 @@ const UNIT_FILTER: KeyFilter[] = [
   { key: ["metadata", SHEET_KEY], value: undefined, operator: "!=" },
 ];
 const ids = (items: Item[]) => items.filter((i) => SHEET_KEY in i.metadata).map((i) => i.id);
-const notify = (text: string, variant: "INFO" | "SUCCESS" | "WARNING" | "ERROR" = "INFO") =>
-  OBR.notification.show(text, variant).catch((e) => console.error("[Butler] notification failed", e));
+const notify = (text: string, variant: "INFO" | "SUCCESS" | "WARNING" | "ERROR" = "INFO") => {
+  if (import.meta.env.DEV) console.log("[Butler] notify", variant, text);
+  return OBR.notification.show(text, variant).catch((e) => console.error("[Butler] notification failed", e));
+};
+
+/** Dev log of every context-menu action (which item, which tokens). */
+const logClick = (id: string, items: Item[]) => { if (import.meta.env.DEV) console.log("[Butler] menu", id, items.map((i) => i.name).join(", ")); };
 
 async function createMenus() {
   // Players can only select tokens they own, so for them this shows on their own units only.
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/view-unit`,
     icons: [{ icon, label: "View unit card", filter: { max: 1, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx, elementId) => { if (ctx.items[0]) await openCard(ctx.items[0].id, elementId); },
+    onClick: async (ctx, elementId) => {
+      logClick("view-unit", ctx.items); if (ctx.items[0]) await openCard(ctx.items[0].id, elementId); },
   });
   const gm = { roles: ["GM" as const] };
   await OBR.contextMenu.create({
@@ -49,6 +55,7 @@ async function createMenus() {
       { icon, label: "Remove from initiative", filter: { ...gm, every: [...UNIT_FILTER] } },
     ],
     onClick: async (ctx) => {
+      logClick("initiative", ctx.items);
       const anyOut = ctx.items.some((i) => (i.metadata[STATE_KEY] as { inEncounter?: boolean } | undefined)?.inEncounter !== true);
       await setInEncounter(obrGateway, ids(ctx.items), anyOut);
     },
@@ -56,12 +63,14 @@ async function createMenus() {
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/roll-initiative`,
     icons: [{ icon, label: "Roll initiative", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx) => { const n = await rollInitiativeFor(obrGateway, ids(ctx.items)); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
+    onClick: async (ctx) => {
+      logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items)); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/hp`,
     icons: [{ icon, label: "Damage / heal", filter: { ...gm, every: [...UNIT_FILTER] } }],
     onClick: async (ctx, elementId) => {
+      logClick("hp", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
       await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 300, height: 300, anchorElementId: elementId });
     },
@@ -69,7 +78,8 @@ async function createMenus() {
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/dead`,
     icons: [{ icon, label: "Mark as dead", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx) => { await markUnitsDead(obrGateway, ids(ctx.items)); },
+    onClick: async (ctx) => {
+      logClick("dead", ctx.items); await markUnitsDead(obrGateway, ids(ctx.items)); },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/party`,
@@ -78,6 +88,7 @@ async function createMenus() {
       { icon, label: "Remove from party", filter: { ...gm, every: [...UNIT_FILTER] } },
     ],
     onClick: async (ctx) => {
+      logClick("party", ctx.items);
       const anyOut = ctx.items.some((i) => (i.metadata[STATE_KEY] as { party?: boolean } | undefined)?.party !== true);
       await setParty(obrGateway, ids(ctx.items), anyOut);
     },

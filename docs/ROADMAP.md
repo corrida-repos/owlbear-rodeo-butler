@@ -11,7 +11,13 @@ Status (2026-11-08):
   attack, crit damage, public/private, session roll log), portraits, aliases, renaming and controlling player (F7).
   Players get a "My units" popover to open their cards. Live: GM attack with advantage + crit damage; player private
   check seen by the player and the GM only. 105 tests.
-- **Next:** phase 3 (combat core: tracker, turns, HP, Dead / Death Saves / Stable).
+- **Phase 3:** done. Tracker tab (turn controls, round, typed/rolled initiative, ties, HP boxes, Mark as dead,
+  Revive, reset), GM context menu (initiative, roll, damage/heal on a multi-selection, Mark as dead, party), turn
+  notices for the controlling player, active-turn ring, follow option, player End my turn, death saves (player rolls
+  go through the GM's client), Stable. Live: turns over two rounds with "up next" / "your turn" reaching only the
+  player, End my turn applied once with two GM tabs open, a party member dropped to 0 then a player death save
+  recorded, Mark as dead on the active unit passing the turn in the same round, reset. 127 tests.
+- **Next:** F9 core books by edition (small), then phase 4 (conditions + movement).
 
 ## Goal
 

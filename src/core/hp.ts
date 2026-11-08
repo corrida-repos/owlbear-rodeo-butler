@@ -71,7 +71,7 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
       if (hp > 0) {
         const overflow = rest - hp;
         hp = Math.max(0, hp - rest);
-        if (hp === 0) {
+        if (hp === 0 && !isDead(state)) {
           events.push(state.party ? "dropped-to-zero" : "creature-at-zero");
           if (state.party && overflow >= max && !isDead(state)) events.push("massive-damage");
         }
@@ -90,7 +90,7 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
       if (deathSaves || isStable(state)) events.push("revived-from-zero");
       deathSaves = undefined;
       if (isStable(state)) conditions = without(conditions, "stable");
-    } else if (state.hp > 0 && target === 0) {
+    } else if (state.hp > 0 && target === 0 && !isDead(state)) {
       events.push(state.party ? "dropped-to-zero" : "creature-at-zero");
     }
     hp = target;
@@ -99,7 +99,7 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
   if (hp !== state.hp) patch.hp = hp;
   if (conditions !== state.conditions) patch.conditions = conditions;
   if (deathSaves !== state.deathSaves) patch.deathSaves = deathSaves;
-  if (hp === 0 && state.hp > 0 && state.party) patch.deathSaves = { ...ZERO };
+  if (hp === 0 && state.hp > 0 && state.party && !isDead(state)) patch.deathSaves = { ...ZERO };
   return { patch, events };
 }
 

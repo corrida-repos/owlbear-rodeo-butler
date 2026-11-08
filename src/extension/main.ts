@@ -63,18 +63,24 @@ if (OBR.isAvailable) {
     await initRoomSettings();
     onRoomSettings(() => render());
     role = await OBR.player.getRole();
-    OBR.player.onChange((p) => { if (p.role !== role) { role = p.role; render(); } });
-    sceneReady = await OBR.scene.isReady();
-    if (role === "PLAYER" && sceneReady) await initPlayerItems(() => render());
-    render();
+    OBR.player.onChange((p) => {
+      if (p.role === role) return;
+      role = p.role;
+      if (role === "PLAYER" && sceneReady) void initPlayerItems(() => render()).then(render);
+      render();
+    });
+    // Subscribe first, so a scene that becomes ready while we're still starting up isn't missed.
     OBR.scene.onReadyChange((r) => {
       sceneReady = r;
       if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); }
-      else if (tab === "tracker") refreshTracker(true);
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
+      else if (tab === "tracker") refreshTracker(true);
       else if (tab === "combat") refreshCombat(true);
       render();
     });
+    sceneReady = await OBR.scene.isReady();
+    if (role === "PLAYER" && sceneReady) await initPlayerItems(() => render());
+    render();
     // Combat tab follows the scene live (tokens added, removed, initiative changed…)
     OBR.scene.items.onChange(() => { if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); });
     OBR.scene.onMetadataChange(() => { if (tab === "tracker") refreshTracker(); });

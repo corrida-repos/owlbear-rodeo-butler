@@ -136,6 +136,10 @@ describe("HP rules", () => {
     expect("deathSaves" in h.patch).toBe(true); // undefined = remove the key
   });
 
+  it("a unit that is already Dead reports nothing at 0 HP", () => {
+    const r = applyHp(wolf, pc({ hp: 5, conditions: [{ id: "d", key: "dead" }] }), { kind: "damage", amount: 9 });
+    expect(r).toEqual({ patch: { hp: 0 }, events: [] });
+  });
   it("creatures at 0 HP are reported (Mark as dead offered), no death saves", () => {
     const r = applyHp(wolf, newState(wolf, { hp: 4 }), { kind: "damage", amount: 10 });
     expect(r.patch).toEqual({ hp: 0 });
