@@ -1,8 +1,9 @@
 # Roadmap: Encounter Butler 2.0 — independent of Forge!
 
 Status (2026-11-08):
-- **Phase 0:** code done (background page, context menu, card popover, roll broadcast, sheet/system/settings types,
-  sheet sizes measured). Live checks in Owlbear still pending.
+- **Phase 0:** done. Live-checked with a GM and a player (background, context menu → card, public/private roll
+  notifications, 256 kB item metadata OK). Finding: players can't select GM-owned tokens, so they open cards from the
+  popover, not the context menu.
 - **Phase 1:** code done. All converters write native sheets, Forge code removed, Combat tab reads native data,
   game-system room setting (search follows it), bundled package rebuilt; 86 tests, 4,574/4,574 5etools creatures OK.
   Live check in Owlbear still pending.
@@ -196,6 +197,35 @@ manifest.json
 - D&D Beyond sync keeps working and writes the native party.
 - Feeds difficulty, notifications (who gets "your turn") and the player tracker.
 
+### F14 · Movement (spent speed) tracker
+- While combat runs, Butler counts how far the **active unit's token** has moved since its turn started: the sum of
+  every move along the path it actually took (each drag measured with the scene's grid distance rules), in feet.
+- Shown to the GM and to the active unit's controller (tracker, player tracker and a small label near the token):
+  "Moved 20 / 30 ft". It turns **red** once the distance moved exceeds the unit's speed (walk speed; the highest
+  speed if the unit has fly/swim/climb; a *Dash* toggle doubles the limit for this turn).
+- **Rewind** button (the controlling player and the GM): moves the token back along its recorded path to the last
+  position that was a multiple of 5 ft. Example: moved 13 ft → rewind puts it where it was at 10 ft (3 ft back).
+  Pressing again while on a multiple of 5 goes back another 5 ft, down to the turn's starting position.
+- The path resets when the turn changes; the GM moving a token outside its turn isn't counted.
+- **Done when:** the path math (summing segments, the "last multiple of 5" point, interpolating inside a segment) is
+  unit-tested, and live a player's 13 ft move rewinds to the 10 ft point and a move past speed shows red for both
+  the player and the GM.
+
+### F15 · Player D&D Beyond sync (own unit only)
+- A player sees **Sync from D&D Beyond** on their player view, next to each unit they control. It works like the
+  GM's party sync, limited to that one character: it opens the character's D&D Beyond page, the bookmarklet (running
+  in the player's own logged-in tab) sends the character back, and Butler converts it with the same code as the
+  party sync and updates that unit's sheet.
+- Only the sheet changes. Position, image, initiative and live state stay as they are; current HP follows the same
+  "keep from token / take from D&D Beyond" choice as the GM's sync. The D&D Beyond character id remembered on the
+  unit (from an earlier GM sync) picks the right character; a player can't overwrite a unit they don't control.
+- If players can't write token metadata in the room, the player's client sends the converted sheet (≤ 16 kB, fits
+  one broadcast) to the GM's client, which checks the player controls that unit and applies it.
+- The GM sees a notice ("Worg synced Thorn from D&D Beyond") and can turn player syncing off with the player-edits
+  setting.
+- **Done when:** a player re-syncs their own character after levelling up on D&D Beyond and the GM's card shows the
+  new numbers, and the same player can't sync a unit they don't control.
+
 ---
 
 ## Phases
@@ -210,8 +240,8 @@ re-added). Between phases 1 and 3 there is no initiative tracker; that gap is ac
 | 1 | **Native data** | F1, F9 (data side) | all converters write native sheets only; Forge code, constants, system check and README requirement removed; Combat tab (difficulty, initiative rolls) reads native data |
 | 2 | **Card + dice** | F2, F3, F7 | live: GM and player roll from cards, public/private correct |
 | 3 | **Combat core** | F4, F5, F10, F6 (+ Dead, Death Saves and Stable, ahead of the rest of F11) | live: 5-round fight with notifications, HP edits, a PC dropping to 0 (Death Saves) then marked dead, Mark as dead on the active unit and on others, reset |
-| 4 | **Conditions** | F11 | durations expire on the right turn; concentration prompts |
-| 5 | **Players & party** | F12, F13 | second account runs through the player checklist |
+| 4 | **Conditions + movement** | F11, F14 | durations expire on the right turn; concentration prompts; a 13 ft move rewinds to 10 ft |
+| 5 | **Players & party** | F12, F13, F15 | second account runs through the player checklist, including a self-sync from D&D Beyond |
 | 6 | **Collection, 2014 rules, release** | F8, F9 (rules side) | README/DEVELOPMENT rewritten; CHANGELOG; release **2.0.0** |
 
 ## Risks and how they're handled

@@ -1,4 +1,5 @@
 /** Encounter Butler popover: three tabs — Add Creatures, Add Party Members (incl. D&D Beyond sync), Combat. */
+import "./devlog";
 import OBR from "@owlbear-rodeo/sdk";
 import { refreshCombat, renderCombatTab, resetCombatTab } from "./combatTab";
 import { h, rerender, setRerender, store, ui, type Child } from "./dom";

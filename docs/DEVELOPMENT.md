@@ -94,14 +94,30 @@ concentration DC), [settings.ts](../src/core/settings.ts) (room settings) and [r
 broadcast messages and visibility).
 
 **Limits (Owlbear docs, checked 2026-11-08):** broadcast messages ≤ 16 kB; room metadata ≤ 16 kB in total for all
-extensions. No documented limit for item metadata.
+extensions. No documented limit for item metadata (256 kB on one token tested fine, see below).
 
 **Sheet size (measured 2026-11-08, `npm run check:5etools`, all 4,574 creatures):** per-token stat metadata median
 2.7 kB, 99th percentile 5.6 kB, max 7.9 kB (Vampire Spellcaster, Strahd). None over 16 kB, so a sheet also fits in one
 broadcast message.
 
-**Not yet verified live:** context menu → card popover, roll notifications GM ↔ player (public, private), the item
-metadata limit (card → *Diagnostics*), background running with all popovers closed.
+**Verified live (2026-11-08, GM + player in two browsers, dev build):**
+- The background page loads for the GM and for the player, also with no popover open, and registers the context menu.
+- Right-click a Butler unit → *View unit card* opens the card popover for that token (GM).
+- A public roll from the card shows as a notification for the GM and the player; a private GM roll is sent LOCAL
+  and shows only for the GM.
+- Item metadata: 8 to 256 kB written to one token and read back intact (card → *Diagnostics*), so sheets (max 7.9 kB)
+  are far from any limit.
+- **Players can't select tokens they don't own**, so the token context menu never shows Butler items to a player for
+  monsters. Players open cards from the popover instead (phase 2). A player's private roll is checked in phase 2.
+
+### Dev tools
+- **Localhost install:** `npm run dev` serves the manifest as *Encounter Butler (dev)* with CORS and Chrome's
+  private-network header (`Access-Control-Allow-Private-Network`), which Owlbear's https page needs to fetch it.
+  Disable the Pages copy in a room while the dev copy is enabled.
+- **Log relay:** in dev, every extension page forwards `console.*` output and uncaught errors to the dev server, which
+  appends them to `.cache/devlog.txt`, tagged with page, role and player name (e.g.
+  `[background.html PLAYER:Worg:eea1]`). Owlbear runs the pages in cross-origin iframes, so this is the easiest way to
+  see GM and player logs side by side. See [devlog.ts](../src/extension/devlog.ts).
 
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
@@ -177,4 +193,4 @@ Manual / CLI route:
 - Square grids only. No fog, walls or lighting (out of scope by request).
 - Lair actions and regional effects are flagged, not listed. Mythic actions are listed after the legendary actions.
 - Companion and summon stat blocks that scale with the caster's level (e.g. Steel Defender) convert, but with placeholder HP and saves. They are flagged.
-- Owlbear item metadata size: the preflight reports the largest token's metadata size (5etools max 7.4 kB); Owlbear documents no item limit (room metadata: 16 kB total, broadcasts: 16 kB). The live size test is in the unit card's Diagnostics.
+- Owlbear item metadata size: the preflight reports the largest token's metadata size (5etools max 7.4 kB); Owlbear documents no item limit (room metadata: 16 kB total, broadcasts: 16 kB); 256 kB on one token worked live.

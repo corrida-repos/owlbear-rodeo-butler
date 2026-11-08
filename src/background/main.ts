@@ -2,6 +2,7 @@
  * Background script: loaded once per client (GM and every player) while the extension is enabled in the room,
  * even when no popover is open. Registers context-menu items and turns roll broadcasts into notifications.
  */
+import "../extension/devlog";
 import OBR from "@owlbear-rodeo/sdk";
 import { BUTLER_NS } from "../core/constants";
 import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls";
@@ -32,11 +33,18 @@ OBR.onReady(async () => {
     },
   });
 
+
   OBR.broadcast.onMessage(ROLL_CHANNEL, async (event) => {
     const msg = event.data;
-    if (!isRollMessage(msg)) return;
+    if (!isRollMessage(msg)) { console.warn("[Butler] ignored malformed roll message", msg); return; }
     const viewer = { id: OBR.player.id, role: await OBR.player.getRole() };
+    console.log("[Butler] roll received", msg.visibility, msg.label, msg.total, "visible:", canSeeRoll(msg, viewer));
     if (!canSeeRoll(msg, viewer)) return;
-    await OBR.notification.show(rollText(msg), msg.visibility === "private" ? "WARNING" : "INFO");
+    try {
+      const id = await OBR.notification.show(rollText(msg), msg.visibility === "private" ? "WARNING" : "INFO");
+      console.log("[Butler] notification shown", id);
+    } catch (e) {
+      console.error("[Butler] notification failed", e);
+    }
   });
 });

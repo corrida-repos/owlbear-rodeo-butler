@@ -3,6 +3,7 @@
  * Phase 0 spike: shows the token, sends test rolls (public / private) and, for the GM, measures how much metadata
  * Owlbear accepts on one token. The full card (F2) replaces this in phase 2.
  */
+import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { BUTLER_NS } from "../core/constants";
 import { cryptoRng, fmtMod } from "../core/dice";
@@ -65,6 +66,7 @@ async function roll(unitName: string) {
     const msg = makeRoll(formula, "test roll", { id: OBR.player.id, name: await OBR.player.getName(), role }, visibility,
       { rng: cryptoRng, unit: item ? { id: item.id, name: unitName } : undefined });
     await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: rollDestination(msg) });
+    console.log("[Butler] roll sent", rollDestination(msg), msg.total);
   } catch (e) {
     log.push(`Roll failed: ${e instanceof Error ? e.message : e}`);
     render();
