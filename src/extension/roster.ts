@@ -135,7 +135,7 @@ export function createRoster(kind: RosterKind) {
   const hb = {
     name: "", mode: "json" as "json" | "quick", json: "", base: null as null | { name: string; book: string; monster: any },
     size: "M", type: "", ac: "12", hp: "10", init: "0", speed: "30", cr: "", level: "", attacks: "", notes: "",
-    imageUrl: "", image: null as ResolvedImage | null, imageNote: "", count: "1", homebrew: true,
+    imageUrl: "", image: null as ResolvedImage | null, imageNote: "", homebrew: true,
   };
   async function useAsBase(r: IndexRow) {
     const L = await getLib();
@@ -202,11 +202,11 @@ export function createRoster(kind: RosterKind) {
     }
     if (!hb.image) { hb.image = placeholderImage(); hb.imageNote = "placeholder"; }
     for (const sb of statblocks) {
-      entries.push({ id: nextId++, statblock: sb, image: hb.image, imageNote: hb.imageNote, count: Math.max(1, Number(hb.count) || 1),
+      entries.push({ id: nextId++, statblock: sb, image: hb.image, imageNote: hb.imageNote, count: 1,
         hp: "average", hidden: false, advantage: false,
         label: hb.base ? `adapted from ${hb.base.name}` : hb.homebrew ? "Homebrew (not official)" : "Your stat block" });
     }
-    Object.assign(hb, { name: "", json: "", base: null, attacks: "", notes: "", level: "", image: null, imageNote: "", imageUrl: "", count: "1" });
+    Object.assign(hb, { name: "", json: "", base: null, attacks: "", notes: "", level: "", image: null, imageNote: "", imageUrl: "" });
   }
 
   // ---- add + undo
@@ -249,7 +249,9 @@ export function createRoster(kind: RosterKind) {
         h("div", { className: "small muted" }, `AC ${sb.forge.Z007 ?? "?"} · HP ${sb.hp.average}${sb.hp.formula ? ` (${sb.hp.formula})` : ""} · Init ${fmtMod(sb.initiative.modifier)}${sb.initiative.advantage ? " adv" : ""} · ${e.label}`),
         h("div", { className: "row", style: "margin-top:4px" },
           h("button", { className: "icon", title: "Fewer", onclick: () => { e.count = Math.max(1, e.count - 1); rerender(); } }, "−"),
-          h("span", { className: "count" }, `× ${e.count}`),
+          h("span", { className: "small" }, "×"),
+          input(String(e.count), () => {}, { className: "qty", inputmode: "numeric", title: "How many to add",
+            onchange: (ev: Event) => { e.count = Math.max(1, Math.min(99, Math.round(Number((ev.target as HTMLInputElement).value)) || 1)); rerender(); } }),
           h("button", { className: "icon", title: "More", onclick: () => { e.count++; rerender(); } }, "+"),
           h("label", { className: "small" }, h("input", { type: "checkbox", checked: e.hp === "roll", onchange: (ev: Event) => { e.hp = (ev.target as HTMLInputElement).checked ? "roll" : "average"; } }), "roll HP"),
           h("label", { className: "small" }, h("input", { type: "checkbox", checked: e.hidden, onchange: (ev: Event) => { e.hidden = (ev.target as HTMLInputElement).checked; } }), "hidden")),
@@ -263,7 +265,7 @@ export function createRoster(kind: RosterKind) {
     return h("div", { className: "panel" },
       h("h2", {}, `Import published ${one}`),
       publishedSearch.el,
-      h("div", { className: "small muted", style: "margin-top:4px" }, `Pick a result to put it on the list below. Pick it again for one more.`));
+      h("div", { className: "small muted", style: "margin-top:4px" }, `Pick a result to put it on the list below, then set how many there.`));
   }
 
   function renderHomebrew(): Child {
@@ -311,7 +313,6 @@ export function createRoster(kind: RosterKind) {
         h("button", { className: "secondary", onclick: action(useImageUrl) }, "Use")),
       f.image ? h("div", { className: "row small", style: "margin-top:4px" }, h("img", { src: f.image.url, className: "thumb" }), `✔ ${f.imageNote}`) : h("div", { className: "small muted", style: "margin-top:4px" }, "No token chosen: the placeholder is used."),
       h("div", { className: "row", style: "margin-top:8px" },
-        h("label", { className: "small", style: "align-items:center" }, "Quantity ", input(f.count, (v) => { f.count = v; }, { style: "width:56px", inputmode: "numeric" })),
         f.base ? null : h("label", { className: "small", style: "align-items:center" }, h("input", { type: "checkbox", checked: f.homebrew, onchange: (e: Event) => { f.homebrew = (e.target as HTMLInputElement).checked; } }), "homebrew (not official)")),
       h("button", { className: "wide", style: "margin-top:8px", onclick: action(addHomebrew) }, "Put on the list"));
   }

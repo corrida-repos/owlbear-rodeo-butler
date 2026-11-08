@@ -44,8 +44,8 @@ The **Encounter Butler** icon now appears in the room's toolbar at the top left.
    - **Stat block (JSON):** upload or paste a 5etools-format stat block, or *start from a published creature*: its stat block is loaded into the box so you can edit anything. **Quick stats** is a short form for simple NPCs.
    - **Name** replaces the stat block's name (or gives one if the JSON has none).
    - **Token:** upload or choose an image in Owlbear's library, use an https image link, the original creature's 5etools token, or the placeholder.
-   - Set the **quantity** and click **Put on the list**.
-4. In the list, set how many of each with **− / +**, and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the Forge tracker with rolled initiative. **Undo** removes them again.
+   - Click **Put on the list**.
+4. In the list, set how many of each (type a number or use **− / +**), and tick **roll HP** or **hidden** if you want. Click **Add … to the scene**. They appear in the middle of your view, already in the Forge tracker with rolled initiative. **Undo** removes them again.
 
 A **Prepared encounter** (map, grid and positioned creatures in one file) can still be imported from the collapsed section at the bottom of this tab. To make your own packages, see the [developer guide](docs/DEVELOPMENT.md#new-encounter-workflow).
 

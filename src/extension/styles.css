@@ -57,7 +57,7 @@ label { display: flex; gap: 6px; align-items: flex-start; }
 .thumb.empty { display: grid; place-items: center; background: var(--bg); color: var(--muted); }
 .grow { flex: 1; min-width: 0; }
 .row.between { justify-content: space-between; }
-.count { min-width: 36px; text-align: center; font-weight: 700; }
+input.qty { width: 44px; text-align: center; font-weight: 700; }
 button.icon { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 2px 8px; }
 button.wide { width: 100%; }
 button.big { padding: 10px; font-size: 14px; }
