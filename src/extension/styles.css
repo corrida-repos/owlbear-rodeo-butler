@@ -151,3 +151,6 @@ button.ok-bg { background: var(--ok); }
 .dot.on { opacity: 1; }
 .stat input.hpbox { width: 100%; margin-top: 2px; }
 .panel.myturn { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }
+.movebar { display: flex; gap: 8px; align-items: center; margin-top: 3px; color: var(--ok); font-weight: 600; }
+.movebar.over { color: var(--bad); }
+.movebar label { gap: 3px; align-items: center; color: var(--text); font-weight: 400; }

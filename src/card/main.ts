@@ -19,7 +19,11 @@ import type { RollMode } from "../core/schema";
 import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
 import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
-import { changeHp, makeStable, recordDeathSave, reviveUnits } from "../core/tracker";
+import { addConditionTo, changeHp, makeStable, recordDeathSave, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
+import { conditionText, d20Penalty, durationText, speedPenalty } from "../core/conditions";
+import { turnOrder } from "../core/encounter";
+import { trackerUnits } from "../core/tracker";
+import { conditionEditor } from "../extension/conditionEditor";
 import { obrGateway } from "../extension/obrGateway";
 import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
@@ -52,6 +56,9 @@ async function roll(formula: string, label: string, kind: RollMessage["kind"], e
   const u = item && readUnit(item.metadata);
   if (!item || !u) return null;
   let sent: RollMessage | null = null;
+  // 2024 exhaustion: −2 per level on every d20 test.
+  const penalty = kind === "attack" || kind === "save" || kind === "check" ? d20Penalty(roomSystem(), u.state) : 0;
+  if (penalty) { formula = `${formula.replace(/\s+/g, "")}${fmtMod(penalty)}`; label = `${label} (exhaustion ${fmtMod(penalty)})`; }
   const clicked: RollMode = ev?.shiftKey ? "advantage" : ev && (ev.ctrlKey || ev.metaKey) ? "disadvantage" : nextMode;
   const mode = combineModes(clicked, opts.builtIn);
   // Public rolls name the unit the way players know it (alias), private ones by its real name.
@@ -108,6 +115,54 @@ function zeroHpPanel(state: UnitState): Child {
       role === "GM" ? h("button", { className: "secondary", onclick: () => void makeStable(obrGateway, itemId).catch((e) => { error = String(e); render(); }) }, "Stable") : null));
 }
 
+/** Units in the scene by id, for duration texts and the "until X's turn" choices. */
+let sceneUnits: { id: string; name: string }[] = [];
+async function refreshSceneUnits() {
+  const items = await obrGateway.getItems();
+  const units = trackerUnits(items);
+  const order = turnOrder(units);
+  sceneUnits = [...order, ...units.filter((u) => !order.includes(u))].map((u) => ({ id: u.id, name: u.name }));
+}
+
+let addOpen = false;
+function conditionsPanel(state: UnitState): Child {
+  const sys = roomSystem();
+  const own = state.conditions.filter((c) => !sys.conditions.find((d) => d.key === c.key)?.automatic);
+  if (role !== "GM" && !own.length) return null;
+  const nameOf = (id: string) => sceneUnits.find((u) => u.id === id)?.name ?? "another unit";
+  return h("div", { className: "panel stack tight" },
+    h("strong", { className: "small" }, "Conditions"),
+    own.length ? h("div", { className: "stack tight" }, ...own.map((c) => h("div", { className: "row between small" },
+      h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null),
+      role === "GM" ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void removeConditionFrom(obrGateway, itemId, c.id).catch(showErr) }, "✕") : null)))
+      : h("div", { className: "small muted" }, "None."),
+    role === "GM" ? h("details", { open: addOpen, ontoggle: (e: Event) => { addOpen = (e.target as HTMLDetailsElement).open; } },
+      h("summary", { className: "small" }, "Add condition"),
+      conditionEditor(sys, sceneUnits, (c) => void addConditionTo(obrGateway, [itemId], c.key, c).catch(showErr))) : null);
+}
+
+function concentrationPanel(sheet: UnitSheet, state: UnitState): Child {
+  const chk = state.concentrationCheck;
+  if (!chk) return null;
+  const con = abilityRows(sheet).find((a) => a.ability === "con")!.save;
+  return h("div", { className: "panel deathsaves" },
+    h("div", {}, h("strong", {}, "Concentration check"), ` · took ${chk.damage} damage: DC ${chk.dc} Constitution save`),
+    h("div", { className: "row", style: "margin-top:6px" },
+      h("button", { onclick: async (ev: MouseEvent) => {
+        const msg = await roll(con.formula, `Concentration (DC ${chk.dc})`, "save", ev);
+        if (!msg) return;
+        try {
+          if (role === "GM") {
+            const r = await resolveConcentration(obrGateway, itemId, msg.total);
+            if (r === "lost") await OBR.notification.show(`Concentration lost (${msg.total} vs DC ${chk.dc}).`, "WARNING");
+          } else await sendRequest({ type: "concentration", unitId: itemId, total: msg.total });
+        } catch (e) { showErr(e); }
+      } }, `Roll Con save ${fmtMod(con.bonus)}`),
+      role === "GM" ? h("button", { className: "secondary", onclick: () => void resolveConcentration(obrGateway, itemId, null).catch(showErr) }, "Dismiss") : null));
+}
+
+const showErr = (e: unknown) => { error = e instanceof Error ? e.message : String(e); render(); };
+
 function gmHpBox(): Child {
   if (role !== "GM") return null;
   const inp = h("input", { type: "text", className: "hpbox", placeholder: "−7 / +5 / t5", title: "-7 damage · +5 heal · 12 set · t5 temp HP; Enter applies" }) as HTMLInputElement;
@@ -117,7 +172,7 @@ function gmHpBox(): Child {
     if (!change) { error = `"${inp.value}" isn't an HP change: use -7, +5, 12 or t5.`; render(); return; }
     inp.value = "";
     inp.blur();
-    try { await changeHp(obrGateway, [itemId], change, { autoDeadAtZero: roomSettings().autoDeadAtZero }); } catch (err) { error = String(err); render(); }
+    try { await changeHp(obrGateway, [itemId], change, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() }); } catch (err) { error = String(err); render(); }
   };
   return inp;
 }
@@ -182,7 +237,8 @@ function statsBar(sheet: UnitSheet, state: UnitState): Child {
       h("button", { className: "chip chip-check big", title: `${init.formula}${init.mode ? ` (${init.mode})` : ""}`, onclick: rollStandard(init) },
         fmtMod(init.bonus), init.mode === "advantage" ? " adv" : init.mode === "disadvantage" ? " dis" : ""),
       state.initiative !== null ? h("span", { className: "small muted" }, `rolled ${state.initiative}`) : null),
-    h("div", { className: "stat wide" }, h("span", { className: "k" }, "Speed"), h("span", { className: "small" }, speedLine(sheet))));
+    h("div", { className: "stat wide" }, h("span", { className: "k" }, "Speed"), h("span", { className: "small" }, speedLine(sheet)),
+      speedPenalty(roomSystem(), state) ? h("span", { className: "small warn" }, `−${speedPenalty(roomSystem(), state)} ft (exhaustion)`) : null));
 }
 
 function rollControls(): Child {
@@ -335,7 +391,7 @@ function render() {
       nodes.push(header(info, u.sheet, u.state, access));
       if (access === "full") {
         
-        nodes.push(statsBar(u.sheet, u.state), zeroHpPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        nodes.push(statsBar(u.sheet, u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
         if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
       } else {
         nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));
@@ -362,7 +418,9 @@ OBR.onReady(async () => {
     players = await OBR.party.getPlayers();
     OBR.party.onChange((ps) => { players = ps; render(); });
   }
+  await refreshSceneUnits();
   render();
   onRollLog((l) => { log = l; render(); });
-  OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });
+  OBR.scene.items.onChange(async (items) => { item = items.find((i) => i.id === itemId) ?? null; await refreshSceneUnits(); render(); });
+  OBR.scene.onMetadataChange(async () => { await refreshSceneUnits(); render(); });
 });

@@ -12,7 +12,7 @@
  *    Stable. Three failures: dead (offered).
  */
 import { maxHp, type ConditionInstance, type UnitSheet, type UnitState } from "./sheet";
-import { isDead, isStable } from "./systems";
+import { DND5E_2024, isDead, isStable, type GameSystem } from "./systems";
 
 export type HpChange =
   | { kind: "damage"; amount: number; critical?: boolean }
@@ -38,16 +38,18 @@ export type HpEvent =
   | "massive-damage"         // damage at 0 HP ≥ max HP: offer Mark as dead
   | "stable-lost"
   | "revived-from-zero"      // healed above 0 HP: death saves / Stable cleared
-  | "creature-at-zero";      // a non-party unit at 0 HP: offer Mark as dead (or automatic, by setting)
+  | "creature-at-zero"       // a non-party unit at 0 HP: offer Mark as dead (or automatic, by setting)
+  | "concentration-check"    // damaged while concentrating: Con save pending (state.concentrationCheck)
+  | "concentration-lost";    // dropped to 0 HP while concentrating: Concentration ends
 
 export interface HpResult { patch: Partial<UnitState>; events: HpEvent[] }
 
-type S = Pick<UnitState, "hp" | "tempHp" | "maxHpOverride" | "party" | "conditions" | "deathSaves">;
+type S = Pick<UnitState, "hp" | "tempHp" | "maxHpOverride" | "party" | "conditions" | "deathSaves" | "concentrationCheck">;
 
 const without = (conds: ConditionInstance[], key: string) => conds.filter((c) => c.key !== key);
 const ZERO = { successes: 0, failures: 0 };
 
-export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange): HpResult {
+export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange, system: Pick<GameSystem, "concentrationDc"> = DND5E_2024): HpResult {
   const max = maxHp(sheet, state);
   const events: HpEvent[] = [];
   const patch: Partial<UnitState> = {};
@@ -94,6 +96,12 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
       events.push(state.party ? "dropped-to-zero" : "creature-at-zero");
     }
     hp = target;
+  }
+
+  // Concentration: damage calls for a Constitution save (DC from the system); 0 HP ends it (Incapacitated).
+  if (change.kind === "damage" && n > 0 && !isDead(state) && conditions.some((c) => c.key === "concentration")) {
+    if (hp === 0) { conditions = without(conditions, "concentration"); events.push("concentration-lost"); patch.concentrationCheck = undefined; }
+    else { patch.concentrationCheck = { dc: system.concentrationDc(n), damage: n }; events.push("concentration-check"); }
   }
 
   if (hp !== state.hp) patch.hp = hp;

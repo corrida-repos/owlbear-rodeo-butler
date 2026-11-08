@@ -13,12 +13,15 @@ import {
 import { rollSceneInitiative } from "../core/combat";
 import { openCard } from "./cardPopover";
 import { followToggle } from "./follow";
+import { movementInfo } from "./movementView";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
 
 let view: TrackerView | null = null;
+let sceneMeta: Record<string, unknown> = {};
 let notes: string[] = [];
+let outsideOpen = false;
 let pending = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -26,7 +29,7 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 export function refreshTracker(immediate = false) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
-    try { view = trackerView(await obrGateway.getItems(), await OBR.scene.getMetadata()); } catch { return; }
+    try { sceneMeta = await OBR.scene.getMetadata(); view = trackerView(await obrGateway.getItems(), sceneMeta); } catch { return; }
     const a = document.activeElement;
     if (a && a.closest("#app") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && (a as HTMLInputElement).type !== "checkbox") { pending = true; return; }
     rerender();
@@ -43,6 +46,8 @@ const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
   "massive-damage": (n) => `${n} took massive damage (at least their max HP past 0): instant death by the rules. Mark as dead (☠)?`,
   "stable-lost": (n) => `${n} is no longer Stable.`,
   "revived-from-zero": (n) => `${n} is back above 0 HP.`,
+  "concentration-check": (n) => `${n} must make a Concentration save: the prompt is on its card.`,
+  "concentration-lost": (n) => `${n} dropped to 0 HP and lost Concentration.`,
 };
 
 function report(rs: HpReport[]) {
@@ -57,7 +62,7 @@ function hpBox(u: TrackerUnit): HTMLInputElement {
     if (!change) { ui.error = `"${inp.value}" isn't an HP change: use -7, +5, 12 or t5.`; rerender(); return; }
     inp.value = "";
     inp.blur();
-    void action(async () => report(await changeHp(obrGateway, [u.id], change, { autoDeadAtZero: roomSettings().autoDeadAtZero })))();
+    void action(async () => report(await changeHp(obrGateway, [u.id], change, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() })))();
   };
   return inp;
 }
@@ -85,7 +90,9 @@ function row(u: TrackerUnit, v: TrackerView, tie: { up: boolean; down: boolean }
         u.hidden ? h("span", { className: "small muted", title: "Hidden from players" }, "(hidden)") : null,
         u.party ? h("span", { className: "small muted" }, "party") : null),
       h("div", { className: "small muted" }, `AC ${u.ac} · init ${fmtMod(u.initMod)}`),
-      conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.detail ? ` ${c.detail}` : ""))) : null),
+      conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.detail ? ` ${c.detail}` : ""))) : null,
+      u.state.concentrationCheck ? h("div", { className: "small warn" }, `Concentration check: DC ${u.state.concentrationCheck.dc} (on its card)`) : null,
+      isActive ? movementInfo(sceneMeta, u, "GM") : null),
     h("div", { className: "thp" },
       h("div", { className: `hpval${u.hp * 2 <= u.maxHp ? " low" : ""}` }, `${u.hp}/${u.maxHp}`, u.tempHp ? h("span", { className: "ok small" }, ` +${u.tempHp}`) : null),
       hpBox(u)),
@@ -134,7 +141,7 @@ export function renderTrackerTab(): Child[] {
   const dead = v.outside.filter((u) => u.dead);
   const others = v.outside.filter((u) => !u.dead);
   if (others.length || dead.length) {
-    out.push(h("details", { className: "panel" }, h("summary", {}, `Not in initiative (${others.length + dead.length})`),
+    out.push(h("details", { className: "panel", open: outsideOpen, ontoggle: (e: Event) => { outsideOpen = (e.target as HTMLDetailsElement).open; } }, h("summary", {}, `Not in initiative (${others.length + dead.length})`),
       ...others.map((u) => h("div", { className: "row between small", style: "margin-top:6px" },
         h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name),
         h("div", { className: "row" },

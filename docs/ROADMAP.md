@@ -20,7 +20,16 @@ Status (2026-11-08):
 - **F9 core books:** done early. 5.5E rooms only offer the 2024 PHB/MM/DMG in creature search, 5E rooms the 2014
   ones; a prepared encounter using the other edition's core books shows a warning. Live: "wolf" in a 5.5E room lists
   only the Monster Manual (2025) wolf.
-- **Next:** phase 4 (conditions + movement).
+- **Phase 4:** done. Conditions (F11): standard, Exhaustion levels with the 2024 d20/speed penalties, custom
+  effects, notes, durations (N rounds / until the start of X's turn / until the end of X's next turn) that expire
+  on turn changes with a notice, concentration checks with the system's DC (card prompt, players' saves through the
+  GM), condition badges on tokens, a Conditions action on the GM's right-click menu for several units at once.
+  Movement (F14): the active unit's path since its turn started, measured with the grid's own rules, "moved / limit"
+  label on the token (red over the limit), Dash, Rewind to the last 5 ft point (players' requests go through the
+  primary GM client, which owns the record). Live: Poisoned until the end of Wolf 2's next turn ended at the end of
+  its turn; 8 damage while concentrating prompted DC 10; 55/40 ft turned red, Dash made it 55/80, Rewind went
+  60 → 55 → 50 from the player's popover. 144 tests.
+- **Next:** phase 5 (players & party: player tracker, party view, player D&D Beyond sync).
 
 ## Goal
 

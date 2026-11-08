@@ -14,6 +14,7 @@ import { obrGateway } from "./obrGateway";
 import { sendRequest } from "./requests";
 import { roomSettings } from "./roomSettings";
 import { followToggle } from "./follow";
+import { movementInfo } from "./movementView";
 import type { SceneItemLite } from "../core/importer";
 
 let items: Item[] = [];
@@ -43,6 +44,7 @@ function turnPanel(meId: string): Child {
       myTurn && roomSettings().playerEdits
         ? h("button", { disabled: sent === key, onclick: async () => { sent = key; await sendRequest({ type: "end-turn", unitId: active!.id, round: v.encounter.round }); renderAgain(); } }, sent === key ? "Sent…" : "End my turn")
         : null),
+    myTurn ? movementInfo(sceneMeta, active!, "PLAYER") : null,
     nameOf(v.next) ? h("div", { className: "small muted" }, `Next: ${nameOf(v.next)}`) : null,
     followToggle());
 }

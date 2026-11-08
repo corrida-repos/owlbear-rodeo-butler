@@ -69,6 +69,8 @@ export interface ConditionInstance {
   level?: number;
   /** Optional expiry: after N rounds, or at the start/end of a given unit's turn. */
   until?: { rounds?: number; turnOf?: string; at?: "start" | "end" };
+  /** When it was applied (round and active unit), for expiry. */
+  from?: { round: number; turnId: string };
 }
 
 export interface UnitState {
@@ -86,6 +88,8 @@ export interface UnitState {
   /** Owlbear player id of the player who controls this unit. */
   controlledBy?: string;
   conditions: ConditionInstance[];
+  /** A pending Constitution save to keep Concentration after taking damage (cleared when rolled or dismissed). */
+  concentrationCheck?: { dc: number; damage: number };
   /** Death saving throws while a party member is at 0 HP (cleared when healed or marked dead). */
   deathSaves?: { successes: number; failures: number };
   /** Portrait shown on the card/tracker; defaults to the token image. */

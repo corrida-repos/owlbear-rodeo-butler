@@ -5,7 +5,10 @@
 import "../extension/devlog";
 import OBR from "@owlbear-rodeo/sdk";
 import type { HpChange } from "../core/hp";
-import { changeHp, trackerUnits, type HpReport, type TrackerUnit } from "../core/tracker";
+import { addConditionTo, changeHp, trackerUnits, type HpReport, type TrackerUnit } from "../core/tracker";
+import { turnOrder } from "../core/encounter";
+import { conditionEditor } from "../extension/conditionEditor";
+import { roomSystem } from "../extension/roomSettings";
 import { h, type Child } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
 import { initRoomSettings, roomSettings } from "../extension/roomSettings";
@@ -16,10 +19,14 @@ let units: TrackerUnit[] = [];
 let results: HpReport[] | null = null;
 let error = "";
 let half = false;
+let allUnits: TrackerUnit[] = [];
+let condNote = "";
+const mode = new URLSearchParams(location.search).get("focus") === "conditions" ? "conditions" : "hp";
 
 const EVENTS: Record<string, string> = {
   "creature-at-zero": "at 0 HP", "dropped-to-zero": "down: death saves", "death-save-failure": "death save failure",
   "three-failures": "three failures", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
+  "concentration-check": "Concentration check (on its card)", "concentration-lost": "Concentration lost",
 };
 
 async function apply(kind: HpChange["kind"]) {
@@ -27,7 +34,7 @@ async function apply(kind: HpChange["kind"]) {
   if (!(amount >= 0)) { error = "Enter a number."; render(); return; }
   try {
     const n = kind === "damage" && half ? Math.floor(amount / 2) : amount;
-    results = await changeHp(obrGateway, ids, { kind, amount: n }, { autoDeadAtZero: roomSettings().autoDeadAtZero });
+    results = await changeHp(obrGateway, ids, { kind, amount: n }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
     error = "";
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
@@ -49,6 +56,15 @@ function render() {
         h("button", { className: "grow secondary", onclick: () => void apply("temp") }, "Temp HP")),
       h("div", { className: "small muted" }, "Enter = damage · Shift+Enter = heal")),
   ];
+  const order = turnOrder(allUnits);
+  const condPanel = h("div", { className: "panel" }, h("strong", { className: "small" }, `Add a condition to ${units.length === 1 ? units[0]!.name : `all ${units.length}`}`),
+    conditionEditor(roomSystem(), [...order, ...allUnits.filter((u) => !order.includes(u))].map((u) => ({ id: u.id, name: u.name })), async (c) => {
+      try { await addConditionTo(obrGateway, ids, c.key, c); condNote = `Added ${c.label ?? roomSystem().conditions.find((d) => d.key === c.key)?.label ?? c.key}.`; error = ""; }
+      catch (e) { error = e instanceof Error ? e.message : String(e); }
+      render();
+    }),
+    condNote ? h("div", { className: "small ok" }, condNote) : null);
+  if (mode === "conditions") nodes.unshift(condPanel); else nodes.push(condPanel);
   if (error) nodes.push(h("div", { className: "panel bad small" }, error));
   if (results) nodes.push(h("div", { className: "panel small" }, ...results.map((r) =>
     h("div", {}, h("strong", {}, r.name), r.markedDead ? ": at 0 HP, marked dead" : r.events.length ? `: ${r.events.map((e) => EVENTS[e] ?? e).join(", ")}` : ": done"))));
@@ -57,13 +73,13 @@ function render() {
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   const inp = document.getElementById("amt") as HTMLInputElement;
   inp.value = results ? "" : val;
-  if (focusWasOnInput || !results) inp.focus();
+  if (focusWasOnInput || (!results && mode === "hp")) inp.focus();
 }
 
 OBR.onReady(async () => {
   await initRoomSettings();
-  const read = async () => { units = trackerUnits(await obrGateway.getItems()).filter((u) => ids.includes(u.id)); };
+  const read = async () => { allUnits = trackerUnits(await obrGateway.getItems()); units = allUnits.filter((u) => ids.includes(u.id)); };
   await read();
   render();
-  OBR.scene.items.onChange(async () => { await read(); render(); });
+  OBR.scene.items.onChange(async () => { await read(); if (!document.activeElement?.closest(".condeditor")) render(); });
 });

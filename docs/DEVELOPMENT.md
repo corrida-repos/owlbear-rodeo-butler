@@ -150,6 +150,18 @@ broadcast message.
 - Context-menu items for the GM are filtered by `roles: ["GM"]`; their labels toggle with nested metadata filters
   (`["metadata", STATE_KEY, "inEncounter"]`).
 
+## Conditions and movement (phase 4)
+- [conditions.ts](../src/core/conditions.ts): add/remove, exhaustion, durations stored as `until` plus `from` (the
+  round and active unit when applied) and checked on each forward turn change by the primary GM client
+  (`expireConditions`); Previous turn doesn't expire or restore anything. Concentration checks are a
+  `state.concentrationCheck` set by [hp.ts](../src/core/hp.ts) and cleared by the save.
+- [movement.ts](../src/core/movement.ts) is the pure path math; [background/movement.ts](../src/background/movement.ts)
+  records the active unit's moves on the primary GM client (segment length = `grid.getDistance` × the grid scale), keeps
+  the record in memory, mirrors it to scene metadata (`dev.owlbear-butler/movement`) and runs tracking, Rewind and Dash
+  one at a time, so a Rewind's own token move is never counted as movement.
+- Badges and the movement label are local `Label` items ([overlays.ts](../src/background/overlays.ts)); labels are
+  drawn at a fixed screen size, so their font and padding are in screen pixels.
+
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
 

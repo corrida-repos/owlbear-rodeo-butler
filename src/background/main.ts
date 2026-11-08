@@ -13,13 +13,17 @@ import { controls } from "../core/card";
 import { BUTLER_NS } from "../core/constants";
 import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls";
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
-import { endTurnFor, markUnitsDead, recordDeathSave, rollInitiativeFor, setInEncounter, setParty, trackerView, type TrackerView } from "../core/tracker";
+import { endTurnFor, expireConditions, markUnitsDead, recordDeathSave, resolveConcentration, rollInitiativeFor, setInEncounter, setParty, trackerView, type TrackerView } from "../core/tracker";
+import { movedFeet, readMovement, speedLimit } from "../core/movement";
+import { speedPenalty, type TurnPoint } from "../core/conditions";
+import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
+import { resetOverlays, updateOverlays } from "./overlays";
 import { isPlayerRequest, REQUEST_CHANNEL } from "../core/turns";
 import { openCard } from "../extension/cardPopover";
 import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
 import { pushRollLog } from "../extension/rollLog";
-import { initRoomSettings, roomSettings } from "../extension/roomSettings";
+import { initRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -72,7 +76,16 @@ async function createMenus() {
     onClick: async (ctx, elementId) => {
       logClick("hp", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
-      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 300, height: 300, anchorElementId: elementId });
+      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 320, height: 460, anchorElementId: elementId });
+    },
+  });
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/conditions`,
+    icons: [{ icon, label: "Conditions", filter: { ...gm, every: [...UNIT_FILTER] } }],
+    onClick: async (ctx, elementId) => {
+      logClick("conditions", ctx.items);
+      await OBR.popover.close(HP_POPOVER).catch(() => {});
+      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?focus=conditions&ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 320, height: 460, anchorElementId: elementId });
     },
   });
   await OBR.contextMenu.create({
@@ -98,6 +111,7 @@ async function createMenus() {
 // ------------------------------------------------------------------ turns
 
 let lastTurnKey: string | null = null;
+let lastTurn: TurnPoint | null = null;
 let ringFor: string | null = null;
 let busy = false;
 let again = false;
@@ -133,27 +147,44 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; ringFor = null; continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetMovementMemory(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
       await updateRing(v, items, role);
+      const primary = await isPrimaryGm();
+      const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
+      // Movement: the primary GM client records; every client shows the active unit's label.
+      const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
+      const au = v.order.find((u) => u.id === mv?.unitId);
+      const movement = mv && au && active?.id === au.id
+        ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
+        : null;
+      await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;
       lastTurnKey = key;
+      const prevTurn = lastTurn;
+      lastTurn = active ? { round: active.round, turnId: active.id } : null;
       if (!key || firstLook) continue; // nothing on load: only actual turn changes notify
+      // Durations end on forward turn changes (not when the GM steps back with Previous).
+      if (primary && lastTurn && prevTurn) {
+        const pos = (id: string) => v.order.findIndex((u) => u.id === id);
+        const forward = lastTurn.round > prevTurn.round || (lastTurn.round === prevTurn.round && pos(lastTurn.turnId) > pos(prevTurn.turnId));
+        if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
+      }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
       const item = (id?: string) => items.find((i) => i.id === id);
-      const active = unit(v.active), next = unit(v.next);
-      if (active && item(active.id) && controls(me, item(active.id)!, active.state) && role === "PLAYER") {
-        await notify(`It's your turn: ${active.name}`, "SUCCESS");
+      const activeU = unit(v.active), next = unit(v.next);
+      if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
+        await notify(`It's your turn: ${activeU.name}`, "SUCCESS");
       } else if (next && item(next.id) && role === "PLAYER" && controls(me, item(next.id)!, next.state)) {
         await notify(`You're up next: ${next.name}`, "INFO");
       }
-      if (store.get("butler.followActive") === "1" && active && (role === "GM" || item(active.id)?.visible)) {
-        const b = await OBR.scene.items.getItemBounds([active.id]);
+      if (store.get("butler.followActive") === "1" && activeU && (role === "GM" || item(activeU.id)?.visible)) {
+        const b = await OBR.scene.items.getItemBounds([activeU.id]);
         await OBR.viewport.animateToBounds({ ...b, min: { x: b.min.x - b.width * 3, y: b.min.y - b.height * 3 }, max: { x: b.max.x + b.width * 3, y: b.max.y + b.height * 3 }, width: b.width * 7, height: b.height * 7 });
       }
     } while (again);
@@ -188,12 +219,20 @@ OBR.onReady(async () => {
   OBR.broadcast.onMessage(REQUEST_CHANNEL, async (event) => {
     const req = event.data;
     if (!isPlayerRequest(req) || !(await isPrimaryGm())) return;
-    // The request must come from the player who controls the unit.
+    // The request must come from the player who controls the unit, or from a GM.
     const [it] = await OBR.scene.items.getItems([req.unitId]);
-    const st = it?.metadata[STATE_KEY] as { controlledBy?: string } | undefined;
-    if (!it || !controls({ id: req.playerId, role: "PLAYER" }, it, st ?? {})) return;
+    if (!it) return;
+    const st = it.metadata[STATE_KEY] as { controlledBy?: string } | undefined;
+    const fromGm = req.playerId === OBR.player.id || (await OBR.party.getPlayers()).some((p) => p.id === req.playerId && p.role === "GM");
+    if (!fromGm && !controls({ id: req.playerId, role: "PLAYER" }, it, st ?? {})) return;
     if (req.type === "end-turn") {
       if (roomSettings().playerEdits && await endTurnFor(obrGateway, req.unitId, req.round)) await notify(`${req.playerName} ended their turn.`);
+    } else if (req.type === "concentration") {
+      const r = await resolveConcentration(obrGateway, req.unitId, req.total);
+      if (r === "lost") await notify(`${it.name} lost Concentration (${req.total}).`, "WARNING");
+    } else if (req.type === "rewind" || req.type === "dash") {
+      const meta = await OBR.scene.getMetadata();
+      if (req.type === "rewind") await rewindActive(meta, req.unitId); else await setDash(meta, req.unitId, req.on);
     } else if (req.type === "death-save") {
       const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
       if (outcome === "dead") await notify(`${it.name}: third death save failure. Mark as dead?`, "WARNING");

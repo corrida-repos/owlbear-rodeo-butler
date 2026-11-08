@@ -11,7 +11,8 @@ import {
 import { applyDeathSave, applyHp, markDead, revive, setStable, type DeathSaveOutcome, type HpChange, type HpEvent } from "./hp";
 import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
-import { isDead } from "./systems";
+import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
+import { isDead, type GameSystem } from "./systems";
 import { isUnitItem, readUnit } from "./unit";
 
 export interface TrackerUnit extends OrderUnit {
@@ -169,7 +170,7 @@ export interface HpReport { id: string; name: string; events: HpEvent[]; markedD
  * Applies one HP change to several units (e.g. one Fireball). Creatures reaching 0 HP are marked dead when the room
  * setting says so; everything else is reported so the UI can offer it.
  */
-export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange, opts: { autoDeadAtZero?: boolean } = {}): Promise<HpReport[]> {
+export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange, opts: { autoDeadAtZero?: boolean; system?: GameSystem } = {}): Promise<HpReport[]> {
   const { view } = await load(gw);
   const all = [...view.order, ...view.waiting, ...view.outside];
   const reports: HpReport[] = [];
@@ -178,7 +179,7 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
   for (const id of ids) {
     const u = all.find((x) => x.id === id);
     if (!u) continue;
-    const { patch, events } = applyHp(u.sheet, u.state, change);
+    const { patch, events } = applyHp(u.sheet, u.state, change, opts.system);
     let full: Partial<UnitState> = patch;
     const autoDead = opts.autoDeadAtZero && events.includes("creature-at-zero");
     if (autoDead) { full = { ...patch, ...markDead({ conditions: patch.conditions ?? u.state.conditions }) }; dying.push(id); }
@@ -234,3 +235,53 @@ export async function setMaxHp(gw: SceneGateway, id: string, max: number | null)
 }
 
 export const dexMod = (u: Pick<TrackerUnit, "dex">) => abilityMod(u.dex);
+
+// ------------------------------------------------------------------ conditions (F11)
+
+/** The current turn as a duration anchor (null outside combat: durations then don't apply). */
+async function currentTurn(gw: SceneGateway): Promise<TurnPoint | null> {
+  const enc = readEncounter(await gw.getSceneMetadata());
+  return enc.started && enc.turnId ? { round: enc.round, turnId: enc.turnId } : null;
+}
+
+/** Adds a condition to one or more units (e.g. Prone on five goblins). Durations count from the current turn. */
+export async function addConditionTo(gw: SceneGateway, ids: string[], key: string, opts: { label?: string; note?: string; level?: number; duration?: Duration } = {}) {
+  const now = await currentTurn(gw);
+  if (opts.duration && opts.duration.kind !== "none" && !now) throw new Error("Durations count turns: start combat first, or add it without a duration.");
+  const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
+  await gw.patchMetadata(units.map((u) => ({ id: u.id, key: STATE_KEY, patch: addCondition(u.state, key, { ...opts, now }) })));
+}
+
+export async function removeConditionFrom(gw: SceneGateway, id: string, conditionId: string) {
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u) throw new Error("That token is no longer in the scene.");
+  const patch: Partial<UnitState> = removeCondition(u.state, conditionId);
+  if (u.state.conditions.find((c) => c.id === conditionId)?.key === "concentration") patch.concentrationCheck = undefined;
+  await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+}
+
+/** Result of a Concentration save (the roll's total): below the DC ends Concentration. Clears the pending check. */
+export async function resolveConcentration(gw: SceneGateway, id: string, total: number | null): Promise<"kept" | "lost" | "dismissed"> {
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u?.state.concentrationCheck) return "dismissed";
+  if (total === null) { await gw.patchMetadata([{ id, key: STATE_KEY, patch: { concentrationCheck: undefined } }]); return "dismissed"; }
+  const lost = total < u.state.concentrationCheck.dc;
+  await gw.patchMetadata([{ id, key: STATE_KEY, patch: { concentrationCheck: undefined, ...(lost ? { conditions: u.state.conditions.filter((c) => c.key !== "concentration") } : {}) } }]);
+  return lost ? "lost" : "kept";
+}
+
+/** Removes conditions whose duration ended with this turn change; returns "Poisoned ended on Wolf 2"-style lines. */
+export async function expireConditions(gw: SceneGateway, prev: TurnPoint | null, next: TurnPoint, system: Pick<GameSystem, "conditions">): Promise<string[]> {
+  const { view } = await load(gw);
+  const all = [...view.order, ...view.waiting, ...view.outside];
+  const pos = (id: string) => view.order.findIndex((u) => u.id === id);
+  const expired = expiredOnTurnChange(all, prev, next, pos);
+  if (!expired.length) return [];
+  const byUnit = new Map<string, string[]>();
+  for (const e of expired) byUnit.set(e.unitId, [...(byUnit.get(e.unitId) ?? []), e.condition.id]);
+  await gw.patchMetadata([...byUnit].map(([id, condIds]) => {
+    const u = all.find((x) => x.id === id)!;
+    return { id, key: STATE_KEY, patch: { conditions: u.state.conditions.filter((c) => !condIds.includes(c.id)) } };
+  }));
+  return expired.map((e) => `${conditionText(e.condition, system)} ended on ${all.find((u) => u.id === e.unitId)?.name ?? "a unit"}.`);
+}
