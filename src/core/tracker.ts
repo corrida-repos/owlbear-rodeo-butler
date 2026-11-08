@@ -14,6 +14,7 @@ import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
 import { isDead, type GameSystem } from "./systems";
 import { isUnitItem, readUnit } from "./unit";
+import { unitName } from "./card";
 
 export interface TrackerUnit extends OrderUnit {
   sheet: UnitSheet;
@@ -35,7 +36,7 @@ export function trackerUnits(items: SceneItemLite[]): TrackerUnit[] {
     const { sheet, state } = u;
     return [{
       id: i.id,
-      name: i.label || i.name || sheet.name,
+      name: unitName(i, sheet, state),
       initiative: state.initiative,
       initMod: sheet.initiative.modifier,
       dex: sheet.abilities.dex,

@@ -142,9 +142,12 @@ describe("unit card rules", () => {
     expect(cardAccess(ana, { ...item, createdUserId: "ana" }, { controlledBy: "bob" })).toBe("limited");
   });
   it("aliases hide the real name from players who don't control the unit", () => {
-    expect(shownName("limited", ana, item, wolf, { alias: "Hooded figure" })).toBe("Hooded figure");
-    expect(shownName("full", gm, item, wolf, { alias: "Hooded figure" })).toBe("Wolf 2");
-    expect(shownName("full", ana, item, wolf, { alias: "Hooded figure" })).toBe("Wolf 2");
+    // While an alias is set, the token label shows it on the map and the item name keeps the real name.
+    const aliased = { ...item, name: "Wolf 2", label: "Hooded figure" };
+    expect(shownName("limited", ana, aliased, wolf, { alias: "Hooded figure" })).toBe("Hooded figure");
+    expect(shownName("full", gm, aliased, wolf, { alias: "Hooded figure" })).toBe("Wolf 2");
+    expect(shownName("full", ana, aliased, wolf, { alias: "Hooded figure" })).toBe("Wolf 2");
+    expect(shownName("full", gm, item, wolf, {})).toBe("Wolf 2");
     expect(shownName("limited", ana, { name: "Wolf" }, wolf, {})).toBe("Wolf");
   });
   it("portrait defaults to the token image", () => {

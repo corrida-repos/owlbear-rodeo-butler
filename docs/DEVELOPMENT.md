@@ -162,6 +162,18 @@ broadcast message.
 - Badges and the movement label are local `Label` items ([overlays.ts](../src/background/overlays.ts)); labels are
   drawn at a fixed screen size, so their font and padding are in screen pixels.
 
+## Players and party (phase 5)
+- Player edits (D5) are requests on `dev.owlbear-butler/request` ([turns.ts](../src/core/turns.ts)): the primary GM
+  client checks the sender controls the unit (or is a GM) and, for edits (`EDIT_REQUESTS`), that the room allows
+  player edits, then applies them with the same tracker functions the GM uses.
+- Player D&D Beyond self-sync: the bookmarklet exports one character when run on `/characters/<id>`; the player's
+  popover converts it ([party.ts](../src/core/party.ts) `partyFromDdbExport`) and sends a `sheet-sync` request.
+  Converted sheets are 15–19 kB, so requests over 14 kB go in chunks on `dev.owlbear-butler/request-chunk`
+  ([chunks.ts](../src/core/chunks.ts)). `applySelfSync` refuses a different D&D Beyond id (or, before the first sync,
+  a name that doesn't match the token) and keeps the unit's live state.
+- Aliases: while one is set, the token label shows the alias (players see the map) and the item name keeps the real
+  name; `unitName(item, sheet, state)` reads it accordingly.
+
 ## Combat tab
 [src/core/combat.ts](../src/core/combat.ts): units are CHARACTER-layer images with a Butler sheet. Party = `state.party`. Difficulty uses the 2024 DMG per-character XP budgets (Low/Moderate/High) and XP by CR, plus an invented Extreme tier (1.5× High); the tier is the highest budget reached. Per-token settings (`exclude`, `level`) are stored in `dev.owlbear-butler/combat`. Initiative re-rolls use the recorded `initiativeSetup` (written by quick add, the importer and party sync), else the last roll's modifier/mode, else Forge Dexterity.
 

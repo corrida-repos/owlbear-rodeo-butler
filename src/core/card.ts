@@ -29,14 +29,17 @@ export function cardAccess(viewer: CardViewer, item: Pick<CardItem, "visible" | 
   return item.visible ? "limited" : "none";
 }
 
-/** The unit's own name: the token label, else the item name, else the sheet name. */
-export const unitName = (item: Pick<CardItem, "label" | "name">, sheet?: Pick<UnitSheet, "name">) =>
-  item.label?.trim() || item.name?.trim() || sheet?.name || "Unit";
+/**
+ * The unit's real name: the token label, else the item name, else the sheet name. While an alias is set, the token's
+ * label shows the alias on the map (players see it), so the real name is the item name.
+ */
+export const unitName = (item: Pick<CardItem, "label" | "name">, sheet?: Pick<UnitSheet, "name">, state?: Pick<UnitState, "alias">) =>
+  (state?.alias?.trim() ? item.name?.trim() : undefined) || item.label?.trim() || item.name?.trim() || sheet?.name || "Unit";
 
 /** The name a viewer sees: players who don't control the unit see the GM's alias while one is set (F7). */
 export function shownName(access: CardAccess, viewer: CardViewer, item: Pick<CardItem, "label" | "name">, sheet: Pick<UnitSheet, "name"> | undefined, state: Pick<UnitState, "alias">): string {
   if (viewer.role !== "GM" && access !== "full" && state.alias?.trim()) return state.alias.trim();
-  return unitName(item, sheet);
+  return unitName(item, sheet, state);
 }
 
 /** Portrait: the unit's own portrait URL if set, else the token image. */

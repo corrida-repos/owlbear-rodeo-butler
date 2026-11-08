@@ -29,7 +29,17 @@ Status (2026-11-08):
   primary GM client, which owns the record). Live: Poisoned until the end of Wolf 2's next turn ended at the end of
   its turn; 8 damage while concentrating prompted DC 10; 55/40 ft turned red, Dash made it 55/80, Rewind went
   60 → 55 → 50 from the player's popover. 144 tests.
-- **Next:** phase 5 (players & party: player tracker, party view, player D&D Beyond sync).
+- **Phase 5:** done (one live check pending). Player tracker (F12): round, turn, the order with names or aliases,
+  images and conditions, hidden tokens left out, HP and initiative boxes on their own units, limited cards for the
+  rest. Player edits (D5) to HP, conditions, initiative and end of turn go to the primary GM client and are applied
+  only while the room setting allows them (Combat tab). Party view (F13) at the top of Add Party: members, player,
+  level, HP, add/remove. Player D&D Beyond self-sync (F15): the bookmark also exports a single character from its
+  page; the sheet travels in chunks (synced sheets are 15–19 kB, over the 16 kB broadcast limit); the GM's client
+  checks the D&D Beyond id or name before applying it. Aliases now also replace the token's label on the map.
+  Live: player HP edit applied by the GM, player edits off hides the boxes, limited card, alias shown to the player
+  and on the token, party view. **Pending live:** a real D&D Beyond self-sync (needs a player logged in to D&D Beyond
+  with the bookmark installed). 153 tests.
+- **Next:** phase 6 (collection, 2014 rules, search filters, release).
 
 ## Goal
 

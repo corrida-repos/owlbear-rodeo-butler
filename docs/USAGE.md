@@ -65,7 +65,7 @@ The combat core, conditions and the movement tracker are implemented in `main` (
 4. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
 5. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
 
-The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits. The full player-facing initiative list is still planned.
+The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits.
 
 ## Conditions, concentration and movement
 
@@ -79,7 +79,15 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 
 ## Give players their cards
 
-On a unit card, the GM opens **Edit unit** and sets **Controlled by**. That player then finds the unit under **My units**, opens its card and rolls from it. Players do not install another extension.
+On a unit card, the GM opens **Edit unit** and sets **Controlled by** (or picks the player in the **Party** list at the top of **Add Party**). That player then finds the unit under **My units**, opens its card and rolls from it. Players do not install another extension.
+
+What a player sees under the Encounter Butler button:
+
+- **Whose turn it is** and who's next, with **End my turn** on their own turn and the movement bar.
+- **Initiative:** every unit they can see, by name (or the alias you gave it), picture and conditions. Hidden tokens never appear. Their own units also show HP, an HP box (`-7`, `+5`, `12`, `t5`) and their initiative box. Clicking another unit's name shows only its name, picture and conditions.
+- **My units:** each with **Card** (roll, conditions, death saves, Concentration saves) and, for a character, **⟳ D&D Beyond**: it opens their character on D&D Beyond; they click the same *Copy party for Encounter Butler* bookmark there (set it up once from the panel), and your Encounter Butler updates that unit's stat block. HP is kept unless they choose to take it from D&D Beyond.
+
+Player changes go through your Encounter Butler, so it must be open in the room. To stop players changing their units, untick **Players may change their own units…** in **Combat → Room settings**. Rolls, the movement tracker and cards still work.
 
 Private player rolls are visible to that player **and the GM**. Private GM rolls stay with the GM. Card visibility is a presentation feature, not a security boundary: technically savvy players can read token metadata.
 

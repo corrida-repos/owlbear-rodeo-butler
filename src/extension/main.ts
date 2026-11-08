@@ -11,6 +11,7 @@ import { renderPackageTab, resetPackageTab } from "./packageTab";
 import { renderPartyTab, resetPartyTab } from "./partyTab";
 import { initPlayerItems, renderPlayerView } from "./playerView";
 import { createRoster } from "./roster";
+import { refreshPartyPanel, resetPartyPanel } from "./partyPanel";
 import { refreshTracker, renderTrackerTab, resetTrackerTab } from "./trackerTab";
 import { initRoomSettings, onRoomSettings } from "./roomSettings";
 
@@ -21,6 +22,8 @@ let tab: Tab = savedTab === "party" || savedTab === "combat" || savedTab === "cr
 let sceneReady = true;
 let packageOpen = false;
 let role: "GM" | "PLAYER" | null = null;
+let playerPending = false;
+document.addEventListener("focusout", () => { if (playerPending) { playerPending = false; setTimeout(render, 0); } });
 
 const creatures = createRoster("creature");
 const app = document.getElementById("app")!;
@@ -38,9 +41,11 @@ function render() {
   const scrollY = app.parentElement ? window.scrollY : 0;
   const focused = document.activeElement as HTMLElement | null;
   if (role === "PLAYER") {
+    // Don't wipe a box the player is typing in (HP, initiative); render when it loses focus.
+    if (focused && focused.closest("#app") && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName) && (focused as HTMLInputElement).type !== "checkbox") { playerPending = true; return; }
     const nodes: Child[] = [];
     if (!sceneReady) nodes.push(h("div", { className: "panel warn" }, "Waiting for the GM to open a scene."));
-    else nodes.push(...renderPlayerView(OBR.player.id));
+    else nodes.push(...renderPlayerView());
     app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
     window.scrollTo(0, scrollY);
     return;
@@ -72,7 +77,7 @@ if (OBR.isAvailable) {
     // Subscribe first, so a scene that becomes ready while we're still starting up isn't missed.
     OBR.scene.onReadyChange((r) => {
       sceneReady = r;
-      if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); }
+      if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); }
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
       else if (tab === "tracker") refreshTracker(true);
       else if (tab === "combat") refreshCombat(true);
@@ -82,7 +87,7 @@ if (OBR.isAvailable) {
     if (role === "PLAYER" && sceneReady) await initPlayerItems(() => render());
     render();
     // Combat tab follows the scene live (tokens added, removed, initiative changed…)
-    OBR.scene.items.onChange(() => { if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); });
+    OBR.scene.items.onChange(() => { if (role !== "GM") return; if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); if (tab === "party") void refreshPartyPanel(); });
     OBR.scene.onMetadataChange(() => { if (tab === "tracker") refreshTracker(); });
   });
 } else {

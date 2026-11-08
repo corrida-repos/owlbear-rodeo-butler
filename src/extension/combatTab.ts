@@ -133,7 +133,12 @@ function renderSettings(): Child {
     h("div", { className: "small muted", style: "margin-top:4px" },
       sys.rules === "2024"
         ? "2024 books come first in creature search; Bloodied is shown automatically."
-        : "2014 books come first in creature search. The difficulty above still uses the 2024 budgets for now."));
+        : "2014 books come first in creature search. The difficulty above still uses the 2024 budgets for now."),
+    h("h2", { style: "margin-top:12px" }, "Room settings"),
+    h("label", { className: "small" }, h("input", { type: "checkbox", checked: roomSettings().playerEdits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ playerEdits: (e.target as HTMLInputElement).checked }))() }),
+      "Players may change their own units' HP, conditions and initiative, end their own turn and re-sync from D&D Beyond"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoDeadAtZero, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoDeadAtZero: (e.target as HTMLInputElement).checked }))() }),
+      "Mark creatures dead automatically at 0 HP (party members still make death saves)"));
 }
 
 export function renderCombatTab(): Child[] {

@@ -138,6 +138,46 @@ export interface PartySyncReport {
   error?: string;
 }
 
+/**
+ * A party member's state after a sync: HP from D&D Beyond or kept from the token (capped at the new max), everything
+ * else (initiative, conditions, controller, portrait…) kept. Shared by the GM's party sync and a player's self-sync.
+ */
+export function syncedState(m: PartyMember, prev: UnitState | undefined, hp: PartySyncOptions["hp"]): UnitState {
+  const keepHp = hp === "keep" && prev !== undefined;
+  const state: UnitState = {
+    ...(prev ?? unitState(m.sheet, m.hp, null)),
+    hp: keepHp ? Math.min(prev.hp, m.hp.max) : m.hp.current,
+    tempHp: keepHp ? prev.tempHp : m.hp.temp,
+    party: true,
+    inEncounter: prev?.inEncounter ?? true,
+  };
+  delete state.maxHpOverride; // the sheet's max HP is the character's real max
+  return state;
+}
+
+/**
+ * A player's own re-sync from D&D Beyond (F15), applied by the GM's client: only the sheet (and HP, by `hp`) of the
+ * one unit changes. The character must be the unit's (same D&D Beyond id once synced, else the same name).
+ */
+export async function applySelfSync(gw: SceneGateway, unitId: string, m: PartyMember, hp: PartySyncOptions["hp"], now: () => Date = () => new Date()): Promise<string> {
+  if (!m || typeof m.ddbId !== "number" || typeof m.name !== "string" || !m.sheet || !m.hp) throw new Error("That isn't a D&D Beyond character.");
+  const item = (await gw.getItems()).find((i) => i.id === unitId);
+  if (!item) throw new Error("That token is no longer in the scene.");
+  const prevRecord = item.metadata[BUTLER_ITEM_KEY] as PartyRecord | undefined;
+  if (prevRecord?.ddbId !== undefined) {
+    if (prevRecord.ddbId !== m.ddbId) throw new Error(`${m.name} on D&D Beyond isn't the character on this token.`);
+  } else {
+    const token = normName(item.label || item.name);
+    const full = normName(m.name), first = full.split(" ")[0]!;
+    if (token !== full && token !== first && !token.startsWith(first)) throw new Error(`${m.name} on D&D Beyond doesn't match the token "${item.label || item.name}".`);
+  }
+  const state = syncedState(m, readUnit(item.metadata)?.state, hp);
+  const record: PartyRecord = { ...(prevRecord ?? {}), role: "party", ddbId: m.ddbId, partyId: prevRecord?.partyId ?? "self-sync", syncedAt: now().toISOString(),
+    initiativeSetup: { modifier: m.initiative.modifier, advantage: m.initiative.advantage, disadvantage: false } };
+  await gw.updateMetadata([{ id: unitId, metadata: { ...unitMetadata(m.sheet, state), [BUTLER_ITEM_KEY]: record } }]);
+  return m.name;
+}
+
 export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: SceneGateway): Promise<PartySyncReport> {
   const newId = opts.newId ?? (() => globalThis.crypto.randomUUID());
   const now = opts.now ?? (() => new Date());
@@ -169,16 +209,7 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
       const record: PartyRecord = { role: "party", ddbId: m.ddbId, partyId: pkg.id, syncedAt: now().toISOString(),
         initiativeSetup: { modifier: m.initiative.modifier, advantage: m.initiative.advantage, disadvantage: false } };
       if (r.item) {
-        const prev = readUnit(r.item.metadata)?.state;
-        const keepHp = opts.hp === "keep" && prev !== undefined;
-        const state: UnitState = {
-          ...(prev ?? unitState(m.sheet, m.hp, null)),
-          hp: keepHp ? Math.min(prev.hp, m.hp.max) : m.hp.current,
-          tempHp: keepHp ? prev.tempHp : m.hp.temp,
-          party: true,
-          inEncounter: prev?.inEncounter ?? true,
-        };
-        delete state.maxHpOverride; // the sheet's max HP is the character's real max
+        const state = syncedState(m, readUnit(r.item.metadata)?.state, opts.hp);
         const unset = state.initiative === null || state.initiative === 0;
         if (opts.initiative === "all" || (opts.initiative === "unset" && unset)) {
           const rolled = roll(m, record);

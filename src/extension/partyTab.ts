@@ -5,7 +5,6 @@
  *  - Import published / homebrewed party members (shared roster flow, flagged as party members).
  */
 import OBR from "@owlbear-rodeo/sdk";
-import bookmarkletSource from "../../scripts/ddb-export.browser.js?raw";
 import { describeInitiative, fmtMod } from "../core/dice";
 import { circularTokenUrl } from "../core/images";
 import { rollbackImport, type ResolvedImage } from "../core/importer";
@@ -13,11 +12,9 @@ import { DDB_EXPORT_SCHEMA, PARTY_SCHEMA, partyFromDdbExport, previewParty, rest
 import { action, check, h, measure, rerender, store, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { createRoster } from "./roster";
+import { renderPartyPanel } from "./partyPanel";
 
-const DDB_ORIGIN = "https://www.dndbeyond.com";
-const MSG_TYPE = "encounter-butler/ddb-export";
-/** The bookmark posts the party back only to this extension's own origin (when this page opened the D&D Beyond tab). */
-const BOOKMARKLET = `javascript:${encodeURIComponent(`(async()=>{${bookmarkletSource}\nawait ddbExport(undefined,{targetOrigin:${JSON.stringify(location.origin)}});})()`)}`;
+import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
 
 const roster = createRoster("party");
 
@@ -84,10 +81,7 @@ async function receive(bundle: unknown) {
   else await OBR.notification.show("Party received from D&D Beyond — check the preview, then press Sync party.", "WARNING");
 }
 
-window.addEventListener("message", (e) => {
-  if (e.origin !== DDB_ORIGIN || e.data?.type !== MSG_TYPE) return;
-  void action(() => receive(e.data.bundle))();
-});
+onDdbExport((bundle) => void action(() => receive(bundle))());
 
 function openDdb() {
   const c = campaign();
@@ -144,7 +138,7 @@ function renderSync(): Child {
     const f = fileInput.files?.[0];
     if (f) { waiting = false; const p = await loadParty(await f.text()); void loadPortraits(p); }
   }) }) as HTMLInputElement;
-  const bookmark = h("a", { className: "bookmarklet", href: BOOKMARKLET, onclick: (e: Event) => e.preventDefault(), title: "Drag me to the bookmarks bar" }, "⭳ Copy party for Encounter Butler");
+  const bookmark = bookmarkButton();
   return h("div", { className: "panel" },
     h("h2", {}, "Sync from D&D Beyond"),
     h("button", { className: "wide big", disabled: ui.busy, onclick: openDdb }, "⟳ Sync from D&D Beyond"),
@@ -225,7 +219,7 @@ function renderReport(r: PartySyncReport): Child {
 }
 
 export function renderPartyTab(): Child[] {
-  const nodes: Child[] = [renderSync()];
+  const nodes: Child[] = [renderPartyPanel(), renderSync()];
   if (report) nodes.push(renderReport(report));
   if (party && preview) nodes.push(...renderPreview(party, preview));
   nodes.push(...roster.render());

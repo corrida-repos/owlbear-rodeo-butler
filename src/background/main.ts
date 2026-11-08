@@ -13,12 +13,17 @@ import { controls } from "../core/card";
 import { BUTLER_NS } from "../core/constants";
 import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls";
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
-import { endTurnFor, expireConditions, markUnitsDead, recordDeathSave, resolveConcentration, rollInitiativeFor, setInEncounter, setParty, trackerView, type TrackerView } from "../core/tracker";
+import {
+  addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
+  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, type TrackerView,
+} from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { resetOverlays, updateOverlays } from "./overlays";
-import { isPlayerRequest, REQUEST_CHANNEL } from "../core/turns";
+import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
+import { Assembler, isChunk } from "../core/chunks";
+import { applySelfSync } from "../core/party";
 import { openCard } from "../extension/cardPopover";
 import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
@@ -195,6 +200,58 @@ async function onSceneChange() {
   }
 }
 
+/** Applies a request from a player's (or GM's) client; only the primary GM client acts on it. */
+async function handleRequest(req: unknown) {
+  try {
+    if (!isPlayerRequest(req) || !(await isPrimaryGm())) return;
+    // The request must come from the player who controls the unit, or from a GM.
+    const [it] = await OBR.scene.items.getItems([req.unitId]);
+    if (!it) return;
+    const st = it.metadata[STATE_KEY] as { controlledBy?: string } | undefined;
+    const fromGm = req.playerId === OBR.player.id || (await OBR.party.getPlayers()).some((p) => p.id === req.playerId && p.role === "GM");
+    if (!fromGm && !controls({ id: req.playerId, role: "PLAYER" }, it, st ?? {})) return;
+    if (!fromGm && EDIT_REQUESTS.includes(req.type) && !roomSettings().playerEdits) {
+      await notify(`${req.playerName} tried to edit ${it.name}, but player edits are off (Combat tab).`, "WARNING");
+      return;
+    }
+    const name = (it as { text?: { plainText?: string } }).text?.plainText || it.name;
+    switch (req.type) {
+      case "end-turn":
+        if (await endTurnFor(obrGateway, req.unitId, req.round)) await notify(`${req.playerName} ended their turn.`);
+        break;
+      case "concentration": {
+        const r = await resolveConcentration(obrGateway, req.unitId, req.total);
+        if (r === "lost") await notify(`${name} lost Concentration (${req.total}).`, "WARNING");
+        break;
+      }
+      case "rewind": await rewindActive(await OBR.scene.getMetadata(), req.unitId); break;
+      case "dash": await setDash(await OBR.scene.getMetadata(), req.unitId, req.on); break;
+      case "death-save": {
+        const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
+        if (outcome === "dead") await notify(`${name}: third death save failure. Mark as dead?`, "WARNING");
+        if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
+        break;
+      }
+      case "hp": {
+        const [r] = await changeHp(obrGateway, [req.unitId], req.change, { system: roomSystem() });
+        if (r?.events.includes("dropped-to-zero")) await notify(`${name} dropped to 0 HP.`, "WARNING");
+        break;
+      }
+      case "initiative": await setInitiative(obrGateway, req.unitId, req.value); break;
+      case "condition-add": await addConditionTo(obrGateway, [req.unitId], req.key, req); break;
+      case "condition-remove": await removeConditionFrom(obrGateway, req.unitId, req.conditionId); break;
+      case "sheet-sync": {
+        const who = await applySelfSync(obrGateway, req.unitId, req.member, req.hp);
+        await notify(`${req.playerName} synced ${who} from D&D Beyond.`, "SUCCESS");
+        break;
+      }
+    }
+  } catch (e) {
+    console.error("[Butler] request failed", e);
+    await notify(`A player's request failed: ${e instanceof Error ? e.message : String(e)}`, "ERROR");
+  }
+}
+
 /** Only one GM client applies a player's request (the one with the smallest connection id), so two GM tabs don't both advance. */
 async function isPrimaryGm(): Promise<boolean> {
   if ((await OBR.player.getRole()) !== "GM") return false;
@@ -216,28 +273,12 @@ OBR.onReady(async () => {
     await notify(rollText(msg), msg.visibility === "private" ? "WARNING" : msg.natural === 20 ? "SUCCESS" : "INFO");
   });
 
-  OBR.broadcast.onMessage(REQUEST_CHANNEL, async (event) => {
-    const req = event.data;
-    if (!isPlayerRequest(req) || !(await isPrimaryGm())) return;
-    // The request must come from the player who controls the unit, or from a GM.
-    const [it] = await OBR.scene.items.getItems([req.unitId]);
-    if (!it) return;
-    const st = it.metadata[STATE_KEY] as { controlledBy?: string } | undefined;
-    const fromGm = req.playerId === OBR.player.id || (await OBR.party.getPlayers()).some((p) => p.id === req.playerId && p.role === "GM");
-    if (!fromGm && !controls({ id: req.playerId, role: "PLAYER" }, it, st ?? {})) return;
-    if (req.type === "end-turn") {
-      if (roomSettings().playerEdits && await endTurnFor(obrGateway, req.unitId, req.round)) await notify(`${req.playerName} ended their turn.`);
-    } else if (req.type === "concentration") {
-      const r = await resolveConcentration(obrGateway, req.unitId, req.total);
-      if (r === "lost") await notify(`${it.name} lost Concentration (${req.total}).`, "WARNING");
-    } else if (req.type === "rewind" || req.type === "dash") {
-      const meta = await OBR.scene.getMetadata();
-      if (req.type === "rewind") await rewindActive(meta, req.unitId); else await setDash(meta, req.unitId, req.on);
-    } else if (req.type === "death-save") {
-      const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
-      if (outcome === "dead") await notify(`${it.name}: third death save failure. Mark as dead?`, "WARNING");
-      if (outcome === "stable") await notify(`${it.name} is Stable.`, "SUCCESS");
-    }
+  OBR.broadcast.onMessage(REQUEST_CHANNEL, (event) => void handleRequest(event.data));
+  const assembler = new Assembler();
+  OBR.broadcast.onMessage(REQUEST_CHUNK_CHANNEL, (event) => {
+    if (!isChunk(event.data)) return;
+    const whole = assembler.add(event.data);
+    if (whole !== undefined) void handleRequest(whole);
   });
 
   void onSceneChange();

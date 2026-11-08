@@ -9,7 +9,7 @@
 import "../extension/devlog";
 import OBR, { type Item, type Player } from "@owlbear-rodeo/sdk";
 import {
-  abilityRows, cardAccess, challengeLine, combineModes, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
+  abilityRows, cardAccess, challengeLine, combineModes, controls, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
   speedLine, typeLine, unitName, type CardAccess, type StandardRoll,
 } from "../core/card";
 import { damageAfter, parseChips, rollLabel, type RollSegment, type Segment } from "../core/chips";
@@ -62,7 +62,7 @@ async function roll(formula: string, label: string, kind: RollMessage["kind"], e
   const clicked: RollMode = ev?.shiftKey ? "advantage" : ev && (ev.ctrlKey || ev.metaKey) ? "disadvantage" : nextMode;
   const mode = combineModes(clicked, opts.builtIn);
   // Public rolls name the unit the way players know it (alias), private ones by its real name.
-  const name = visibility === "public" && u.state.alias?.trim() ? u.state.alias.trim() : unitName(itemInfo(item), u.sheet);
+  const name = visibility === "public" && u.state.alias?.trim() ? u.state.alias.trim() : unitName(itemInfo(item), u.sheet, u.state);
   try {
     const msg = makeRoll(formula, label, { id: me.id, name: me.name, role }, visibility,
       { rng: cryptoRng, unit: { id: item.id, name }, kind, mode, crit: opts.crit });
@@ -125,20 +125,24 @@ async function refreshSceneUnits() {
 }
 
 let addOpen = false;
+/** The GM edits directly; the unit's player (when the GM allows player edits) sends the change to the GM's client. */
+const canEdit = () => role === "GM" || (roomSettings().playerEdits && !!item && controls({ id: me.id, role }, itemInfo(item), readUnit(item.metadata)?.state ?? {}));
+
 function conditionsPanel(state: UnitState): Child {
   const sys = roomSystem();
   const own = state.conditions.filter((c) => !sys.conditions.find((d) => d.key === c.key)?.automatic);
-  if (role !== "GM" && !own.length) return null;
+  const edit = canEdit();
+  if (!edit && !own.length) return null;
   const nameOf = (id: string) => sceneUnits.find((u) => u.id === id)?.name ?? "another unit";
   return h("div", { className: "panel stack tight" },
     h("strong", { className: "small" }, "Conditions"),
     own.length ? h("div", { className: "stack tight" }, ...own.map((c) => h("div", { className: "row between small" },
       h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null),
-      role === "GM" ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void removeConditionFrom(obrGateway, itemId, c.id).catch(showErr) }, "✕") : null)))
+      edit ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void (role === "GM" ? removeConditionFrom(obrGateway, itemId, c.id) : sendRequest({ type: "condition-remove", unitId: itemId, conditionId: c.id })).catch(showErr) }, "✕") : null)))
       : h("div", { className: "small muted" }, "None."),
-    role === "GM" ? h("details", { open: addOpen, ontoggle: (e: Event) => { addOpen = (e.target as HTMLDetailsElement).open; } },
+    edit ? h("details", { open: addOpen, ontoggle: (e: Event) => { addOpen = (e.target as HTMLDetailsElement).open; } },
       h("summary", { className: "small" }, "Add condition"),
-      conditionEditor(sys, sceneUnits, (c) => void addConditionTo(obrGateway, [itemId], c.key, c).catch(showErr))) : null);
+      conditionEditor(sys, sceneUnits, (c) => void (role === "GM" ? addConditionTo(obrGateway, [itemId], c.key, c) : sendRequest({ type: "condition-add", unitId: itemId, ...c })).catch(showErr))) : null);
 }
 
 function concentrationPanel(sheet: UnitSheet, state: UnitState): Child {
@@ -164,7 +168,7 @@ function concentrationPanel(sheet: UnitSheet, state: UnitState): Child {
 const showErr = (e: unknown) => { error = e instanceof Error ? e.message : String(e); render(); };
 
 function gmHpBox(): Child {
-  if (role !== "GM") return null;
+  if (!canEdit()) return null;
   const inp = h("input", { type: "text", className: "hpbox", placeholder: "−7 / +5 / t5", title: "-7 damage · +5 heal · 12 set · t5 temp HP; Enter applies" }) as HTMLInputElement;
   inp.onkeydown = async (e: KeyboardEvent) => {
     if (e.key !== "Enter") return;
@@ -172,7 +176,10 @@ function gmHpBox(): Child {
     if (!change) { error = `"${inp.value}" isn't an HP change: use -7, +5, 12 or t5.`; render(); return; }
     inp.value = "";
     inp.blur();
-    try { await changeHp(obrGateway, [itemId], change, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() }); } catch (err) { error = String(err); render(); }
+    try {
+      if (role === "GM") await changeHp(obrGateway, [itemId], change, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
+      else await sendRequest({ type: "hp", unitId: itemId, change });
+    } catch (err) { error = String(err); render(); }
   };
   return inp;
 }
@@ -322,7 +329,7 @@ function rollLog(): Child {
 
 function editPanel(info: ItemInfo, state: UnitState): Child {
   if (role !== "GM") return null;
-  const name = h("input", { type: "text", value: info.label ?? info.name }) as HTMLInputElement;
+  const name = h("input", { type: "text", value: unitName(info, undefined, state) }) as HTMLInputElement;
   const alias = h("input", { type: "text", value: state.alias ?? "", placeholder: "e.g. Hooded figure (empty: real name)" }) as HTMLInputElement;
   const portrait = h("input", { type: "text", value: state.portraitUrl ?? "", placeholder: "https://… (empty: token image)" }) as HTMLInputElement;
   // One entry per player: the same account connected twice appears twice in the party list.
@@ -355,8 +362,10 @@ async function saveEdits(name: string, alias: string, portrait: string, controll
     if (p && !/^https:\/\//i.test(p)) throw new Error("Portrait must be an https:// link that players' browsers can load.");
     await OBR.scene.items.updateItems([itemId], (ds) => {
       for (const d of ds as any[]) {
-        const n = name.trim();
-        if (n) { d.name = n; if (d.text) d.text.plainText = n; }
+        // The token label shows the alias while one is set (players see the map); the real name stays as the item name.
+        const n = name.trim() || d.name;
+        d.name = n;
+        if (d.text) d.text.plainText = alias.trim() || n;
         const cur = (d.metadata[STATE_KEY] ?? {}) as Record<string, unknown>;
         const next: Record<string, unknown> = { ...cur };
         for (const [k, v] of [["alias", alias.trim()], ["portraitUrl", p], ["controlledBy", controller]] as const) {

@@ -154,3 +154,4 @@ button.ok-bg { background: var(--ok); }
 .movebar { display: flex; gap: 8px; align-items: center; margin-top: 3px; color: var(--ok); font-weight: 600; }
 .movebar.over { color: var(--bad); }
 .movebar label { gap: 3px; align-items: center; color: var(--text); font-weight: 400; }
+.initval { width: 38px; text-align: center; font-weight: 800; }
