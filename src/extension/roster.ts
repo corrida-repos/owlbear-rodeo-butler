@@ -18,6 +18,7 @@ import type { Statblock } from "../core/schema";
 import { action, h, measure, mimeFromUrl, rerender, showError, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSystem } from "./roomSettings";
+import { searchableSource } from "../core/systems";
 
 // ------------------------------------------------------------------ 5etools index + library (shared, lazy)
 
@@ -44,13 +45,15 @@ const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 function search(q: string): IndexRow[] {
   if (!index || q.trim().length < 2) return [];
   const n = norm(q.trim());
-  const scored = index.map((r) => {
+  const system = roomSystem();
+  // Only the room edition's PHB / MM / DMG are offered (F9); every other book stays in both.
+  const scored = index.filter((r) => searchableSource(system, r.source)).map((r) => {
     const name = norm(r.name);
     const s = name === n ? 0 : name.startsWith(n) ? 1 : name.split(/[\s,(]+/).some((w) => w.startsWith(n)) ? 2 : name.includes(n) ? 3 : 9;
     return { r, s };
   }).filter((x) => x.s < 9);
   // The room's game system decides which edition comes first when a creature exists in both (5.5E → 2024 books).
-  const pref = roomSystem().rules;
+  const pref = system.rules;
   scored.sort((a, b) => a.s - b.s || (b.r.rules === pref ? 1 : 0) - (a.r.rules === pref ? 1 : 0) || a.r.name.localeCompare(b.r.name));
   return scored.slice(0, 12).map((x) => x.r);
 }

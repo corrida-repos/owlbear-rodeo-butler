@@ -24,6 +24,8 @@ export interface GameSystem {
   short: "5.5E" | "5E";
   /** 5etools edition this system prefers when a creature exists in both. */
   rules: "2024" | "2014";
+  /** Core books of the other edition, left out of the 5etools search (F9): 5.5E hides the 2014 PHB/MM/DMG, 5E the 2024 ones. */
+  hiddenSources: string[];
   conditions: ConditionDef[];
   /** 2024 only: a creature is Bloodied while it has half its Hit Points or fewer. */
   hasBloodied: boolean;
@@ -67,6 +69,7 @@ export const DND5E_2024: GameSystem = {
   label: "D&D 5.5E (2024 rules)",
   short: "5.5E",
   rules: "2024",
+  hiddenSources: ["PHB", "MM", "DMG"],
   conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO, BLOODIED],
   hasBloodied: true,
   // PHB 2024: "10 or half the damage taken (round down), whichever number is higher, up to a maximum DC of 30."
@@ -78,6 +81,7 @@ export const DND5E_2014: GameSystem = {
   label: "D&D 5E (2014 rules)",
   short: "5E",
   rules: "2014",
+  hiddenSources: ["XPHB", "XMM", "XDMG"],
   conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO],
   hasBloodied: false,
   // PHB 2014: "DC equals 10 or half the damage you take, whichever number is higher."
@@ -86,6 +90,9 @@ export const DND5E_2014: GameSystem = {
 
 export const SYSTEMS: Record<SystemId, GameSystem> = { "dnd5e-2024": DND5E_2024, "dnd5e-2014": DND5E_2014 };
 export const getSystem = (id: unknown): GameSystem => SYSTEMS[id as SystemId] ?? SYSTEMS[DEFAULT_SYSTEM];
+
+/** Whether creatures from this 5etools source appear in the search under this system (other books: always). */
+export const searchableSource = (system: Pick<GameSystem, "hiddenSources">, source: string) => !system.hiddenSources.includes(source.toUpperCase());
 
 export const isDead = (state: Pick<UnitState, "conditions">) => state.conditions.some((c) => c.key === "dead");
 

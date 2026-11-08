@@ -3,7 +3,7 @@ import { seededRng } from "../src/core/dice";
 import { canSeeRoll, isRollMessage, makeRoll, rollDestination, rollText } from "../src/core/rolls";
 import { DEFAULT_SETTINGS, readSettings, SETTINGS_KEY, settingsUpdate } from "../src/core/settings";
 import { migrateSheet, newState, normalizeState, SHEET_SCHEMA, validateSheet, type UnitSheet } from "../src/core/sheet";
-import { displayConditions, DND5E_2014, DND5E_2024, getSystem, isBloodied, needsDeathSaves } from "../src/core/systems";
+import { displayConditions, DND5E_2014, DND5E_2024, getSystem, isBloodied, needsDeathSaves, searchableSource } from "../src/core/systems";
 
 const wolf: UnitSheet = {
   schema: SHEET_SCHEMA, name: "Wolf", kind: "creature", size: "M", type: "Beast", ac: 12, hp: { max: 11, formula: "2d8+2" },
@@ -27,6 +27,10 @@ describe("unit sheet", () => {
 });
 
 describe("game systems", () => {
+  it("offers only the room edition's core books in the 5etools search", () => {
+    expect(["PHB", "MM", "DMG", "XPHB", "XMM", "XDMG", "CoS", "MPMM"].filter((b) => searchableSource(DND5E_2024, b))).toEqual(["XPHB", "XMM", "XDMG", "CoS", "MPMM"]);
+    expect(["PHB", "MM", "DMG", "XPHB", "XMM", "XDMG", "CoS", "MPMM"].filter((b) => searchableSource(DND5E_2014, b))).toEqual(["PHB", "MM", "DMG", "CoS", "MPMM"]);
+  });
   it("defaults to 5.5E", () => {
     expect(getSystem(undefined).id).toBe("dnd5e-2024");
     expect(getSystem("dnd5e-2014").id).toBe("dnd5e-2014");

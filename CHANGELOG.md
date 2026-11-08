@@ -11,7 +11,7 @@
 - **HP, 0 HP and death:** temp HP absorbs damage first and doesn't stack. A party member at 0 HP makes death saves (rolled from their card; damage at 0 HP counts as a failure, and three successes make them Stable); a creature at 0 HP can be marked dead, or automatically by room setting. **Mark as dead** takes a unit out of initiative and passes the turn on if it was theirs; **Revive** undoes it.
 - **Right-click actions (GM)** on one or more selected units: add to / remove from initiative, roll initiative, damage / heal (one amount for all, with half damage for a successful save), mark as dead, add to / remove from party.
 - **Names, aliases and portraits:** rename a unit (the token label follows), show it to players under an alias ("Hooded figure") until revealed, and give it a portrait different from its token art (link or Owlbear library).
-- **Game system setting:** D&D 5.5E (2024 rules, default) or 5E (2014 rules), in the Combat tab. Creature search puts the chosen edition's books first.
+- **Game system setting:** D&D 5.5E (2024 rules, default) or 5E (2014 rules), in the Combat tab. Creature search puts the chosen edition's books first and only offers that edition's Player's Handbook, Monster Manual and Dungeon Master's Guide (other books stay available in both).
 - Mythic actions are now listed with legendary actions. Dice chips accept any die size (e.g. d3).
 - Party files from earlier versions need a fresh sync from D&D Beyond.
 

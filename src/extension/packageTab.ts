@@ -1,4 +1,6 @@
 /** "Prepared encounter" tab: load an AI/CLI-built encounter package (map, grid, placed creatures) and import it. */
+import { roomSystem } from "./roomSettings";
+import { searchableSource } from "../core/systems";
 import OBR from "@owlbear-rodeo/sdk";
 import { SIZE_CELLS } from "../core/constants";
 import { describeInitiative } from "../core/dice";
@@ -160,6 +162,10 @@ function renderPreview(p: Preview, pk: EncounterPackage) {
   if (p.validation.ok) checks.push(check("ok", "Package valid"));
   else checks.push(check("bad", "Package invalid:", h("ul", { className: "plain small" }, ...p.validation.errors.map((e) => h("li", {}, e)))));
   for (const w of p.validation.warnings) checks.push(check("warn", w));
+  // F9: the room's edition hides the other edition's core books from search; a package may still use them.
+  const sys = roomSystem();
+  const otherEdition = Object.values(pk.statblocks ?? {}).filter((sb) => sb.source?.book && !searchableSource(sys, sb.source.book));
+  if (otherEdition.length) checks.push(check("warn", `${otherEdition.map((sb) => `${sb.name} (${sb.source.book})`).join(", ")}: from the other edition's core books than this room's ${sys.short}. They import as packaged.`));
   checks.push(check(p.isGM ? "ok" : "bad", p.isGM ? "You are the GM" : "You are not the GM — import disabled"));
   if (p.duplicates.itemIds.length)
     checks.push(check("warn", `Already imported in this scene: ${p.duplicates.itemIds.length} items from ${p.duplicates.importIds.length} earlier import(s) (revision ${p.duplicates.revisions.join(", ")}).`));

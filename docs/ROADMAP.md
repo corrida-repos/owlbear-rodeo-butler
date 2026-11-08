@@ -17,7 +17,10 @@ Status (2026-11-08):
   go through the GM's client), Stable. Live: turns over two rounds with "up next" / "your turn" reaching only the
   player, End my turn applied once with two GM tabs open, a party member dropped to 0 then a player death save
   recorded, Mark as dead on the active unit passing the turn in the same round, reset. 127 tests.
-- **Next:** F9 core books by edition (small), then phase 4 (conditions + movement).
+- **F9 core books:** done early. 5.5E rooms only offer the 2024 PHB/MM/DMG in creature search, 5E rooms the 2014
+  ones; a prepared encounter using the other edition's core books shows a warning. Live: "wolf" in a 5.5E room lists
+  only the Monster Manual (2025) wolf.
+- **Next:** phase 4 (conditions + movement).
 
 ## Goal
 
