@@ -236,6 +236,25 @@ manifest.json
 - **Done when:** a player re-syncs their own character after levelling up on D&D Beyond and the GM's card shows the
   new numbers, and the same player can't sync a unit they don't control.
 
+### F16 · Creature search filters
+- The 5etools search (Add Creatures, and *Start from a published creature*) gets filters that combine with the
+  text search, so a GM can browse without knowing a name:
+  - **Challenge Rating:** a min–max range (0 to 30, including 1/8, 1/4, 1/2).
+  - **Creature type:** Aberration, Beast, Celestial, Construct, Dragon, Elemental, Fey, Fiend, Giant, Humanoid,
+    Monstrosity, Ooze, Plant, Undead (several at once).
+  - **Environment / habitat:** arctic, coastal, desert, forest, grassland, hill, mountain, swamp, underdark,
+    underwater, urban, planar (and the 2024 Monster Manual's habitat names where they differ). Creatures 5etools
+    gives no environment get one assigned by Butler (from type, name, traits and the book's setting), marked as
+    "assigned by Butler" in the results so a GM knows it's a guess.
+  - **Size:** Tiny to Gargantuan (several at once).
+  - **Spellcaster:** any / only spellcasters / no spellcasters (from the stat block's Spellcasting entries).
+- The filters work on the search index the extension already loads (`npm run index:build` adds CR, type, size,
+  environment and spellcaster fields), so filtering is instant and needs no extra downloads. An empty text box with
+  filters set lists every match, sorted by CR then name, and the result count is shown.
+- The core-books rule (F9) applies on top of the filters. The chosen filters are remembered per browser.
+- **Done when:** "CR 1–3, Undead, swamp, spellcaster" returns a sensible list in both editions; every creature in the
+  index has an environment (from 5etools or assigned); filter logic and the assignment rules are unit-tested.
+
 ---
 
 ## Phases
@@ -252,7 +271,7 @@ re-added). Between phases 1 and 3 there is no initiative tracker; that gap is ac
 | 3 | **Combat core** | F4, F5, F10, F6 (+ Dead, Death Saves and Stable, ahead of the rest of F11) | live: 5-round fight with notifications, HP edits, a PC dropping to 0 (Death Saves) then marked dead, Mark as dead on the active unit and on others, reset |
 | 4 | **Conditions + movement** | F11, F14 | durations expire on the right turn; concentration prompts; a 13 ft move rewinds to 10 ft |
 | 5 | **Players & party** | F12, F13, F15 | second account runs through the player checklist, including a self-sync from D&D Beyond |
-| 6 | **Collection, 2014 rules, release** | F8, F9 (rules side) | README/DEVELOPMENT rewritten; CHANGELOG; release **2.0.0** |
+| 6 | **Collection, 2014 rules, search, release** | F8, F9 (rules side), F16 | README/DEVELOPMENT rewritten; CHANGELOG; release **2.0.0** |
 
 ## Risks and how they're handled
 - **Metadata size.** Big spellcasters may approach Owlbear's per-item/per-update limits. Phase 0 measures this;
