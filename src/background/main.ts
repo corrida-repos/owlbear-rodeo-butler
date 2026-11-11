@@ -16,7 +16,7 @@ import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import {
   addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
-  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, undoHp, revealOnTurnStart, setSurprised, isLairTurn, LAIR_TURN_ID, type TrackerView,
+  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, undoHp, revealOnTurnStart, setSurprised, isLairTurn, isWorldTurn, LAIR_TURN_ID, type TrackerView,
 } from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
@@ -213,7 +213,8 @@ async function onSceneChange() {
       if (primary) await setupDruids(lite);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
       // Movement: the primary GM client records; every client shows the active unit's label.
-      const mv = primary ? await trackMovement(meta, active?.id === LAIR_TURN_ID ? null : active) : readMovement(meta);
+      const tokenless = !!active && (active.id === LAIR_TURN_ID || isWorldTurn(v.turns.find((t) => t.id === active.id)));
+      const mv = primary ? await trackMovement(meta, tokenless ? null : active) : readMovement(meta);
       const au = v.order.find((u) => u.id === mv?.unitId);
       const movement = mv && au && active?.id === au.id
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
@@ -252,6 +253,7 @@ async function onSceneChange() {
       const activeU = unit(v.active), next = unit(v.next);
       const lair = v.turns.find((t) => t.id === v.active);
       if (isLairTurn(lair) && role === "GM") await notify(`Initiative 20: lair actions (${lair.units.map((u) => u.name).join(", ")}).`);
+      if (isWorldTurn(lair) && role === "GM") await notify(`Initiative ${lair.initiative}: ${lair.name}${lair.turn.note ? ` · ${lair.turn.note}` : ""}`, "WARNING");
       if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
         await notify(`It's your turn: ${activeU.name}`, "SUCCESS");
       } else if (next && item(next.id) && role === "PLAYER" && controls(me, item(next.id)!, next.state)) {

@@ -279,6 +279,10 @@ run `npx playwright install chromium` once.
   `sheet.lair`. `tracker.ts` adds a virtual turn (`LAIR_TURN_ID`) on initiative 20 with the lowest tie-break while a
   living unit in the order has `state.inLair` and lair actions. `TrackerView.turns` (units plus the lair turn) is what
   Next/Previous, passing the turn and duration positions use; `order` stays tokens only.
+- World turns: GM-made slots in `sceneMeta[WORLD_KEY]` (`{ id, name, initiative, note?, shown? }`), turned into
+  tokenless entries in `TrackerView.turns` (like the lair turn, they lose ties). They belong to the scene, not the
+  encounter record, so End combat and Reset keep them. Edits rewrite the whole list, so they're queued per client.
+  Removing the active one passes the turn.
 - HP undo: `changeHp` stores a `HpLogEntry` (the fields its patch overwrote, the conditions it added or removed, and
   the HP it left) in `state.hpLog`, up to 5. `undoHp` restores them, and refuses if HP changed outside the log. A Wild
   Shape revert isn't logged and clears the log, because the sheet and picture changed too.

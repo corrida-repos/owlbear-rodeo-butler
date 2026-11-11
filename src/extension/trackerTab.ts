@@ -7,7 +7,7 @@ import { fmtMod } from "../core/dice";
 import { parseHpInput, type HpEvent } from "../core/hp";
 import { displayConditions } from "../core/systems";
 import {
-  changeHp, encounterAction, isLairTurn, markUnitsDead, moveTie, revealUnits, reviveUnits, rollInitiativeFor, setInEncounter, setInitiative,
+  addWorldTurn, changeHp, encounterAction, isLairTurn, isWorldTurn, removeWorldTurn, updateWorldTurn, type WorldTurnEntry, markUnitsDead, moveTie, revealUnits, reviveUnits, rollInitiativeFor, setInEncounter, setInitiative,
   setRevealOnTurn, setSurprised, trackerView, undoHp, type EncounterAction, type HpReport, type LairTurn, type TrackerUnit, type TrackerView,
 } from "../core/tracker";
 import { hasLairFeatures, setInLair, usesSummary } from "../core/uses";
@@ -117,6 +117,34 @@ function lairRow(t: LairTurn, v: TrackerView): Child {
       h("div", { className: "small" }, ...t.units.flatMap((u, i) => [i ? ", " : "", h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name)]))));
 }
 
+/**
+ * Saves a typed field without the busy re-render `action` does: that would replace the box the GM tabbed into and
+ * lose what they're typing. The scene change refreshes the tracker, which waits while a box has focus.
+ */
+const saveField = (fn: () => Promise<void>) => () => { void fn().catch((e) => { ui.error = e instanceof Error ? e.message : String(e); rerender(); }); };
+
+/** A world turn the GM added: name, initiative, note and players' visibility edit in place. */
+function worldRow(t: WorldTurnEntry, v: TrackerView): Child {
+  const w = t.turn;
+  const init = h("input", { type: "text", inputmode: "numeric", className: "initbox", value: String(w.initiative), title: "Initiative count of this world turn" }) as HTMLInputElement;
+  init.onchange = saveField(async () => {
+    const n = Number(init.value.trim());
+    if (init.value.trim() === "" || !Number.isFinite(n)) { init.value = String(w.initiative); return; }
+    await updateWorldTurn(obrGateway, w.id, { initiative: n });
+  });
+  const name = h("input", { type: "text", value: w.name, title: "Name (e.g. Lair actions, Collapsing ceiling, Storm)", style: "font-weight:600" }) as HTMLInputElement;
+  name.onchange = saveField(() => updateWorldTurn(obrGateway, w.id, { name: name.value }));
+  const note = h("input", { type: "text", className: "small", value: w.note ?? "", placeholder: "Reminder: what to resolve (optional)" }) as HTMLInputElement;
+  note.onchange = saveField(() => updateWorldTurn(obrGateway, w.id, { note: note.value }));
+  return h("div", { className: `trow lair${v.active === t.id ? " active" : ""}${v.next === t.id ? " next" : ""}` },
+    h("div", { className: "tinit" }, init),
+    h("div", { className: "grow stack tight" }, name, note),
+    h("div", { className: "tbtns" },
+      h("button", { className: `icon tiny${w.shown ? "" : " muted"}`, title: w.shown ? "Players see this turn (click to hide it)" : "Only you see this turn (click to show it to players)",
+        onclick: action(() => updateWorldTurn(obrGateway, w.id, { shown: !w.shown })) }, w.shown ? "👁" : "🙈"),
+      h("button", { className: "icon tiny", title: "Remove this world turn", onclick: action(() => removeWorldTurn(obrGateway, w.id)) }, "✕")));
+}
+
 /** The latest HP changes across units, newest first; each unit's newest change can be undone. */
 function hpLogPanel(v: TrackerView): Child {
   const units = [...v.order, ...v.waiting, ...v.outside];
@@ -165,7 +193,7 @@ function controls(v: TrackerView): Child {
   const activeName = v.turns.find((u) => u.id === v.active)?.name;
   return h("div", { className: "panel stack tight" },
     h("div", { className: "row between" },
-      h("div", {}, e.started ? h("span", {}, h("strong", { className: "round" }, `Round ${e.round}`), isLairTurn(v.turns.find((t) => t.id === v.active)) ? " · Lair actions (initiative 20)" : activeName ? ` · ${activeName}'s turn` : "") : h("strong", {}, "Not in combat")),
+      h("div", {}, e.started ? h("span", {}, h("strong", { className: "round" }, `Round ${e.round}`), isLairTurn(v.turns.find((t) => t.id === v.active)) ? " · Lair actions (initiative 20)" : isWorldTurn(v.turns.find((t) => t.id === v.active)) ? ` · ${activeName}` : activeName ? ` · ${activeName}'s turn` : "") : h("strong", {}, "Not in combat")),
       e.started
         ? h("div", { className: "row" },
           h("button", { className: "secondary", disabled: ui.busy || !e.history.length, onclick: act("previous") }, "◀ Prev"),
@@ -175,7 +203,9 @@ function controls(v: TrackerView): Child {
       h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "all", { rules: roomSystem().rules }); }) }, "Roll all"),
       h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "creatures", { rules: roomSystem().rules }); }) }, "Roll creatures"),
       h("button", { className: "secondary small", disabled: ui.busy, title: "Clear initiative values and the round; units stay in the encounter", onclick: act("reset") }, "Reset round & initiative"),
-      e.started ? h("button", { className: "secondary small", disabled: ui.busy, onclick: act("end") }, "End combat") : null),
+      e.started ? h("button", { className: "secondary small", disabled: ui.busy, onclick: act("end") }, "End combat") : null,
+      h("button", { className: "secondary small", disabled: ui.busy, title: "Save a spot in the order for lair actions, hazards or other effects you resolve yourself",
+        onclick: action(async () => { await addWorldTurn(obrGateway); }) }, "+ World turn")),
     followToggle());
 }
 
@@ -188,6 +218,7 @@ export function renderTrackerTab(): Child[] {
     v.order.length ? null : h("div", { className: "small muted" }, "Nobody has an initiative yet. Roll above, or type players' rolls in the boxes below."),
     ...v.turns.map((t) => {
       if (isLairTurn(t)) return lairRow(t, v);
+      if (isWorldTurn(t)) return worldRow(t, v);
       const i = v.order.indexOf(t);
       const prev = v.order[i - 1], next = v.order[i + 1];
       return row(t, v, { up: prev?.initiative === t.initiative, down: next?.initiative === t.initiative });

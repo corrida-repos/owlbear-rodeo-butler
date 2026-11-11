@@ -2,6 +2,7 @@
  * The initiative tracker's data and GM operations (F4, F5, F6, F10), on top of the SceneGateway so they run against
  * Owlbear or the in-memory test scene. Turn logic is in encounter.ts, HP rules in hp.ts.
  */
+import { BUTLER_NS } from "./constants";
 import { abilityMod, maxHp, STATE_KEY, type UnitSheet, type UnitState } from "./sheet";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
 import {
@@ -59,7 +60,7 @@ export function trackerUnits(items: SceneItemLite[]): TrackerUnit[] {
  */
 export const LAIR_TURN_ID = "butler-lair";
 export interface LairTurn extends OrderUnit { lair: true; units: TrackerUnit[] }
-export type TurnEntry = TrackerUnit | LairTurn;
+export type TurnEntry = TrackerUnit | LairTurn | WorldTurnEntry;
 export const isLairTurn = (t: TurnEntry | OrderUnit | undefined): t is LairTurn => !!t && (t as LairTurn).lair === true;
 
 export function lairTurn(order: TrackerUnit[]): LairTurn | null {
@@ -69,10 +70,40 @@ export function lairTurn(order: TrackerUnit[]): LairTurn | null {
   return { id: LAIR_TURN_ID, name: "Lair actions", initiative: 20, initMod: -1e6, dex: -1e6, tiebreak: -1e9, inEncounter: true, lair: true, units };
 }
 
-/** The order the encounter steps through: units, plus the lair turn when there is one. */
-export function turnsOf(order: TrackerUnit[]): TurnEntry[] {
+/**
+ * World turns: slots the GM adds to the order by hand (lair actions without a stat block, a collapsing ceiling, a
+ * storm, reinforcements…), as a reminder to resolve those effects. Not tokens: they live in scene metadata, stay
+ * across fights in the scene until removed, and lose initiative ties like lair actions.
+ */
+export const WORLD_KEY = `${BUTLER_NS}/worldTurns`;
+export interface WorldTurn {
+  id: string;
+  name: string;
+  initiative: number;
+  /** What to resolve, shown in the tracker and in the GM's notice. */
+  note?: string;
+  /** Players see it in their initiative order (off: a GM-only reminder). */
+  shown?: boolean;
+}
+export interface WorldTurnEntry extends OrderUnit { world: true; turn: WorldTurn }
+export const isWorldTurn = (t: TurnEntry | OrderUnit | undefined): t is WorldTurnEntry => !!t && (t as WorldTurnEntry).world === true;
+/** Lair or world turn: a slot in the order without a token. */
+export const isTokenlessTurn = (t: TurnEntry | OrderUnit | undefined): t is LairTurn | WorldTurnEntry => isLairTurn(t) || isWorldTurn(t);
+
+const isWorldTurnData = (x: any): x is WorldTurn => !!x && typeof x.id === "string" && typeof x.name === "string" && Number.isFinite(x.initiative);
+export function readWorldTurns(sceneMeta: Record<string, unknown>): WorldTurn[] {
+  const x = sceneMeta[WORLD_KEY];
+  return Array.isArray(x) ? x.filter(isWorldTurnData) : [];
+}
+
+const worldEntry = (t: WorldTurn): WorldTurnEntry =>
+  ({ id: t.id, name: t.name, initiative: t.initiative, initMod: -1e6, dex: -1e6, tiebreak: -1e9, inEncounter: true, world: true, turn: t });
+
+/** The order the encounter steps through: units, plus the lair turn and the GM's world turns. */
+export function turnsOf(order: TrackerUnit[], world: WorldTurn[] = []): TurnEntry[] {
   const lair = lairTurn(order);
-  return lair ? [...order, lair].sort(compareOrder) : order;
+  const extra: TurnEntry[] = [...(lair ? [lair] : []), ...world.map(worldEntry)];
+  return extra.length ? [...order, ...extra].sort(compareOrder) : order;
 }
 
 export interface TrackerView {
@@ -92,7 +123,7 @@ export function trackerView(items: SceneItemLite[], sceneMeta: Record<string, un
   const units = trackerUnits(items);
   const encounter = readEncounter(sceneMeta);
   const order = turnOrder(units);
-  const turns = turnsOf(order);
+  const turns = turnsOf(order, readWorldTurns(sceneMeta));
   return {
     encounter, order, turns,
     waiting: waitingForInitiative(units),
@@ -280,6 +311,63 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
   if (patches.length) await gw.patchMetadata(patches);
   for (const r of reverts) await finishRevert(gw, r.item, r.patch);
   return reports;
+}
+
+// ------------------------------------------------------------------ world turns
+
+const saveWorld = (gw: SceneGateway, turns: WorldTurn[]) => gw.setSceneMetadata({ [WORLD_KEY]: turns });
+/** The list is rewritten whole, so this client's edits run one after another (a quick name + note edit would race). */
+let worldQueue: Promise<unknown> = Promise.resolve();
+function queued<T>(fn: () => Promise<T>): Promise<T> {
+  const run = worldQueue.then(fn, fn);
+  worldQueue = run.catch(() => {});
+  return run;
+}
+const cleanWorld = (t: Partial<WorldTurn>): Partial<WorldTurn> => {
+  const out: Partial<WorldTurn> = {};
+  if (t.name !== undefined) {
+    const name = t.name.trim().slice(0, 60);
+    if (!name) throw new Error("Give the world turn a name, e.g. Lair actions or Collapsing ceiling.");
+    out.name = name;
+  }
+  if (t.initiative !== undefined) {
+    if (!Number.isFinite(t.initiative)) throw new Error("Initiative must be a number.");
+    out.initiative = Math.round(t.initiative);
+  }
+  if (t.note !== undefined) out.note = t.note.trim().slice(0, 300) || undefined;
+  if (t.shown !== undefined) out.shown = t.shown || undefined;
+  return out;
+};
+
+/** Adds a world turn (default: "Lair / world actions" on initiative 20). Returns its id. */
+export const addWorldTurn = (gw: SceneGateway, t: { name?: string; initiative?: number; note?: string; shown?: boolean } = {}) => queued(() => addWorldTurnNow(gw, t));
+async function addWorldTurnNow(gw: SceneGateway, t: { name?: string; initiative?: number; note?: string; shown?: boolean }): Promise<string> {
+  await requireGm(gw);
+  const turns = readWorldTurns(await gw.getSceneMetadata());
+  const id = `world-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+  const c = cleanWorld({ name: t.name ?? "Lair / world actions", initiative: t.initiative ?? 20, note: t.note, shown: t.shown });
+  await saveWorld(gw, [...turns, JSON.parse(JSON.stringify({ id, ...c }))]);
+  return id;
+}
+
+/** Renames a world turn, moves it in the order, changes its note or whether players see it. */
+export const updateWorldTurn = (gw: SceneGateway, id: string, patch: Partial<Omit<WorldTurn, "id">>) => queued(() => updateWorldTurnNow(gw, id, patch));
+async function updateWorldTurnNow(gw: SceneGateway, id: string, patch: Partial<Omit<WorldTurn, "id">>) {
+  await requireGm(gw);
+  const turns = readWorldTurns(await gw.getSceneMetadata());
+  if (!turns.some((t) => t.id === id)) throw new Error("That world turn is gone.");
+  const c = cleanWorld(patch);
+  await saveWorld(gw, turns.map((t) => (t.id === id ? JSON.parse(JSON.stringify({ ...t, ...c })) : t)));
+}
+
+/** Removes a world turn; if it's the current turn, the turn passes to the next one. */
+export const removeWorldTurn = (gw: SceneGateway, id: string) => queued(() => removeWorldTurnNow(gw, id));
+async function removeWorldTurnNow(gw: SceneGateway, id: string) {
+  await requireGm(gw);
+  const { view, meta } = await load(gw);
+  const enc = passTurnFrom(view.encounter, view.turns, [id]);
+  if (enc !== view.encounter) await saveEncounter(gw, enc);
+  await saveWorld(gw, readWorldTurns(meta).filter((t) => t.id !== id));
 }
 
 /** Undoes the unit's last HP change (see hp.ts undoHpPatch). Returns e.g. "-70" and the HP it went back to. */

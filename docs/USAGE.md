@@ -75,6 +75,8 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 5. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
 6. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
 
+**World turns:** for anything that should happen at a point in the order but isn't a creature (lair actions you run yourself, a collapsing ceiling, a storm, rising water, reinforcements), press **+ World turn**. It adds a *Lair / world actions* slot on initiative 20, losing ties. In its row you can rename it, change its initiative, and add a reminder note (*DC 13 Dex save under the cracks*). When its turn comes, **Next turn** stops there and you get a notice with the name and note. Encounter Butler doesn't resolve anything for you. Add as many as you need. World turns belong to the scene, so they stay through **End combat** and **Reset** until you remove them with **✕**. Players don't see them unless you click **🙈** to show one (**👁**).
+
 **Hidden creatures:** a token hidden from players shows **Reveal on its turn?** in the tracker. Turn it on and the token appears to the players when its turn starts; **Reveal now** shows it straight away.
 
 The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits.

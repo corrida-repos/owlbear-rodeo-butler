@@ -137,3 +137,38 @@ test("Damage / heal popover and Wild Shape popover load", async ({ page }) => {
   await expect(ws.getByText(/Uses:|Short Rest|Long Rest/)).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test("GM popover: a world turn added by hand, renamed, reached in combat; players see it only when shown", async ({ page }) => {
+  const errors = await boot(page);
+  const f = await open(page, "index.html");
+  const rows = f.locator(".panel.tracker .trow");
+  await expect(rows).toHaveCount(3);
+  await f.getByRole("button", { name: "+ World turn" }).click();
+  await expect(rows).toHaveCount(4);
+  const world = rows.nth(1); // initiative 20: after the goblin (22), before Thorn (15)
+  await expect(world.locator("input").nth(1)).toHaveValue("Lair / world actions");
+  await world.locator("input").nth(1).fill("Collapsing ceiling");
+  await world.locator("input").nth(2).fill("DC 13 Dex save under the cracks");
+  await world.locator("input").nth(2).press("Tab");
+  await expect.poll(async () => (await obr(page)).sceneMeta["dev.owlbear-butler/worldTurns"]?.[0]).toMatchObject({ name: "Collapsing ceiling", note: "DC 13 Dex save under the cracks", initiative: 20 });
+
+  await f.getByRole("button", { name: "Start combat" }).click();
+  await f.getByRole("button", { name: "Next turn ▶" }).click();
+  await expect(f.locator(".trow.active input").nth(1)).toHaveValue("Collapsing ceiling");
+  await expect(f.getByText("Round 1 · Collapsing ceiling")).toBeVisible();
+
+  // Players: hidden by default (a GM reminder), listed once the GM shows it.
+  const p = await page.evaluate(() => (window as any).__obr.sceneMeta);
+  const ctx = await page.context().newPage();
+  const perr = await boot(ctx, { role: "PLAYER", name: "Ana", id: "player-1", sceneMeta: p });
+  const pf = await open(ctx, "index.html");
+  await expect(pf.locator(".panel.tracker .trow")).toHaveCount(3);
+  await expect(pf.getByText("the GM's turn")).toBeVisible();
+  await world.getByTitle(/Only you see this turn/).click();
+  await expect.poll(async () => (await obr(page)).sceneMeta["dev.owlbear-butler/worldTurns"]?.[0]?.shown).toBe(true);
+  const shown = await page.evaluate(() => (window as any).__obr.sceneMeta);
+  await ctx.evaluate((m) => { const s = (window as any).__obr; s.sceneMeta = m; for (const fr of s.frames) fr.contentWindow.postMessage({ id: "OBR_SCENE_METADATA_EVENT_CHANGE", data: { metadata: m } }, location.origin); }, shown);
+  await expect(pf.locator(".panel.tracker .trow")).toHaveCount(4);
+  await expect(pf.locator(".trow.active")).toContainText("Collapsing ceiling");
+  expect([...errors, ...perr]).toEqual([]);
+});

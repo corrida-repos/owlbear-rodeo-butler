@@ -13,7 +13,7 @@ import { parseHpInput } from "../core/hp";
 import type { SceneItemLite } from "../core/importer";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import { displayConditions } from "../core/systems";
-import { isLairTurn, trackerView, type TrackerUnit, type TrackerView } from "../core/tracker";
+import { isLairTurn, isWorldTurn, trackerView, type TrackerUnit, type TrackerView } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
 import { openCard } from "./cardPopover";
@@ -55,7 +55,9 @@ function turnPanel(): Child {
   if (!v.encounter.started) return h("div", { className: "panel small muted" }, "Not in combat.", followToggle());
   const visible = v.order.filter((u) => !u.hidden);
   const nameOf = (id?: string) => {
-    if (id && isLairTurn(v.turns.find((t) => t.id === id))) return lairShown(v) ? "Lair actions" : null;
+    const t = id ? v.turns.find((x) => x.id === id) : undefined;
+    if (isLairTurn(t)) return lairShown(v) ? "Lair actions" : null;
+    if (isWorldTurn(t)) return t.turn.shown ? t.name : null;
     const u = visible.find((x) => x.id === id);
     return u ? shownName(mine(u) ? "full" : "limited", me(), { label: u.name, name: u.name }, u.sheet, u.state) : null;
   };
@@ -64,7 +66,7 @@ function turnPanel(): Child {
   const key = `${v.encounter.round}:${v.active}`;
   return h("div", { className: `panel${myTurn ? " myturn" : ""}` },
     h("div", { className: "row between" },
-      h("span", {}, h("strong", { className: "round" }, `Round ${v.encounter.round}`), nameOf(v.active) === "Lair actions" ? " · Lair actions (initiative 20)" : nameOf(v.active) ? ` · ${nameOf(v.active)}'s turn` : " · the GM's turn"),
+      h("span", {}, h("strong", { className: "round" }, `Round ${v.encounter.round}`), nameOf(v.active) === "Lair actions" ? " · Lair actions (initiative 20)" : isWorldTurn(v.turns.find((x) => x.id === v.active)) && nameOf(v.active) ? ` · ${nameOf(v.active)}` : nameOf(v.active) ? ` · ${nameOf(v.active)}'s turn` : " · the GM's turn"),
       myTurn && roomSettings().playerEdits
         ? h("button", { disabled: sent === key, onclick: async () => { sent = key; await request({ type: "end-turn", unitId: active!.id, round: v.encounter.round }, ""); } }, sent === key ? "Sent…" : "End my turn")
         : null),
@@ -107,7 +109,7 @@ function initBox(u: TrackerUnit): Child {
 function orderPanel(): Child {
   const v = trackerView(lite, sceneMeta);
   const showLair = lairShown(v);
-  const rows = [...v.turns, ...v.waiting].filter((u) => isLairTurn(u) ? showLair : !u.hidden);
+  const rows = [...v.turns, ...v.waiting].filter((u) => isLairTurn(u) ? showLair : isWorldTurn(u) ? !!u.turn.shown : !u.hidden);
   if (!rows.length) return null;
   return h("div", { className: "panel tracker" },
     h("h2", {}, "Initiative"),
@@ -115,6 +117,10 @@ function orderPanel(): Child {
       if (isLairTurn(u)) {
         return h("div", { className: `trow lair${v.active === u.id ? " active" : ""}${v.next === u.id ? " next" : ""}` },
           h("div", { className: "tinit" }, "20"), h("div", { className: "grow small" }, h("strong", {}, "Lair actions"), h("span", { className: "muted" }, " (loses ties)")));
+      }
+      if (isWorldTurn(u)) {
+        return h("div", { className: `trow lair${v.active === u.id ? " active" : ""}${v.next === u.id ? " next" : ""}` },
+          h("div", { className: "tinit" }, String(u.initiative)), h("div", { className: "grow small" }, h("strong", {}, u.name)));
       }
       const own = mine(u);
       const name = shownName(own ? "full" : "limited", me(), { label: u.name, name: u.name }, u.sheet, u.state);

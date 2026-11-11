@@ -10,7 +10,7 @@ import { initiativeSetupFor } from "../src/core/combat";
 import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, validateSheet, type UnitSheet, type UnitState } from "../src/core/sheet";
 import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import {
-  addConditionTo, changeHp, encounterAction, expireConditions, LAIR_TURN_ID, markUnitsDead, revealOnTurnStart, revealUnits, rollInitiativeFor,
+  addConditionTo, addWorldTurn, changeHp, encounterAction, readWorldTurns, removeWorldTurn, updateWorldTurn, WORLD_KEY, expireConditions, LAIR_TURN_ID, markUnitsDead, revealOnTurnStart, revealUnits, rollInitiativeFor,
   setRevealOnTurn, setSurprised, trackerView, undoHp,
 } from "../src/core/tracker";
 import { isPlayerRequest } from "../src/core/turns";
@@ -222,5 +222,64 @@ describe("hidden units revealed on their turn", () => {
     scene.role = "GM";
     await revealUnits(scene, ["ass"]);
     expect(scene.items[1]!.visible).toBe(true);
+  });
+});
+
+describe("world turns (added by hand, no stat block needed)", () => {
+  beforeEach(() => {
+    add("pc", sheet("Thorn", { kind: "character" }), { party: true, initiative: 20, inEncounter: true });
+    add("gob", sheet("Goblin"), { initiative: 8, inEncounter: true });
+  });
+
+  it("defaults to 'Lair / world actions' on 20, losing ties; several can be added at any count", async () => {
+    const id = await addWorldTurn(scene);
+    expect(readWorldTurns(scene.sceneMeta)).toEqual([{ id, name: "Lair / world actions", initiative: 20 }]);
+    const ceiling = await addWorldTurn(scene, { name: "  Collapsing ceiling ", initiative: 10, note: "DC 13 Dex save under the cracks" });
+    expect((await view()).turns.map((t) => t.id)).toEqual(["pc", id, ceiling, "gob"]);
+    expect(readWorldTurns(scene.sceneMeta)[1]).toMatchObject({ name: "Collapsing ceiling", note: "DC 13 Dex save under the cracks" });
+    // A unit with lair actions in its lair still gets its own lair turn alongside.
+    add("drg", lairDragon, { initiative: 5, inEncounter: true, inLair: true });
+    const ids = (await view()).turns.map((t) => t.id);
+    expect(ids[0]).toBe("pc"); // the unit on 20 wins the tie against both tokenless turns
+    expect(new Set(ids.slice(1, 3))).toEqual(new Set([LAIR_TURN_ID, id]));
+    expect(ids.slice(3)).toEqual([ceiling, "gob", "drg"]);
+  });
+
+  it("combat steps through it; editing moves it; removing the current one passes the turn", async () => {
+    const id = await addWorldTurn(scene, { name: "Storm", initiative: 15 });
+    await encounterAction(scene, "start");
+    await encounterAction(scene, "next");
+    expect(enc()).toMatchObject({ round: 1, turnId: id });
+    expect((await view()).active).toBe(id);
+    await updateWorldTurn(scene, id, { initiative: 5, shown: true, name: "Storm surge" });
+    expect(readWorldTurns(scene.sceneMeta)[0]).toMatchObject({ initiative: 5, shown: true, name: "Storm surge" });
+    expect((await view()).turns.map((t) => t.id)).toEqual(["pc", "gob", id]);
+    await removeWorldTurn(scene, id);
+    expect(readWorldTurns(scene.sceneMeta)).toEqual([]);
+    expect(enc().turnId).not.toBe(id);
+    expect((await view()).turns.map((t) => t.id)).toEqual(["pc", "gob"]);
+  });
+
+  it("quick edits to different fields don't overwrite each other", async () => {
+    const id = await addWorldTurn(scene);
+    await Promise.all([updateWorldTurn(scene, id, { name: "Ceiling" }), updateWorldTurn(scene, id, { note: "Dex save" }), updateWorldTurn(scene, id, { initiative: 4 })]);
+    expect(readWorldTurns(scene.sceneMeta)[0]).toMatchObject({ name: "Ceiling", note: "Dex save", initiative: 4 });
+  });
+
+  it("stays when combat ends or initiative is reset (part of the scene, not the fight)", async () => {
+    const id = await addWorldTurn(scene);
+    await encounterAction(scene, "start");
+    await encounterAction(scene, "end");
+    await encounterAction(scene, "reset");
+    expect(readWorldTurns(scene.sceneMeta).map((t) => t.id)).toEqual([id]);
+  });
+
+  it("GM only, needs a name and a number; ignores malformed stored entries", async () => {
+    await expect(addWorldTurn(scene, { name: "   " })).rejects.toThrow(/name/);
+    await expect(addWorldTurn(scene, { initiative: Number.NaN })).rejects.toThrow(/number/);
+    scene.role = "PLAYER";
+    await expect(addWorldTurn(scene)).rejects.toThrow(/GM/);
+    scene.sceneMeta[WORLD_KEY] = [{ id: "ok", name: "Ok", initiative: 3 }, { id: "bad" }, "junk"];
+    expect(readWorldTurns(scene.sceneMeta).map((t) => t.id)).toEqual(["ok"]);
   });
 });
