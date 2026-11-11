@@ -2,7 +2,6 @@
  * Requests a player's client sends to the GM's client, which checks and applies them. Players can't write the
  * encounter record, and Owlbear only lets them change tokens they own, so these go through the GM.
  */
-import { isUseChange, type UseChange } from "./actions";
 import { BUTLER_NS } from "./constants";
 import type { Duration } from "./conditions";
 import type { PartyMember } from "./ddb";
@@ -41,13 +40,11 @@ export type WildShapeOp =
   /** A rest: a Short Rest gives one use back (5.5E), a Long Rest all. */
   | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
-/** Action bar: Action / Bonus Action / Reaction spent, uses of features and spell slots, rests. */
-export interface UseRequest extends Base { type: "use"; change: UseChange }
 export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
-  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | UseRequest;
+  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
-export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn", "use"];
+export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn"];
 
 export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
@@ -71,7 +68,6 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
     if (w.op === "rest") return w.rest === undefined || w.rest === "short" || w.rest === "long";
     return w.op === "revert";
   }
-  if (r.type === "use") return isUseChange(r.change);
   if (r.type === "sheet-sync") return !!r.member && typeof r.member === "object" && (r.hp === "ddb" || r.hp === "keep");
   return false;
 }

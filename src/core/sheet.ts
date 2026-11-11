@@ -103,10 +103,6 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
-  /** Action bar: Action / Bonus Action / Reaction / Legendary Actions spent in the unit's current turn (see actions.ts). */
-  turn?: { round: number; action?: boolean; bonus?: boolean; reaction?: boolean; legendary?: number };
-  /** Action bar: uses spent of limited features and spell slots, by key; replaces the sheet's count (D&D Beyond's at sync). */
-  used?: Record<string, number>;
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

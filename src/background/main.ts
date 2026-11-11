@@ -38,7 +38,6 @@ import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
 import { migrateSheet } from "../core/sheet";
-import { useOnUnit } from "../core/actions";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -320,7 +319,6 @@ async function handleRequest(req: unknown) {
         }
         break;
       }
-      case "use": await useOnUnit(obrGateway, req.unitId, req.change, roomSystem().rules); break;
       case "sheet-sync": {
         const who = await applySelfSync(obrGateway, req.unitId, req.member, req.hp);
         await notify(`${req.playerName} synced ${who} from D&D Beyond.`, "SUCCESS");
