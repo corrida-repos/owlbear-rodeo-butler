@@ -148,7 +148,8 @@ function conditionsPanel(state: UnitState): Child {
   return h("div", { className: "panel stack tight" },
     h("strong", { className: "small" }, "Conditions"),
     own.length ? h("div", { className: "stack tight" }, ...own.map((c) => h("div", { className: "row between small" },
-      h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null,
+      h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null,
+        c.source === "ddb" ? h("span", { className: "muted", title: "Set on D&D Beyond; the next sync updates or removes it" }, " · D&D Beyond") : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null,
         // 2014 exhaustion works by levels of effects (5.5E applies its flat penalties to rolls and speed instead).
         c.key === "exhaustion" && sys.rules === "2014" && c.level ? h("div", { className: "muted" }, EXHAUSTION_2014.slice(0, c.level).join("; ")) : null),
       edit ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void (role === "GM" ? removeConditionFrom(obrGateway, itemId, c.id) : sendRequest({ type: "condition-remove", unitId: itemId, conditionId: c.id })).catch(showErr) }, "✕") : null)))

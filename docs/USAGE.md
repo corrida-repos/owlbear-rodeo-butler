@@ -45,7 +45,9 @@ Right-click a creature or party token → **View unit card** (or click a name in
 2. Click the **Copy party for Encounter Butler** bookmark in that tab. It sends the party back to Owlbear and closes itself.
 3. The party tokens are updated and marked as party members. If something needs a look first (two tokens that could match, an error), you see a preview and press **Sync party** yourself. **Undo** removes tokens the sync created and puts back pictures it replaced.
 
-Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync only writes the stat block (and HP): it leaves token positions, owners and conditions alone, and it changes images only if you choose to use the D&D Beyond portraits (*Sync options*). If the tab didn't send the party back (some browsers block it), the bookmark also copies it to your clipboard: press **Paste party**.
+Tokens are matched to characters by name. Name each player's token after their character's full or first name. Missing tokens can be created for you. The sync writes the stat block, HP and conditions. It leaves token positions and owners alone, and it changes images only if you choose to use the D&D Beyond portraits (*Sync options*). **Conditions** set on D&D Beyond (Exhaustion with its level) appear on the token, marked *D&D Beyond* on the card. Each sync updates them: a condition removed on D&D Beyond goes away in Owlbear too. Conditions you add in Owlbear (on the card or with right-click → **Conditions**) stay. If both list the same condition, the D&D Beyond one wins.
+
+If the tab didn't send the party back (some browsers block it), the bookmark also copies it to your clipboard: press **Paste party**.
 
 Below the sync, **Import published / homebrewed party member** work exactly like Add Creatures, for sidekicks, companions or a guest character. They join the party.
 
@@ -83,7 +85,7 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 
 ## Recharge, legendary actions and daily uses
 
-Encounter Butler reads limited uses from the stat block's wording, so 5etools creatures, homebrew and D&D Beyond characters all work:
+Encounter Butler reads limited uses from the stat block's wording, for 5etools creatures and homebrew units. Characters synced from D&D Beyond get no counters: players track their uses and spell slots on D&D Beyond, and the card shows what the last sync brought (*Second Wind (2/Short Rest, 1 used)*).
 
 - **Recharge** (*Fire Breath (Recharge 5–6)*): the card shows **Ready**. Rolling any dice from that ability marks it **Used**. At the start of the creature's turn Encounter Butler rolls the d6 for you (a private GM roll in the log) and sets it back to Ready on a 5 or 6. **🎲 d6** rolls it by hand.
 - **X/Day** (*Legendary Resistance (3/Day)*, *Dominate Mind (2/Day)*, spells *1/Day Each: …* or *3/Day: …*): pips next to the name. Click a filled pip to spend one, an empty pip to get it back. *Each* lists get a counter per spell.
@@ -134,7 +136,7 @@ What a player sees under the Encounter Butler button:
 
 - **Whose turn it is** and who's next, with **End my turn** on their own turn and the movement bar.
 - **Initiative:** every unit they can see, by name (or the alias you gave it), picture and conditions. Hidden tokens never appear. Their own units also show HP, an HP box (`-7`, `+5`, `12`, `t5`) and their initiative box. Clicking another unit's name shows only its name, picture and conditions.
-- **My units:** each with **Card** (roll, conditions, death save rolls, Concentration saves) and, for a character, **⟳ D&D Beyond**: it opens their character on D&D Beyond; they click the same *Copy party for Encounter Butler* bookmark there (set it up once from the panel), and your Encounter Butler updates that unit's stat block. HP is kept unless they choose to take it from D&D Beyond.
+- **My units:** each with **Card** (roll, conditions, death save rolls, Concentration saves) and, for a character, **⟳ D&D Beyond**: it opens their character on D&D Beyond; they click the same *Copy party for Encounter Butler* bookmark there (set it up once from the panel), and your Encounter Butler updates that unit's stat block and its D&D Beyond conditions. HP is kept unless they choose to take it from D&D Beyond.
 
 Player changes go through your Encounter Butler, so it must be open in the room. To stop players changing their units, untick **Players may change their own units…** in **Combat → Room settings**. Rolls, the movement tracker and cards still work.
 

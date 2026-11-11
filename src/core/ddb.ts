@@ -29,6 +29,25 @@ const ALIGNMENT: Record<number, string> = { 1: "Lawful Good", 2: "Neutral Good",
 const ACTIVATION: Record<number, "action" | "bonus" | "reaction" | "other"> = { 1: "action", 3: "bonus", 4: "reaction" };
 const RESET: Record<number, string> = { 1: "Short Rest", 2: "Long Rest", 3: "Dawn", 4: "Other" };
 
+/** D&D Beyond's condition ids (character.conditions[].id). Exhaustion (4) has a level. */
+export const DDB_CONDITION_IDS: Record<number, string> = {
+  1: "blinded", 2: "charmed", 3: "deafened", 4: "exhaustion", 5: "frightened", 6: "grappled", 7: "incapacitated", 8: "invisible",
+  9: "paralyzed", 10: "petrified", 11: "poisoned", 12: "prone", 13: "restrained", 14: "stunned", 15: "unconscious",
+};
+
+/** A character's active conditions on D&D Beyond, as Butler condition keys. Unknown ids are reported, not guessed. */
+export function ddbConditions(c: any): { conditions: { key: string; level?: number }[]; unknown: number[] } {
+  const conditions: { key: string; level?: number }[] = [];
+  const unknown: number[] = [];
+  for (const x of Array.isArray(c?.conditions) ? c.conditions : []) {
+    const key = DDB_CONDITION_IDS[x?.id];
+    if (!key) { if (typeof x?.id === "number") unknown.push(x.id); continue; }
+    if (conditions.some((k) => k.key === key)) continue;
+    conditions.push(key === "exhaustion" ? { key, level: Math.min(6, Math.max(1, Math.round(Number(x.level) || 1))) } : { key });
+  }
+  return { conditions, unknown };
+}
+
 export interface PartyMember {
   ddbId: number;
   name: string;
@@ -43,6 +62,8 @@ export interface PartyMember {
   initiative: { modifier: number; advantage: boolean; reasons: string[] };
   /** The character's stat block in Butler's native format. */
   sheet: UnitSheet;
+  /** Active conditions on D&D Beyond when synced (applied to the token by the sync). */
+  conditions?: { key: string; level?: number }[];
   flags: string[];
 }
 
@@ -302,7 +323,8 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
 
   // ---- flags for things we can't compute
   if (find("set", "unarmored-armor-class").length) flags.push("Unarmored Defense/natural armor detected — verify AC against D&D Beyond.");
-  if ((c.conditions ?? []).length) flags.push(`Active conditions on D&D Beyond: ${(c.conditions ?? []).map((x: any) => x.id).join(", ")} (not applied).`);
+  const synced = ddbConditions(c);
+  if (synced.unknown.length) flags.push(`D&D Beyond condition ids not recognised (not applied): ${synced.unknown.join(", ")}.`);
   if (c.classes?.length > 1) flags.push("Multiclass: spell slots per class shown; multiclass slot table not combined.");
 
   const savesProf = ABILITIES.filter((a) => find("proficiency", `${ABILITY_NAME[a]}-saving-throws`).length);
@@ -366,6 +388,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     ac,
     initiative,
     sheet: { ...sheet, flags: allFlags },
+    conditions: synced.conditions,
     flags: allFlags,
   };
 }

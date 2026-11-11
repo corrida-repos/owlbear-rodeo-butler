@@ -13,7 +13,7 @@
  */
 import { makeRoll, type RollMessage } from "./rolls";
 import type { Rng } from "./dice";
-import { STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "./sheet";
+import { isDdbSheet, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "./sheet";
 import type { SceneGateway } from "./importer";
 import { readUnit } from "./unit";
 
@@ -68,6 +68,8 @@ export function spellNames(text: string): string[] {
 
 /** Every limited-use resource of a sheet, in card order. */
 export function sheetUses(sheet: UnitSheet, opts: { inLair?: boolean } = {}): UseResource[] {
+  // D&D Beyond characters: the player tracks uses there; the card keeps the synced "(2/Short Rest, 1 used)" text.
+  if (isDdbSheet(sheet)) return [];
   const out: UseResource[] = [];
   const lists: [Section, SheetEntry[]][] = [...SECTIONS.map((s) => [s, sheet[s]] as [Section, SheetEntry[]]), ["lair", sheet.lair ?? []]];
   for (const [section, entries] of lists) {

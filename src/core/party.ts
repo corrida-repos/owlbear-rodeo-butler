@@ -1,11 +1,12 @@
 /**
  * Party sync: write D&D Beyond-derived stat blocks onto the party's existing Owlbear tokens.
  * Never moves, replaces or deletes tokens; only writes Butler's unit keys (and an optional new token for
- * characters that have none, if asked). A token's live state (conditions, initiative…) is kept.
+ * characters that have none, if asked). A token's live state (initiative…) is kept; conditions follow D&D Beyond.
  */
 import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
-import { convertDdbCharacter, type PartyMember } from "./ddb";
-import { validateSheet, type UnitState } from "./sheet";
+import { convertDdbCharacter, DDB_CONDITION_IDS, type PartyMember } from "./ddb";
+import { validateSheet, type ConditionInstance, type UnitState } from "./sheet";
+import { condition } from "./hp";
 import { readUnit, unitMetadata, unitState } from "./unit";
 import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type InitiativeSetup, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
@@ -140,12 +141,31 @@ export interface PartySyncReport {
 
 /**
  * A party member's state after a sync: HP from D&D Beyond or kept from the token (capped at the new max), everything
- * else (initiative, conditions, controller, portrait…) kept. Shared by the GM's party sync and a player's self-sync.
+ * else (initiative, controller, portrait…) kept; conditions follow D&D Beyond (see syncedConditions). Shared by the GM's party sync and a player's self-sync.
  */
+/**
+ * Conditions after a sync: those D&D Beyond reports replace the previous sync's and any of the same kind added in
+ * Owlbear (D&D Beyond is the record for that condition now); synced ones D&D Beyond no longer reports are removed;
+ * the rest added in Owlbear (and Butler's own: Concentration, Stable, Dead…) stay. `m.conditions` undefined (an older
+ * export): nothing changes.
+ */
+export function syncedConditions(prev: ConditionInstance[], m: Pick<PartyMember, "conditions">): ConditionInstance[] {
+  if (!Array.isArray(m.conditions)) return prev;
+  // A player's self-sync arrives from their browser: only D&D Beyond's standard conditions are accepted.
+  const known = new Set(Object.values(DDB_CONDITION_IDS));
+  const incoming = m.conditions.filter((c) => c && known.has(c.key));
+  const fromDdb = new Set(incoming.map((c) => c.key));
+  const kept = prev.filter((c) => c.source !== "ddb" && !fromDdb.has(c.key));
+  return [...kept, ...[...new Map(incoming.map((c) => [c.key, c])).values()].map((c) =>
+    condition(c.key, { ...(c.key === "exhaustion" ? { level: Math.min(6, Math.max(1, Math.round(Number(c.level) || 1))) } : {}), source: "ddb" }))];
+}
+
 export function syncedState(m: PartyMember, prev: UnitState | undefined, hp: PartySyncOptions["hp"]): UnitState {
   const keepHp = hp === "keep" && prev !== undefined;
+  const base = prev ?? unitState(m.sheet, m.hp, null);
   const state: UnitState = {
-    ...(prev ?? unitState(m.sheet, m.hp, null)),
+    ...base,
+    conditions: syncedConditions(base.conditions ?? [], m),
     hp: keepHp ? Math.min(prev.hp, m.hp.max) : m.hp.current,
     tempHp: keepHp ? prev.tempHp : m.hp.temp,
     party: true,
@@ -227,7 +247,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
         const size = SIZE_CELLS[m.size] ?? 1;
         const idx = creates.length;
         const rolled = opts.initiative === "all" || opts.initiative === "unset" ? roll(m, record) : null;
-        const meta = { ...unitMetadata(m.sheet, unitState(m.sheet, m.hp, rolled, { party: true })), [BUTLER_ITEM_KEY]: record };
+        const fresh = unitState(m.sheet, m.hp, rolled, { party: true });
+        const meta = { ...unitMetadata(m.sheet, { ...fresh, conditions: syncedConditions(fresh.conditions, m) }), [BUTLER_ITEM_KEY]: record };
         creates.push({
           id: newId(), name: m.name, layer: "CHARACTER", image: img,
           grid: tokenImageGrid(img.width, img.height, size),
@@ -244,7 +265,7 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
 
     if (updates.length) {
       await gw.updateMetadata(updates);
-      steps.push({ step: "Update tokens", ok: true, detail: `stat blocks written to ${updates.length} existing token(s); position, image, ownership and conditions untouched` });
+      steps.push({ step: "Update tokens", ok: true, detail: `stat blocks written to ${updates.length} existing token(s); position, image and ownership untouched; conditions follow D&D Beyond (ones added in Owlbear kept)` });
     }
     if (opts.replaceWith) {
       const imgUpdates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }[] = [];
