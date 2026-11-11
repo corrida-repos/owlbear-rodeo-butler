@@ -94,9 +94,10 @@ export const skillRolls = (sheet: UnitSheet): StandardRoll[] =>
   sheet.skills.map((s) => ({ label: `${s.name} check`, formula: d20(s.bonus), bonus: s.bonus, kind: "check" }));
 
 /** 2014 rules: creatures roll initiative with their Dexterity modifier (2024 stat blocks add proficiency). */
-export function initiativeRoll(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): StandardRoll {
+export function initiativeRoll(sheet: UnitSheet, rules: "2024" | "2014" = "2024", state?: Pick<UnitState, "surprised">): StandardRoll {
   const i = sheet.initiative;
-  const mode = resolveRollMode(i.advantage, i.disadvantage);
+  // 2024: surprised → disadvantage on initiative.
+  const mode = resolveRollMode(i.advantage, i.disadvantage || (rules === "2024" && !!state?.surprised));
   const mod = rules === "2014" && sheet.kind === "creature" ? abilityMod(sheet.abilities.dex) : i.modifier;
   return { label: "Initiative", formula: d20(mod), bonus: mod, kind: "initiative", ...(mode !== "normal" ? { mode } : {}) };
 }
@@ -117,5 +118,5 @@ export function combineModes(clicked: RollMode, builtIn: RollMode | undefined): 
 /** Sheet sections shown on the card, in order, with their headings. */
 export const SECTIONS = [
   ["traits", "Traits"], ["actions", "Actions"], ["bonusActions", "Bonus Actions"], ["reactions", "Reactions"],
-  ["legendary", "Legendary Actions"], ["spells", "Spells"], ["inventory", "Inventory"],
+  ["legendary", "Legendary Actions"], ["lair", "Lair Actions"], ["spells", "Spells"], ["inventory", "Inventory"],
 ] as const;

@@ -5,10 +5,10 @@
 import { abilityMod, maxHp, STATE_KEY, type UnitSheet, type UnitState } from "./sheet";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
 import {
-  activeAndNext, endCombat, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat,
+  activeAndNext, compareOrder, endCombat, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat,
   turnOrder, waitingForInitiative, type EncounterState, type OrderUnit,
 } from "./encounter";
-import { applyDeathSave, applyHp, markDead, revive, setStable, type DeathSaveOutcome, type HpChange, type HpEvent } from "./hp";
+import { applyDeathSave, applyHp, condition, hpLogEntry, markDead, revive, setStable, undoHpPatch, withHpLog, type DeathSaveOutcome, type HpChange, type HpEvent } from "./hp";
 import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
@@ -53,9 +53,34 @@ export function trackerUnits(items: SceneItemLite[]): TrackerUnit[] {
   });
 }
 
+/**
+ * Lair actions: a turn of its own on initiative count 20, losing ties, while a creature in the fight is in its lair and
+ * has lair actions. It isn't a token, so it only exists in `turns` (the encounter steps through `turns`).
+ */
+export const LAIR_TURN_ID = "butler-lair";
+export interface LairTurn extends OrderUnit { lair: true; units: TrackerUnit[] }
+export type TurnEntry = TrackerUnit | LairTurn;
+export const isLairTurn = (t: TurnEntry | OrderUnit | undefined): t is LairTurn => !!t && (t as LairTurn).lair === true;
+
+export function lairTurn(order: TrackerUnit[]): LairTurn | null {
+  const units = order.filter((u) => !u.dead && u.state.inLair && (u.sheet.lair?.length ?? 0) > 0);
+  if (!units.length) return null;
+  // Loses initiative ties: below any unit's tie-break, modifier and Dexterity.
+  return { id: LAIR_TURN_ID, name: "Lair actions", initiative: 20, initMod: -1e6, dex: -1e6, tiebreak: -1e9, inEncounter: true, lair: true, units };
+}
+
+/** The order the encounter steps through: units, plus the lair turn when there is one. */
+export function turnsOf(order: TrackerUnit[]): TurnEntry[] {
+  const lair = lairTurn(order);
+  return lair ? [...order, lair].sort(compareOrder) : order;
+}
+
 export interface TrackerView {
   encounter: EncounterState;
+  /** Units taking turns (tokens only). */
   order: TrackerUnit[];
+  /** `order` plus the lair turn, sorted: what Next / Previous step through. */
+  turns: TurnEntry[];
   waiting: TrackerUnit[];
   /** Units in the scene that aren't in the encounter. */
   outside: TrackerUnit[];
@@ -67,11 +92,12 @@ export function trackerView(items: SceneItemLite[], sceneMeta: Record<string, un
   const units = trackerUnits(items);
   const encounter = readEncounter(sceneMeta);
   const order = turnOrder(units);
+  const turns = turnsOf(order);
   return {
-    encounter, order,
+    encounter, order, turns,
     waiting: waitingForInitiative(units),
     outside: units.filter((u) => !u.inEncounter).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
-    ...activeAndNext(encounter, order),
+    ...activeAndNext(encounter, turns),
   };
 }
 
@@ -90,20 +116,39 @@ const saveEncounter = (gw: SceneGateway, enc: EncounterState) => gw.setSceneMeta
 
 export type EncounterAction = "start" | "next" | "previous" | "end" | "reset";
 
-export async function encounterAction(gw: SceneGateway, action: EncounterAction): Promise<EncounterState> {
+export async function encounterAction(gw: SceneGateway, action: EncounterAction, opts: { rules?: "2024" | "2014" } = {}): Promise<EncounterState> {
   await requireGm(gw);
   const { view } = await load(gw);
   const enc = view.encounter;
   let next: EncounterState;
+  const all = [...view.order, ...view.waiting, ...view.outside];
+  const surprised = all.filter((u) => u.state.surprised);
   switch (action) {
-    case "start": next = startCombat(enc, view.order); break;
-    case "next": next = nextTurn(enc, view.order); break;
-    case "previous": next = previousTurn(enc, view.order); break;
-    case "end": next = endCombat(); break;
+    case "start": {
+      next = startCombat(enc, view.turns);
+      // Surprise is settled when combat starts: 5.5E already rolled initiative with disadvantage; in 5E the unit is
+      // Surprised until the end of its first turn.
+      if (surprised.length) {
+        await gw.patchMetadata(surprised.map((u) => ({ id: u.id, key: STATE_KEY, patch: {
+          surprised: undefined,
+          ...(opts.rules === "2014" && u.inEncounter ? { conditions: [...u.state.conditions.filter((c) => c.key !== "surprised"),
+            condition("surprised", { until: { turnOf: u.id, at: "end" }, from: { round: 0, turnId: "" } })] } : {}),
+        } })));
+      }
+      break;
+    }
+    case "next": next = nextTurn(enc, view.turns); break;
+    case "previous": next = previousTurn(enc, view.turns); break;
+    case "end": {
+      next = endCombat();
+      if (surprised.length) await gw.patchMetadata(surprised.map((u) => ({ id: u.id, key: STATE_KEY, patch: { surprised: undefined } })));
+      break;
+    }
     case "reset": {
       // Reset round & initiative (F10): clear initiative values and the round; units stay in the encounter.
       const ids = [...view.order, ...view.waiting].map((u) => u.id);
       if (ids.length) await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { initiative: null, initiativeRoll: undefined, initiativeTiebreak: undefined } })));
+      if (surprised.length) await gw.patchMetadata(surprised.map((u) => ({ id: u.id, key: STATE_KEY, patch: { surprised: undefined } })));
       next = endCombat();
       break;
     }
@@ -116,7 +161,7 @@ export async function encounterAction(gw: SceneGateway, action: EncounterAction)
 export async function endTurnFor(gw: SceneGateway, unitId: string, round: number): Promise<boolean> {
   const { view } = await load(gw);
   if (!view.encounter.started || view.encounter.turnId !== unitId || view.encounter.round !== round) return false;
-  await saveEncounter(gw, nextTurn(view.encounter, view.order));
+  await saveEncounter(gw, nextTurn(view.encounter, view.turns));
   return true;
 }
 
@@ -134,7 +179,7 @@ export async function setInEncounter(gw: SceneGateway, ids: string[], on: boolea
   await requireGm(gw);
   const { view } = await load(gw);
   if (!on) {
-    const enc = passTurnFrom(view.encounter, view.order, ids);
+    const enc = passTurnFrom(view.encounter, view.turns, ids);
     if (enc !== view.encounter) await saveEncounter(gw, enc);
   }
   await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { inEncounter: on } })));
@@ -157,6 +202,36 @@ export async function rollInitiativeFor(gw: SceneGateway, ids: string[], opts: {
   });
   await gw.patchMetadata(patches);
   return patches.length;
+}
+
+/** Marks units as surprised (or not) before combat starts. */
+export async function setSurprised(gw: SceneGateway, ids: string[], on: boolean) {
+  await requireGm(gw);
+  await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { surprised: on ? true : undefined } })));
+}
+
+/** A hidden unit that becomes visible when its turn comes (or not). */
+export async function setRevealOnTurn(gw: SceneGateway, ids: string[], on: boolean) {
+  await requireGm(gw);
+  await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { revealOnTurn: on ? true : undefined } })));
+}
+
+/** Shows hidden units to the players (and drops their reveal-on-turn mark). */
+export async function revealUnits(gw: SceneGateway, ids: string[]) {
+  await requireGm(gw);
+  await gw.setVisible(ids, true);
+  await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { revealOnTurn: undefined } })));
+}
+
+/**
+ * When a unit's turn starts: if it's hidden and marked to be revealed on its turn, it becomes visible.
+ * Returns its name when it was revealed.
+ */
+export async function revealOnTurnStart(gw: SceneGateway, id: string): Promise<string | null> {
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u || !u.hidden || !u.state.revealOnTurn) return null;
+  await revealUnits(gw, [id]);
+  return u.name;
 }
 
 export async function setParty(gw: SceneGateway, ids: string[], on: boolean) {
@@ -190,12 +265,16 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
     let full: Partial<UnitState> = patch;
     const autoDead = opts.autoDeadAtZero && events.includes("creature-at-zero");
     if (autoDead) { full = { ...patch, ...markDead({ conditions: patch.conditions ?? u.state.conditions }) }; dying.push(id); }
-    if (wild?.revert && item) reverts.push({ item, patch: full });
-    else if (Object.keys(full).length) patches.push({ id, key: STATE_KEY, patch: full });
+    // Logged for Undo, except when Wild Shape ended: the sheet and picture changed too, which Undo can't put back.
+    if (wild?.revert && item) reverts.push({ item, patch: { ...full, hpLog: undefined } });
+    else if (Object.keys(full).length) {
+      const entry = hpLogEntry(u.state, full, change, Date.now());
+      patches.push({ id, key: STATE_KEY, patch: entry ? { ...full, hpLog: withHpLog(u.state, entry) } : full });
+    }
     reports.push({ id, name: u.name, events, markedDead: !!autoDead });
   }
   if (dying.length) {
-    const enc = passTurnFrom(view.encounter, view.order, dying);
+    const enc = passTurnFrom(view.encounter, view.turns, dying);
     if (enc !== view.encounter) await saveEncounter(gw, enc);
   }
   if (patches.length) await gw.patchMetadata(patches);
@@ -203,12 +282,21 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
   return reports;
 }
 
+/** Undoes the unit's last HP change (see hp.ts undoHpPatch). Returns e.g. "-70" and the HP it went back to. */
+export async function undoHp(gw: SceneGateway, id: string): Promise<{ text: string; hp: number }> {
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u) throw new Error("That token is no longer in the scene.");
+  const { patch, entry } = undoHpPatch(u.state);
+  await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+  return { text: entry.text, hp: entry.before.hp };
+}
+
 /** Mark as dead (F10): Dead condition, out of initiative, turn passes on if it was theirs. */
 export async function markUnitsDead(gw: SceneGateway, ids: string[]) {
   await requireGm(gw);
   const { view } = await load(gw);
   const all = [...view.order, ...view.waiting, ...view.outside];
-  const enc = passTurnFrom(view.encounter, view.order, ids);
+  const enc = passTurnFrom(view.encounter, view.turns, ids);
   if (enc !== view.encounter) await saveEncounter(gw, enc);
   await gw.patchMetadata(all.filter((u) => ids.includes(u.id)).map((u) => ({ id: u.id, key: STATE_KEY, patch: markDead(u.state) })));
   await revertIfIncapacitated(gw, ids);
@@ -286,7 +374,7 @@ export async function resolveConcentration(gw: SceneGateway, id: string, total: 
 export async function expireConditions(gw: SceneGateway, prev: TurnPoint | null, next: TurnPoint, system: Pick<GameSystem, "conditions">): Promise<string[]> {
   const { view } = await load(gw);
   const all = [...view.order, ...view.waiting, ...view.outside];
-  const pos = (id: string) => view.order.findIndex((u) => u.id === id);
+  const pos = (id: string) => view.turns.findIndex((u) => u.id === id);
   const expired = expiredOnTurnChange(all, prev, next, pos);
   if (!expired.length) return [];
   const byUnit = new Map<string, string[]>();

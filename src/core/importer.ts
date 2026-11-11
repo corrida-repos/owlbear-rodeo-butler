@@ -51,6 +51,8 @@ export interface SceneGateway {
   /** Merges `patch` into the object stored under `key` (e.g. a unit's state), in one atomic scene update.
    *  A key set to `undefined` in the patch is removed (see mergePatch). */
   patchMetadata(updates: { id: string; key: string; patch: Record<string, unknown> }[]): Promise<void>;
+  /** Shows or hides items for players. */
+  setVisible(ids: string[], visible: boolean): Promise<void>;
   getSceneMetadata(): Promise<Record<string, unknown>>;
   setSceneMetadata(update: Record<string, unknown>): Promise<void>;
   getRoomMetadata(): Promise<Record<string, unknown>>;

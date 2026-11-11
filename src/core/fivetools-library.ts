@@ -93,9 +93,30 @@ export class FivetoolsLibrary {
     }
     await this.ensureChain(raw);
     const r = resolveCopy(raw, { getMonster: this.rawLookup, templates: this.templates ?? [] });
-    const out: FivetoolsResolved = { monster: r.monster, catalogEntry: this.catalog[this.key(raw.source)], copyChain: r.chain, copyNotes: r.notes, notes };
+    const legendaryGroup = await this.legendaryGroup(r.monster.legendaryGroup);
+    const out: FivetoolsResolved = { monster: r.monster, catalogEntry: this.catalog[this.key(raw.source)], copyChain: r.chain, copyNotes: r.notes, notes,
+      ...(legendaryGroup ? { legendaryGroup } : {}) };
     this.prepared.set(cacheKey, out);
     return out;
+  }
+
+  private groups: Promise<any[]> | null = null;
+  /** A creature's legendary group (lair actions, regional effects), following one `_copy`. Null if unavailable. */
+  async legendaryGroup(ref: { name?: string; source?: string } | undefined): Promise<any | null> {
+    if (!ref?.name || !ref.source) return null;
+    try {
+      this.groups ??= this.fetchJson("bestiary/legendarygroups.json").then((d) => (Array.isArray(d?.legendaryGroup) ? d.legendaryGroup : []));
+      const all = await this.groups;
+      const find = (n: string, s: string) => all.find((g: any) => g.name?.toLowerCase() === n.toLowerCase() && g.source?.toLowerCase() === s.toLowerCase());
+      const g = find(ref.name, ref.source);
+      if (!g) return null;
+      const base = g._copy ? find(g._copy.name, g._copy.source) : null;
+      return base ? { ...base, ...g } : g;
+    } catch (e) {
+      this.groups = null;
+      console.warn("[Butler] legendary groups unavailable", e);
+      return null;
+    }
   }
 
   /** Synchronous accessor for BuildDeps.fivetools (after prepare). */

@@ -11,7 +11,7 @@
  *  - Death save: 10+ succeeds, a natural 1 counts as two failures, a natural 20 restores 1 HP. Three successes:
  *    Stable. Three failures: dead (offered).
  */
-import { maxHp, type ConditionInstance, type UnitSheet, type UnitState } from "./sheet";
+import { maxHp, type ConditionInstance, type HpLogEntry, type UnitSheet, type UnitState } from "./sheet";
 import { DND5E_2024, isDead, isStable, type GameSystem } from "./systems";
 
 export type HpChange =
@@ -149,4 +149,73 @@ export function revive(state: Pick<UnitState, "conditions">): Partial<UnitState>
 export function setStable(state: Pick<UnitState, "conditions" | "hp" | "party">): Partial<UnitState> {
   if (!state.party || state.hp > 0) throw new Error("Only a party member at 0 HP can be Stable.");
   return { conditions: [...without(state.conditions, "stable"), condition("stable")], deathSaves: { ...ZERO } };
+}
+
+// ------------------------------------------------------------------ undo
+
+/** How many HP changes each unit keeps for Undo. */
+export const HP_LOG_MAX = 5;
+
+/** "-7", "+5", "=12", "t5" ("crit" added for a critical hit). */
+export function hpChangeText(change: HpChange): string {
+  const n = Math.max(0, Math.floor(change.amount));
+  switch (change.kind) {
+    case "damage": return `-${n}${change.critical ? " crit" : ""}`;
+    case "heal": return `+${n}`;
+    case "set": return `=${n}`;
+    case "temp": return `t${n}`;
+  }
+}
+
+type LogState = Pick<UnitState, "hp" | "tempHp" | "conditions" | "deathSaves" | "concentrationCheck" | "inEncounter" | "hpLog">;
+
+/**
+ * The log entry for an HP change: what it overwrote (only the fields its patch touches) and the HP it left, so Undo
+ * can put things back. Null if the patch changes nothing.
+ */
+export function hpLogEntry(state: LogState, patch: Partial<UnitState>, change: HpChange, at: number): HpLogEntry | null {
+  if (!Object.keys(patch).length) return null;
+  const before: HpLogEntry["before"] = { hp: state.hp, tempHp: state.tempHp };
+  if ("deathSaves" in patch) before.deathSaves = state.deathSaves ?? null;
+  if ("concentrationCheck" in patch) before.concentrationCheck = state.concentrationCheck ?? null;
+  if ("inEncounter" in patch) before.inEncounter = state.inEncounter;
+  const entry: HpLogEntry = { at, text: hpChangeText(change), before, after: { hp: patch.hp ?? state.hp, tempHp: patch.tempHp ?? state.tempHp } };
+  if (patch.conditions) {
+    const oldIds = new Set(state.conditions.map((c) => c.id));
+    const newIds = new Set(patch.conditions.map((c) => c.id));
+    const added = patch.conditions.filter((c) => !oldIds.has(c.id)).map((c) => c.id);
+    const removed = state.conditions.filter((c) => !newIds.has(c.id));
+    if (added.length) entry.addedConditions = added;
+    if (removed.length) entry.removedConditions = removed;
+  }
+  return entry;
+}
+
+/** The unit's log with `entry` added (newest last, at most HP_LOG_MAX). */
+export const withHpLog = (state: Pick<UnitState, "hpLog">, entry: HpLogEntry): HpLogEntry[] => [...(state.hpLog ?? []), entry].slice(-HP_LOG_MAX);
+
+/**
+ * Undo the newest logged HP change: HP, temp HP, death saves, the Concentration check and initiative membership go
+ * back; conditions it added (Dead, Stable…) are removed and those it removed (Concentration, Stable) come back.
+ * Refuses if the HP moved since (by something that isn't logged, e.g. a death save of 20).
+ */
+export function undoHpPatch(state: LogState): { patch: Partial<UnitState>; entry: HpLogEntry } {
+  const log = state.hpLog ?? [];
+  const entry = log.at(-1);
+  if (!entry) throw new Error("No HP change to undo.");
+  if (state.hp !== entry.after.hp || state.tempHp !== entry.after.tempHp) {
+    throw new Error(`HP changed since ${entry.text} (now ${state.hp}${state.tempHp ? ` +${state.tempHp}` : ""}): set it by hand.`);
+  }
+  const b = entry.before;
+  const patch: Partial<UnitState> = { hp: b.hp, tempHp: b.tempHp, hpLog: log.length > 1 ? log.slice(0, -1) : undefined };
+  if ("deathSaves" in b) patch.deathSaves = b.deathSaves ?? undefined;
+  if ("concentrationCheck" in b) patch.concentrationCheck = b.concentrationCheck ?? undefined;
+  if ("inEncounter" in b) patch.inEncounter = b.inEncounter;
+  if (entry.addedConditions?.length || entry.removedConditions?.length) {
+    const added = new Set(entry.addedConditions ?? []);
+    const conditions = state.conditions.filter((c) => !added.has(c.id));
+    for (const c of entry.removedConditions ?? []) if (!conditions.some((x) => x.id === c.id || (x.key === c.key && c.key !== "custom"))) conditions.push(c);
+    patch.conditions = conditions;
+  }
+  return { patch, entry };
 }

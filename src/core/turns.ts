@@ -28,6 +28,10 @@ export interface HpRequest extends Base { type: "hp"; change: HpChange }
 export interface InitiativeRequest extends Base { type: "initiative"; value: number | null }
 export interface ConditionAddRequest extends Base { type: "condition-add"; key: string; label?: string; note?: string; level?: number; duration?: Duration }
 export interface ConditionRemoveRequest extends Base { type: "condition-remove"; conditionId: string }
+/** Limited uses (uses.ts): how many of a resource are spent. */
+export interface UsesRequest extends Base { type: "uses"; key: string; spent: number }
+/** Undo the unit's last HP change. */
+export interface HpUndoRequest extends Base { type: "hp-undo" }
 /** F15: the player's character re-synced from D&D Beyond (converted in the player's browser). */
 export interface SheetSyncRequest extends Base { type: "sheet-sync"; member: PartyMember; hp: "ddb" | "keep" }
 /** Wild Shape on the player's own druid: Known Shapes, transforming (the beast's stat block is loaded and converted
@@ -39,10 +43,11 @@ export type WildShapeOp =
   | { op: "revert" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
 export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
-  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest;
+  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest
+  | UsesRequest | HpUndoRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
-export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn"];
+export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn", "uses", "hp-undo"];
 
 export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
@@ -56,6 +61,8 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   if (r.type === "initiative") return r.value === null || Number.isFinite(r.value);
   if (r.type === "condition-add") return typeof r.key === "string" && r.key.length < 40;
   if (r.type === "condition-remove") return typeof r.conditionId === "string";
+  if (r.type === "uses") return typeof r.key === "string" && r.key.length < 200 && Number.isInteger(r.spent) && r.spent >= 0 && r.spent <= 20;
+  if (r.type === "hp-undo") return true;
   if (r.type === "wild-shape") {
     const w = r as WildShapeRequest;
     const ref = (x: any) => !!x && typeof x.name === "string" && typeof x.source === "string";

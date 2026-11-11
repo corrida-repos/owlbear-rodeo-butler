@@ -96,6 +96,12 @@ export { isUnitItem };
  * 2014 rules: creatures use their Dexterity modifier (2024 stat blocks add proficiency); advantage still applies.
  */
 export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState, rules: "2024" | "2014" = "2024"): InitiativeSetup {
+  const setup = baseInitiativeSetup(meta, sheet, state, rules);
+  // 2024: a surprised combatant rolls initiative with disadvantage.
+  return state?.surprised && rules === "2024" ? { ...setup, disadvantage: true } : setup;
+}
+
+function baseInitiativeSetup(meta: Record<string, unknown>, sheet: UnitSheet | undefined, state: UnitState | undefined, rules: "2024" | "2014"): InitiativeSetup {
   if (rules === "2014" && sheet?.kind === "creature") {
     return { modifier: Math.floor((sheet.abilities.dex - 10) / 2), advantage: sheet.initiative.advantage, disadvantage: sheet.initiative.disadvantage };
   }

@@ -16,7 +16,7 @@ import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import {
   addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
-  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, type TrackerView,
+  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, undoHp, revealOnTurnStart, setSurprised, isLairTurn, LAIR_TURN_ID, type TrackerView,
 } from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
@@ -37,6 +37,8 @@ import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
 import { migrateSheet } from "../core/sheet";
+import { applyTurnStartUses, setUsesSpent } from "../core/uses";
+import { cryptoRng } from "../core/dice";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -93,6 +95,21 @@ async function createMenus() {
     icons: [{ icon, label: "Roll initiative", filter: { ...gm, every: [...UNIT_FILTER] } }],
     onClick: async (ctx) => {
       logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items), { rules: roomSystem().rules }); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
+  });
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/surprised`,
+    icons: [
+      { icon, label: "Surprised", filter: { ...gm, every: [...UNIT_FILTER], some: [{ key: ["metadata", STATE_KEY, "surprised"], value: true, operator: "!=" }] } },
+      { icon, label: "Not surprised", filter: { ...gm, every: [...UNIT_FILTER] } },
+    ],
+    onClick: async (ctx) => {
+      logClick("surprised", ctx.items);
+      const anyNot = ctx.items.some((i) => (i.metadata[STATE_KEY] as { surprised?: boolean } | undefined)?.surprised !== true);
+      await setSurprised(obrGateway, ids(ctx.items), anyNot);
+      await notify(anyNot
+        ? roomSystem().rules === "2024" ? "Surprised: they roll initiative with disadvantage." : "Surprised: they lose their first turn once combat starts."
+        : "No longer surprised.");
+    },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/hp`,
@@ -196,7 +213,7 @@ async function onSceneChange() {
       if (primary) await setupDruids(lite);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
       // Movement: the primary GM client records; every client shows the active unit's label.
-      const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
+      const mv = primary ? await trackMovement(meta, active?.id === LAIR_TURN_ID ? null : active) : readMovement(meta);
       const au = v.order.find((u) => u.id === mv?.unitId);
       const movement = mv && au && active?.id === au.id
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
@@ -209,16 +226,32 @@ async function onSceneChange() {
       const prevTurn = lastTurn;
       lastTurn = active ? { round: active.round, turnId: active.id } : null;
       if (!key || firstLook) continue; // nothing on load: only actual turn changes notify
+      // A hidden unit marked "reveal on its turn" appears now.
+      if (primary && v.active) {
+        const shown = await revealOnTurnStart(obrGateway, v.active);
+        if (shown) await notify(`${shown} is revealed to the players (its turn).`);
+      }
       // Durations end on forward turn changes (not when the GM steps back with Previous).
       if (primary && lastTurn && prevTurn) {
-        const pos = (id: string) => v.order.findIndex((u) => u.id === id);
+        const pos = (id: string) => v.turns.findIndex((u) => u.id === id);
         const forward = lastTurn.round > prevTurn.round || (lastTurn.round === prevTurn.round && pos(lastTurn.turnId) > pos(prevTurn.turnId));
-        if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
+        if (forward) {
+          for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
+          // Start of the unit's turn: legendary actions come back, Recharge abilities roll (GM-private rolls).
+          const starting = v.order.find((u) => u.id === lastTurn!.turnId);
+          if (starting) {
+            const name = await OBR.player.getName();
+            const r = await applyTurnStartUses(obrGateway, starting.id, { rng: cryptoRng, by: { id: OBR.player.id, name, role: "GM" }, unitName: starting.name });
+            for (const msg of r.rolls) await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: "LOCAL" });
+          }
+        }
       }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
       const item = (id?: string) => items.find((i) => i.id === id);
       const activeU = unit(v.active), next = unit(v.next);
+      const lair = v.turns.find((t) => t.id === v.active);
+      if (isLairTurn(lair) && role === "GM") await notify(`Initiative 20: lair actions (${lair.units.map((u) => u.name).join(", ")}).`);
       if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
         await notify(`It's your turn: ${activeU.name}`, "SUCCESS");
       } else if (next && item(next.id) && role === "PLAYER" && controls(me, item(next.id)!, next.state)) {
@@ -298,6 +331,12 @@ async function handleRequest(req: unknown) {
         break;
       }
       case "condition-remove": await removeConditionFrom(obrGateway, req.unitId, req.conditionId); break;
+      case "uses": await setUsesSpent(obrGateway, req.unitId, req.key, req.spent); break;
+      case "hp-undo": {
+        const r = await undoHp(obrGateway, req.unitId);
+        await notify(`${req.playerName} undid ${r.text} on ${name} (back to ${r.hp} HP).`);
+        break;
+      }
       case "wild-shape": {
         const rules = roomSystem().rules;
         if (req.op === "known-add") await addKnownShape(obrGateway, req.unitId, req.shape, rules);

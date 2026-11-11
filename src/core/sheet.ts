@@ -54,6 +54,9 @@ export interface UnitSheet {
   legendary: SheetEntry[];
   spells: SheetEntry[];
   inventory: SheetEntry[];
+  /** Lair actions (2014 legendary creatures), taken on initiative count 20 while the unit is in its lair. Optional:
+   *  added after the first sheets were stored, so older sheets don't have it. */
+  lair?: SheetEntry[];
   source: { provenance: Provenance; book?: string; bookTitle?: string; page?: number; url?: string; notes?: string[] };
   flags: string[];
 }
@@ -96,6 +99,27 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
+  /** Limited uses spent (Recharge, X/Day, legendary actions), by resource key (see uses.ts). */
+  uses?: Record<string, number>;
+  /** In its lair: lair actions on initiative 20 and the stat block's "in Lair" counts. */
+  inLair?: boolean;
+  /** Surprised when combat starts: 5.5E rolls initiative with disadvantage; 5E can't act on its first turn. */
+  surprised?: boolean;
+  /** A hidden token that becomes visible when its turn comes. */
+  revealOnTurn?: boolean;
+  /** Recent HP changes, newest last, for Undo (see hp.ts). */
+  hpLog?: HpLogEntry[];
+}
+
+/** One HP change and what it overwrote, so it can be undone. `before` keys set to null were absent. */
+export interface HpLogEntry {
+  at: number;
+  /** "-7", "+5", "=12", "t5" (with "crit" for a critical hit at 0 HP). */
+  text: string;
+  before: { hp: number; tempHp: number; deathSaves?: UnitState["deathSaves"] | null; concentrationCheck?: UnitState["concentrationCheck"] | null; inEncounter?: boolean };
+  after: { hp: number; tempHp: number };
+  addedConditions?: string[];
+  removedConditions?: ConditionInstance[];
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);
@@ -132,6 +156,8 @@ export function validateSheet(x: unknown): string[] {
     if (!Array.isArray(x[l]) || !x[l].every((it: unknown) => isObj(it) && typeof it.name === "string" && typeof it.text === "string"))
       e.push(`${l}: array of {name, text}`);
   }
+  if (x.lair !== undefined && (!Array.isArray(x.lair) || !x.lair.every((it: unknown) => isObj(it) && typeof it.name === "string" && typeof it.text === "string")))
+    e.push("lair: array of {name, text}");
   if (!isObj(x.source) || typeof x.source.provenance !== "string") e.push("source.provenance: missing");
   if (!Array.isArray(x.flags)) e.push("flags: array");
   return e;

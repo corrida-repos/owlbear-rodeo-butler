@@ -52,6 +52,8 @@ export interface FivetoolsResolved {
   copyNotes?: string[];
   /** e.g. how the book was chosen when none was given. */
   notes?: string[];
+  /** The creature's legendary group (lair actions), when 5etools has one. */
+  legendaryGroup?: any;
 }
 
 export interface BuildDeps {
@@ -87,7 +89,7 @@ export function buildPackage(src: EncounterSource, deps: BuildDeps): EncounterPa
     if ("fivetools" in group.statblock) {
       const { name, source } = group.statblock.fivetools;
       ft = deps.fivetools(name, source);
-      sb = convertMonster(ft.monster, { catalogEntry: ft.catalogEntry, copyChain: ft.copyChain, copyNotes: ft.copyNotes, notes: ft.notes });
+      sb = convertMonster(ft.monster, { catalogEntry: ft.catalogEntry, copyChain: ft.copyChain, copyNotes: ft.copyNotes, notes: ft.notes, legendaryGroup: ft.legendaryGroup });
       sbKey = `${slug(ft.monster.name)}-${String(ft.monster.source).toLowerCase()}`;
       for (const n of ft.notes ?? []) assumptions.push(n);
     } else {

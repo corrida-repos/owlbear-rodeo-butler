@@ -162,3 +162,18 @@ button.fchip.on { background: var(--accent); color: #fff; border-color: var(--ac
 .filters { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-top: 6px; }
 select.crsel { width: auto; padding: 3px; }
 button.secondary.on { border-color: var(--accent); color: var(--accent); }
+
+/* Limited uses (Recharge, X/Day, legendary actions), HP undo, lair turn */
+.uses { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; }
+.usebtn { background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 0 7px; font-size: 11px; font-weight: 600; line-height: 18px; }
+.usebtn.ready { border-color: var(--ok); color: var(--ok); }
+.usebtn.spent { border-color: var(--bad); color: var(--bad); }
+.usebtn:disabled { opacity: .55; cursor: default; }
+.pip { background: transparent; color: var(--muted); border: 0; padding: 0 1px; font-size: 13px; line-height: 16px; min-width: 0; }
+.pip.on { color: var(--accent); }
+.pip:disabled { cursor: default; }
+.spelluses { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.spelluse { display: inline-flex; align-items: center; gap: 4px; }
+.trow.lair:not(.active) { border-style: dashed; border-color: var(--border); }
+.trow.lair .tinit { color: var(--muted); font-weight: 700; text-align: center; }
+.hplog li { display: flex; align-items: center; gap: 6px; justify-content: space-between; }

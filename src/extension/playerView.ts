@@ -13,7 +13,7 @@ import { parseHpInput } from "../core/hp";
 import type { SceneItemLite } from "../core/importer";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import { displayConditions } from "../core/systems";
-import { trackerView, type TrackerUnit } from "../core/tracker";
+import { isLairTurn, trackerView, type TrackerUnit, type TrackerView } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
 import { openCard } from "./cardPopover";
@@ -44,11 +44,18 @@ async function request(body: Parameters<typeof sendRequest>[0], done: string) {
   renderAgain();
 }
 
+/** The lair turn is shown to players only while one of its creatures is visible to them. */
+const lairShown = (v: TrackerView) => {
+  const t = v.turns.find(isLairTurn);
+  return !!t && t.units.some((u) => !u.hidden);
+};
+
 function turnPanel(): Child {
   const v = trackerView(lite, sceneMeta);
   if (!v.encounter.started) return h("div", { className: "panel small muted" }, "Not in combat.", followToggle());
   const visible = v.order.filter((u) => !u.hidden);
   const nameOf = (id?: string) => {
+    if (id && isLairTurn(v.turns.find((t) => t.id === id))) return lairShown(v) ? "Lair actions" : null;
     const u = visible.find((x) => x.id === id);
     return u ? shownName(mine(u) ? "full" : "limited", me(), { label: u.name, name: u.name }, u.sheet, u.state) : null;
   };
@@ -57,7 +64,7 @@ function turnPanel(): Child {
   const key = `${v.encounter.round}:${v.active}`;
   return h("div", { className: `panel${myTurn ? " myturn" : ""}` },
     h("div", { className: "row between" },
-      h("span", {}, h("strong", { className: "round" }, `Round ${v.encounter.round}`), nameOf(v.active) ? ` · ${nameOf(v.active)}'s turn` : " · the GM's turn"),
+      h("span", {}, h("strong", { className: "round" }, `Round ${v.encounter.round}`), nameOf(v.active) === "Lair actions" ? " · Lair actions (initiative 20)" : nameOf(v.active) ? ` · ${nameOf(v.active)}'s turn` : " · the GM's turn"),
       myTurn && roomSettings().playerEdits
         ? h("button", { disabled: sent === key, onclick: async () => { sent = key; await request({ type: "end-turn", unitId: active!.id, round: v.encounter.round }, ""); } }, sent === key ? "Sent…" : "End my turn")
         : null),
@@ -77,7 +84,17 @@ function ownEdits(u: TrackerUnit): Child {
     hp.blur();
     void request({ type: "hp", unitId: u.id, change }, "");
   };
-  return hp;
+  const last = u.state.hpLog?.at(-1);
+  if (!last) return hp;
+  return h("span", { className: "row", style: "gap:2px;flex-wrap:nowrap" }, hp,
+    h("button", { className: "icon tiny", title: `Undo ${last.text} (back to ${last.before.hp} HP${last.before.tempHp ? ` +${last.before.tempHp} temp` : ""})`,
+      onclick: () => void request({ type: "hp-undo", unitId: u.id }, "") }, "↶"));
+}
+
+/** Surprise: what it means for the player's own unit under the room's rules. */
+function surpriseHint(u: TrackerUnit, started: boolean): Child {
+  if (!u.state.surprised || started) return null;
+  return h("div", { className: "small warn" }, roomSystem().rules === "2024" ? "Surprised: roll initiative with disadvantage." : "Surprised: no move, action or reaction on your first turn.");
 }
 
 function initBox(u: TrackerUnit): Child {
@@ -89,11 +106,16 @@ function initBox(u: TrackerUnit): Child {
 
 function orderPanel(): Child {
   const v = trackerView(lite, sceneMeta);
-  const rows = [...v.order, ...v.waiting].filter((u) => !u.hidden);
+  const showLair = lairShown(v);
+  const rows = [...v.turns, ...v.waiting].filter((u) => isLairTurn(u) ? showLair : !u.hidden);
   if (!rows.length) return null;
   return h("div", { className: "panel tracker" },
     h("h2", {}, "Initiative"),
     ...rows.map((u) => {
+      if (isLairTurn(u)) {
+        return h("div", { className: `trow lair${v.active === u.id ? " active" : ""}${v.next === u.id ? " next" : ""}` },
+          h("div", { className: "tinit" }, "20"), h("div", { className: "grow small" }, h("strong", {}, "Lair actions"), h("span", { className: "muted" }, " (loses ties)")));
+      }
       const own = mine(u);
       const name = shownName(own ? "full" : "limited", me(), { label: u.name, name: u.name }, u.sheet, u.state);
       const conds = displayConditions(roomSystem(), u.sheet, u.state);
@@ -104,6 +126,7 @@ function orderPanel(): Child {
         h("div", { className: "grow" },
           h("button", { className: "linkish", onclick: () => void openCard(u.id) }, name),
           own ? h("span", { className: "small muted" }, " (you)") : null,
+          own ? surpriseHint(u, v.encounter.started) : null,
           conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.level ? ` ${c.level}` : ""))) : null),
         own ? h("div", { className: "thp" }, h("div", { className: "hpval" }, `${u.hp}/${u.maxHp}`, u.tempHp ? h("span", { className: "ok small" }, ` +${u.tempHp}`) : null), ownEdits(u)) : null);
     }));

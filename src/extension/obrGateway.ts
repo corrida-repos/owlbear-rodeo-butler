@@ -62,6 +62,10 @@ export const obrGateway: SceneGateway = {
       }
     });
   },
+  async setVisible(ids, visible) {
+    if (!ids.length) return;
+    await OBR.scene.items.updateItems(ids, (drafts) => { for (const d of drafts) d.visible = visible; });
+  },
   getSceneMetadata: () => OBR.scene.getMetadata(),
   setSceneMetadata: (u) => OBR.scene.setMetadata(u),
   getRoomMetadata: () => OBR.room.getMetadata(),

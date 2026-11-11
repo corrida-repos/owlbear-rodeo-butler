@@ -278,6 +278,19 @@ export interface ConvertOptions {
   copyNotes?: string[];
   /** Extra provenance notes (e.g. how the source was chosen). */
   notes?: string[];
+  /** The creature's entry from 5etools' bestiary/legendarygroups.json (lair actions), if it has one. */
+  legendaryGroup?: any;
+}
+
+/** Header of the legendary list with the number of uses, so the card can count them (5etools omits it when it's 3). */
+function legendaryHeaderText(m: any, rules2024: boolean): string {
+  const n = typeof m.legendaryActions === "number" ? m.legendaryActions : 3;
+  const who = `the ${String(m.shortName && m.shortName !== true ? m.shortName : m.name).toLowerCase()}`;
+  if (rules2024) {
+    const lair = typeof m.legendaryActionsLair === "number" ? ` (${m.legendaryActionsLair} in Lair)` : "";
+    return `Legendary Action Uses: ${n}${lair}. Immediately after another creature's turn, ${who} can expend a use to take one of the following actions. ${who[0]!.toUpperCase()}${who.slice(1)} regains all expended uses at the start of each of its turns.`;
+  }
+  return `${who[0]!.toUpperCase()}${who.slice(1)} can take ${n} legendary action${n === 1 ? "" : "s"}, choosing from the options below. Only one legendary action can be used at a time and only at the end of another creature's turn. ${who[0]!.toUpperCase()}${who.slice(1)} regains spent legendary actions at the start of its turn.`;
 }
 
 export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock {
@@ -331,11 +344,16 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
   const reactions = entryList(m.reaction);
   const legendary = entryList(m.legendary);
   if (m.legendaryHeader) legendary.unshift({ name: "Legendary Actions", text: renderEntries(m.legendaryHeader) });
+  else if (legendary.length) legendary.unshift({ name: "Legendary Actions", text: legendaryHeaderText(m, src?.rules === "2024" || typeof m.legendaryActionsLair === "number") });
   if (m.mythic) legendary.push({ name: "Mythic Actions", text: renderEntries(m.mythicHeader) || "Mythic actions (see the stat block's mythic trait)." }, ...entryList(m.mythic));
   const traits = entryList(m.trait);
   const spells: ListEntry[] = [];
   for (const sc of m.spellcasting ?? []) spells.push(...spellcastingEntries(sc));
-  if (m.lairActions || m.legendaryGroup) flags.push("Lair actions/regional effects are not included.");
+  const group = opts.legendaryGroup;
+  const lairActions = group?.lairActions ?? m.lairActions;
+  const lair: ListEntry[] = lairActions ? [{ name: "Lair Actions", text: renderEntries(lairActions) }] : [];
+  if (m.legendaryGroup && !group) flags.push("Lair actions and regional effects couldn't be loaded from 5etools.");
+  if (group?.regionalEffects) flags.push("Regional effects (around the lair) are not included.");
 
   const initiative = deriveInitiative(m, scores.dex!, pb);
   const typeStr = typeText(m.type);
@@ -393,6 +411,7 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
     legendary,
     spells,
     inventory: [],
+    ...(lair.length ? { lair } : {}),
     source: {
       provenance: "official",
       book: m.source,

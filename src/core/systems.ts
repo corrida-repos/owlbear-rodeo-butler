@@ -82,7 +82,8 @@ export const DND5E_2014: GameSystem = {
   short: "5E",
   rules: "2014",
   hiddenSources: ["XPHB", "XMM", "XDMG"],
-  conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO],
+  // 2014: a surprised creature can't move or act on its first turn, nor take reactions until that turn ends.
+  conditions: [...STANDARD, { key: "surprised", label: "Surprised" }, ...BUTLER, ...BUTLER_AUTO],
   hasBloodied: false,
   // PHB 2014: "DC equals 10 or half the damage you take, whichever number is higher."
   concentrationDc: (damage) => Math.max(10, halfDown(damage)),

@@ -114,6 +114,7 @@ export function durationText(c: ConditionInstance, nameOf: (id: string) => strin
   const u = c.until;
   if (!u) return "";
   if (u.rounds) return `${u.rounds} round${u.rounds === 1 ? "" : "s"}`;
+  if (u.turnOf && u.at === "end" && c.from?.round === 0) return `until the end of ${nameOf(u.turnOf)}'s first turn`;
   if (u.turnOf) return u.at === "end" ? `until the end of ${nameOf(u.turnOf)}'s next turn` : `until the start of ${nameOf(u.turnOf)}'s turn`;
   return "";
 }

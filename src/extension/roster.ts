@@ -171,7 +171,7 @@ export function createRoster(kind: RosterKind) {
   async function addPublished(r: IndexRow) {
     const L = await getLib();
     const ft = await L.prepare(r.name, r.source);
-    const sb = convertMonster(ft.monster, { catalogEntry: ft.catalogEntry, copyChain: ft.copyChain, copyNotes: ft.copyNotes });
+    const sb = convertMonster(ft.monster, { catalogEntry: ft.catalogEntry, copyChain: ft.copyChain, copyNotes: ft.copyNotes, legendaryGroup: ft.legendaryGroup });
     const existing = entries.find((e) => e.statblock.name === sb.name && e.statblock.source.book === sb.source.book && e.label.startsWith(r.book));
     if (existing) { existing.count++; rerender(); return; }
     const e: Entry = { id: nextId++, statblock: sb, image: null, imageNote: "loading artwork…", count: 1, hp: "average", hidden: false, advantage: false,

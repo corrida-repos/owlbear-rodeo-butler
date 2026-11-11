@@ -24,7 +24,7 @@ for (const source of Object.keys(lib.catalog)) {
     if (raw._copy) copies++;
     try {
       const r = await lib.prepare(raw.name, raw.source);
-      const sb = convertMonster(r.monster, { catalogEntry: r.catalogEntry, copyChain: r.copyChain, copyNotes: r.copyNotes });
+      const sb = convertMonster(r.monster, { catalogEntry: r.catalogEntry, copyChain: r.copyChain, copyNotes: r.copyNotes, legendaryGroup: r.legendaryGroup });
       const meta = unitMetadata(sb, unitState(sb, { max: sb.hp.max, current: sb.hp.max }, null)); // throws on an invalid sheet
       if (!Number.isFinite(sb.initiative.modifier)) throw new Error("initiative modifier not finite");
       if (sb.initiative.advantage) advAuto++;
