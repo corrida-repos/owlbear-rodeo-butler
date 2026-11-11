@@ -30,6 +30,7 @@ import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
 import { readWildShape, revertWildShape } from "../core/wildshape";
 import { openWildShape } from "../extension/wildShapePopover";
+import { openActions } from "../extension/actionsPopover";
 import { h, store, type Child } from "../extension/dom";
 import { onRollLog, readRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
@@ -248,7 +249,8 @@ function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, 
         h("h1", {}, name),
         access === "full" && sheet ? h("div", { className: "small muted" }, typeLine(sheet)) : null,
         role === "GM" && state.alias?.trim() ? h("div", { className: "small warn" }, `Players see: ${state.alias.trim()}`) : null,
-        role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null)),
+        role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null),
+      access === "full" && sheet ? h("button", { className: "small", title: "What this unit can do: actions, bonus actions, reactions and spells, explained", onclick: () => void openActions(itemId).catch(showErr) }, "⚔ Actions") : null),
     conds.length ? h("div", { className: "conds" }, ...conds.map((c) =>
       h("span", { className: `cond${c.automatic ? " auto" : ""}`, title: c.detail ?? "" }, c.label, c.level ? ` ${c.level}` : "", c.detail ? ` (${c.detail})` : ""))) : null);
 }

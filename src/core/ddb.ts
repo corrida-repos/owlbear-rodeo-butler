@@ -408,6 +408,20 @@ export function renderTemplate(s: string, ctx: TplCtx): string {
 
 // ------------------------------------------------------------------ spells
 
+/** D&D Beyond activation → the action bar's cost and the casting time shown on the card. */
+export function castingTime(a: { activationType?: number; activationTime?: number } | null | undefined): { cost?: ListEntry["cost"]; label: string } {
+  const n = a?.activationTime ?? 1;
+  switch (a?.activationType) {
+    case 1: return { cost: "action", label: "Action" };
+    case 3: return { cost: "bonus", label: "Bonus Action" };
+    case 4: return { cost: "reaction", label: "Reaction" };
+    case 2: return { cost: "free", label: "No Action" };
+    case 6: return { cost: "longer", label: `${n} minute${n === 1 ? "" : "s"}` };
+    case 7: return { cost: "longer", label: `${n} hour${n === 1 ? "" : "s"}` };
+    default: return { label: "" };
+  }
+}
+
 const ABBR: Record<number, string> = { 1: "STR", 2: "DEX", 3: "CON", 4: "INT", 5: "WIS", 6: "CHA" };
 
 function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
@@ -432,12 +446,16 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
       parts.push(`${withChip(f)} ${label}`);
     }
     const range = d.range?.origin === "Self" ? "Self" : d.range?.rangeValue ? `${d.range.rangeValue} ft.` : d.range?.origin ?? "";
-    const tags = [d.concentration ? "Concentration" : "", d.ritual ? "Ritual" : "", range].filter(Boolean).join(", ");
+    const time = castingTime(d.activation);
+    const tags = [time.label, d.concentration ? "Concentration" : "", d.ritual ? "Ritual" : "", range].filter(Boolean).join(", ");
     const lvl = d.level === 0 ? "Cantrip" : `Level ${d.level}`;
-    return {
+    const entry: ListEntry = {
       name: `${prefix}${d.name} (${lvl})`,
       text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.snippet || d.description).slice(0, 260)}`.trim(),
     };
+    if (time.cost) entry.cost = time.cost;
+    if (time.cost === "longer" || (time.cost === "reaction" && d.castingTimeDescription)) entry.costNote = time.cost === "longer" ? time.label : `Reaction: ${d.castingTimeDescription}`;
+    return entry;
   };
 
   for (const cs of c.classSpells ?? []) {

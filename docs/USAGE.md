@@ -105,6 +105,25 @@ Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Sh
 
 **5E (2014) rooms:** any beast you have seen (no limit on Known Shapes). Swimming speeds are allowed from level 4. Circle of the Moon gets CR 1 from level 2. The form has the beast's hit points: at 0 you revert and leftover damage carries over to your own HP. Uses come back on any rest.
 
+## Action bar (what can I do?)
+
+A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. It's only for reading. Nothing is spent or counted (Butler only tracks HP), and rolls stay on the unit card.
+
+Open it from the token's right-click menu (**Actions**), the **⚔ Actions** button on the unit card, or, for players, **⚔ Actions** under **My units** and **⚔ My actions** on their turn. It opens at the bottom of the screen. Players can tick **Open my action bar on my turn** to have it open by itself when their turn starts (each browser remembers its own choice).
+
+- **Tabs** sort the options by cost: **● Action**, **▲ Bonus**, **◆ Reaction**, **★ Legendary**, plus **✦ Spells** and **❖ Features** (features with a limit or a recharge). Spells also appear under their casting time, so a bonus-action spell shows under **Bonus**. **⚔ Combat** lists everything anyone can do in a fight by the rules, worked out for that unit and worded for the room's edition:
+  - **Actions:** Attack, Dash, Disengage, Dodge, Help, Hide, Influence, Magic, Ready, Search, Study, Utilize (5E: Cast a Spell, Use an Object), Escape a Grapple, Stabilize.
+  - **Attack options:** Unarmed Strike (if the sheet doesn't list one), Grapple, Shove, Two-Weapon Fighting, Opportunity Attack, Improvised Weapon.
+  - **Movement:** Move, Drop Prone, Stand Up, Jump, Climb, Swim, Mount or Dismount.
+  - **Other:** Interact with an Object, Drink or Administer a Potion, Speak.
+  - **DMG optional rules** (marked *DMG*, only if your GM uses them): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature.
+
+  The numbers come from the sheet: Unarmed Strike to-hit and damage, the Grapple / Shove DC (8 + Strength + proficiency; Athletics in 5E), Athletics, Acrobatics, Stealth and Medicine bonuses, Dash distance, half Speed to stand up, and jump distances from Strength. Hover a tab to see what that cost means.
+- **Tiles** show the attack bonus, damage or save DC, the spell level (`C` for cantrips, `L2`), a limit as written on the sheet (`2/Long Rest`, `5–6` for a recharge) and ◎ for Concentration.
+- **Click a tile** for **How it works**, in plain words: what it costs, what to roll and against what (attack roll vs AC, or the target's saving throw and DC), the damage, spell slot level, Concentration, Ritual, limits and recharge. **From the sheet** has the full text.
+
+**From D&D Beyond.** For a party member, the list comes from their D&D Beyond sync: actions and bonus actions as D&D Beyond sorts them, and each spell's casting time. Re-sync (the player's **⟳ D&D Beyond**, the **⟳** on the bar, or the GM's party sync) and the list follows the sheet. Characters synced before this version need one re-sync to sort their spells by casting time.
+
 ## Give players their cards
 
 On a unit card, the GM opens **Edit unit** and sets **Controlled by** (or picks the player in the **Party** list at the top of **Add Party**). That player then finds the unit under **My units**, opens its card and rolls from it. Players do not install another extension.

@@ -16,6 +16,7 @@ import { displayConditions } from "../core/systems";
 import { trackerView, type TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
+import { openActions } from "./actionsPopover";
 import { openCard } from "./cardPopover";
 import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
 import { h, store, type Child } from "./dom";
@@ -46,7 +47,7 @@ async function request(body: Parameters<typeof sendRequest>[0], done: string) {
 
 function turnPanel(): Child {
   const v = trackerView(lite, sceneMeta);
-  if (!v.encounter.started) return h("div", { className: "panel small muted" }, "Not in combat.", followToggle());
+  if (!v.encounter.started) return h("div", { className: "panel small muted" }, "Not in combat.", followToggle(), autoActionsToggle());
   const visible = v.order.filter((u) => !u.hidden);
   const nameOf = (id?: string) => {
     const u = visible.find((x) => x.id === id);
@@ -62,9 +63,15 @@ function turnPanel(): Child {
         ? h("button", { disabled: sent === key, onclick: async () => { sent = key; await request({ type: "end-turn", unitId: active!.id, round: v.encounter.round }, ""); } }, sent === key ? "Sent…" : "End my turn")
         : null),
     myTurn ? movementInfo(sceneMeta, active!, "PLAYER") : null,
+    myTurn ? h("button", { className: "small", style: "margin-top:4px", title: "Actions, bonus actions, reactions, spells and uses", onclick: () => void openActions(active!.id) }, "⚔ My actions") : null,
     nameOf(v.next) ? h("div", { className: "small muted" }, `Next: ${nameOf(v.next)}`) : null,
-    followToggle());
+    followToggle(), autoActionsToggle());
 }
+
+/** Opens the action bar by itself when one of this player's units starts its turn (this browser). */
+const autoActionsToggle = () => h("label", { className: "small", title: "When it's your turn, open your action bar at the bottom of the screen" },
+  h("input", { type: "checkbox", checked: store.get("butler.autoActions") === "1", onchange: (e: Event) => store.set("butler.autoActions", (e.target as HTMLInputElement).checked ? "1" : "0") }),
+  "Open my action bar on my turn");
 
 function ownEdits(u: TrackerUnit): Child {
   if (!roomSettings().playerEdits) return null;
@@ -150,6 +157,7 @@ function myUnitsPanel(): Child {
             h("div", { className: "small muted" }, `HP ${state.hp}/${maxHp(sheet, state)}${state.tempHp ? ` (+${state.tempHp})` : ""} · AC ${sheet.ac}`)),
           h("div", { className: "stack tight" },
             h("button", { onclick: () => void openCard(item.id) }, "Card"),
+            h("button", { className: "small", title: "Actions, bonus actions, reactions, spells and uses (BG3-style)", onclick: () => void openActions(item.id) }, "⚔ Actions"),
             isPc && canSync ? h("button", { className: "secondary small", title: "Update this character from your D&D Beyond sheet", onclick: () => startDdbSync(item.id, ddbId) }, "⟳ D&D Beyond") : null));
       }))
       : h("div", { className: "small muted" }, "No units yet. Ask the GM to set you as the controller of your character (unit card → Edit unit → Controlled by)."),
