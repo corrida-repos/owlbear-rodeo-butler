@@ -177,3 +177,4 @@ button.secondary.on { border-color: var(--accent); color: var(--accent); }
 .trow.lair:not(.active) { border-style: dashed; border-color: var(--border); }
 .trow.lair .tinit { color: var(--muted); font-weight: 700; text-align: center; }
 .hplog li { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+.sizegrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }

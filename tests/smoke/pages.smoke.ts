@@ -124,7 +124,7 @@ test("Background: registers the context menus without errors", async ({ page }) 
   await open(page, "background.html", "background");
   await expect.poll(async () => (await obr(page)).menus.length).toBeGreaterThan(5);
   const labels = (await obr(page)).menus.flatMap((m: any) => m.icons.map((i: any) => i.label));
-  expect(labels).toEqual(expect.arrayContaining(["View unit card", "Roll initiative", "Damage / heal", "Surprised", "Mark as dead"]));
+  expect(labels).toEqual(expect.arrayContaining(["View unit card", "Roll initiative", "Damage / heal", "Surprised", "Mark as dead", "Set size"]));
   expect(errors).toEqual([]);
 });
 
@@ -171,4 +171,33 @@ test("GM popover: a world turn added by hand, renamed, reached in combat; player
   await expect(pf.locator(".panel.tracker .trow")).toHaveCount(4);
   await expect(pf.locator(".trow.active")).toContainText("Collapsing ceiling");
   expect([...errors, ...perr]).toEqual([]);
+});
+
+test("Set size: the picker resizes and re-snaps the selected tokens, then closes", async ({ page }) => {
+  const errors = await boot(page);
+  await page.evaluate(() => { const s = (window as any).__obr; s.items[1].position = { x: 80, y: 90 }; s.items[2].position = { x: 80, y: 90 }; });
+  const f = await open(page, "size.html?ids=gob,drg", "size");
+  await expect(f.getByText("Size: 2 tokens")).toBeVisible();
+  await expect(f.getByRole("button")).toHaveCount(6);
+  await f.getByRole("button", { name: "Large" }).click();
+  await expect.poll(async () => (await page.evaluate(() => (window as any).__obr.closed)) ?? []).toContain("dev.owlbear-butler/size");
+  const items = (await obr(page)).items.filter((i: any) => i.id !== "pc");
+  for (const i of items) {
+    expect(i.grid.dpi).toBe(150); // 300 px image over 2 cells
+    expect(i.scale).toEqual({ x: 1, y: 1 });
+    expect(i.position).toEqual({ x: 150, y: 150 }); // even footprint: on a grid corner
+  }
+  // Thorn wasn't selected: unchanged.
+  expect((await obr(page)).items.find((i: any) => i.id === "pc").grid.dpi).toBe(300);
+
+  // Medium on one token: back to one cell, centred in a cell.
+  const g = await open(page, "size.html?ids=gob", "size2");
+  await expect(g.getByText("Size: Goblin")).toBeVisible();
+  await expect(g.getByRole("button", { name: "Large" })).not.toHaveClass(/secondary/); // current size highlighted
+  await g.getByRole("button", { name: "Medium" }).click();
+  await expect.poll(async () => (await obr(page)).items.find((i: any) => i.id === "gob").grid.dpi).toBe(300);
+  // From a grid corner, any of the four cells around it is nearest; it must land on a cell centre.
+  const pos = (await obr(page)).items.find((i: any) => i.id === "gob").position;
+  expect([(pos.x - 75) % 150, (pos.y - 75) % 150]).toEqual([0, 0]);
+  expect(errors).toEqual([]);
 });

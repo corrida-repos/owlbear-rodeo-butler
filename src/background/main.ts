@@ -43,6 +43,7 @@ import { cryptoRng } from "../core/dice";
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
 const HP_POPOVER = `${BUTLER_NS}/hp`;
+const SIZE_POPOVER = `${BUTLER_NS}/size`;
 
 const UNIT_FILTER: KeyFilter[] = [
   { key: "layer", value: "CHARACTER" },
@@ -118,6 +119,16 @@ async function createMenus() {
       logClick("hp", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
       await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 320, height: 460, anchorElementId: elementId });
+    },
+  });
+  // Any token on the Character layer, Butler unit or not; one size for the whole selection.
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/size`,
+    icons: [{ icon, label: "Set size", filter: { ...gm, every: [{ key: "layer", value: "CHARACTER" }, { key: "type", value: "IMAGE" }] } }],
+    onClick: async (ctx, elementId) => {
+      logClick("size", ctx.items);
+      await OBR.popover.close(SIZE_POPOVER).catch(() => {});
+      await OBR.popover.open({ id: SIZE_POPOVER, url: new URL(`size.html?ids=${ctx.items.map((i) => encodeURIComponent(i.id)).join(",")}`, location.href).href, width: 280, height: 190, anchorElementId: elementId });
     },
   });
   await OBR.contextMenu.create({

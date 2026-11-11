@@ -44,6 +44,32 @@ export function tokenImageGrid(width: number, height: number, sizeCells: number)
   return { dpi: Math.max(width, height) / sizeCells, offset: { x: width / 2, y: height / 2 } };
 }
 
+/** The size categories a token can be set to from the right-click menu, smallest first. */
+export const TOKEN_SIZES = ["T", "S", "M", "L", "H", "G"] as const;
+export type TokenSize = (typeof TOKEN_SIZES)[number];
+
+/**
+ * A token's footprint in map cells from its image and image grid (and any manual scale), and the size category that
+ * matches it. Small and Medium both fill one cell, so a one-cell token reads as Medium.
+ */
+export function tokenCells(image: { width: number; height: number }, grid: { dpi: number }, scale: { x: number; y: number } = { x: 1, y: 1 }): number {
+  return (Math.max(image.width, image.height) / grid.dpi) * Math.max(Math.abs(scale.x), Math.abs(scale.y));
+}
+export function sizeForCells(cells: number): TokenSize | null {
+  const match = (["T", "M", "L", "H", "G"] as const).find((s) => Math.abs(SIZE_CELLS[s]! - cells) < 0.05);
+  return match ?? null;
+}
+
+/**
+ * What resizing a token to `size` writes: the image grid for that footprint, scale back to 1 (a manual stretch would
+ * throw the size off), and how to snap it: an even footprint (Large, Gargantuan) sits on grid corners, an odd one
+ * (Tiny inside a cell, Small, Medium, Huge) on a cell centre.
+ */
+export function resizeFor(image: { width: number; height: number }, size: TokenSize) {
+  const cells = SIZE_CELLS[size]!;
+  return { grid: tokenImageGrid(image.width, image.height, cells), scale: { x: 1, y: 1 }, snap: cells % 2 === 0 ? "corners" as const : "center" as const };
+}
+
 const snap = (v: number, dpi: number) => Math.ceil(v / dpi) * dpi;
 
 /** Place the new map at (0,0) on an empty scene, otherwise to the right of existing maps with a 2-cell gap. */

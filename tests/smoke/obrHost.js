@@ -57,6 +57,12 @@
       case "OBR_SCENE_GRID_GET_DPI": return { dpi: 150 };
       case "OBR_SCENE_GRID_GET_SCALE": return { raw: "5ft", parsed: { multiplier: 5, unit: "ft", digits: 0 } };
       case "OBR_SCENE_GRID_GET_TYPE": return { type: "SQUARE" };
+      case "OBR_SCENE_GRID_SNAP_POSITION": {
+        // 150-unit cells: corners are multiples of 150, centres sit halfway.
+        const c = (v) => (d.useCorners ? Math.round(v / 150) * 150 : Math.floor(v / 150) * 150 + 75);
+        return { position: { x: c(d.position.x), y: c(d.position.y) } };
+      }
+      case "OBR_POPOVER_CLOSE": S.closed = [...(S.closed ?? []), d.id]; return {};
       case "OBR_SCENE_GRID_GET_MEASUREMENT": return { measurement: "CHEBYSHEV" };
       case "OBR_SCENE_GRID_GET_DISTANCE": return { distance: d.from && d.to ? Math.max(Math.abs(d.from.x - d.to.x), Math.abs(d.from.y - d.to.y)) / 150 : 0 };
       case "OBR_THEME_GET_THEME": return { theme: { mode: "DARK", primary: { main: "#bb99ff" }, secondary: {}, background: {}, text: {} } };

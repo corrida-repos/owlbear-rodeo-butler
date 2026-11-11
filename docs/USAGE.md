@@ -97,6 +97,10 @@ The tracker lists each creature's uses under its name (*Fire Breath ✗ · Legen
 
 **Lairs:** creatures with lair actions (from the 2014 books) show **In its lair?** in the tracker and on their card. Turn it on and the order gets a **Lair actions** turn on initiative 20, losing ties. **Next turn** stops there, and the card's *Lair Actions* section lists the options. In 5.5E, where lair actions became extra uses, the same switch raises the in-lair counts: *Legendary Action Uses: 3 (4 in Lair)* and *Legendary Resistance (3/Day, or 4/Day in Lair)*.
 
+## Token size
+
+Right-click one or more tokens → **Set size** and pick **Tiny**, **Small**, **Medium**, **Large**, **Huge** or **Gargantuan**. Tiny is half a cell, Small and Medium one, Large 2×2, Huge 3×3, Gargantuan 4×4. Large and Gargantuan tokens snap to grid corners, the others to the middle of a cell. Any token on the Character layer works, Encounter Butler unit or not. A manual stretch is reset so the size is exact. Only the token changes: the stat block keeps its own size, so it suits Enlarge/Reduce or a homebrew token whose picture came in at the wrong size. (GM only.)
+
 ## Conditions, concentration and movement
 
 - **Add a condition** from a unit's card (**Conditions → Add condition**), or right-click one or more selected tokens → **Conditions** to apply the same one to all of them. Pick a standard condition, **Exhaustion** (with a level) or **Custom effect…** (your own name, e.g. *Hexed*), an optional note and an optional duration:

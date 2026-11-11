@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseMapOrigin, mapGeometry, tokenCenter, tokenImageGrid } from "../src/core/layout";
+import { chooseMapOrigin, mapGeometry, resizeFor, sizeForCells, tokenCells, tokenCenter, tokenImageGrid, TOKEN_SIZES } from "../src/core/layout";
 import { checkAssetUrl } from "../src/core/importer";
 
 describe("layout", () => {
@@ -25,5 +25,24 @@ describe("asset URL policy", () => {
     expect(checkAssetUrl("https://localhost:5173/x.png")).toMatch(/not reachable/);
     expect(checkAssetUrl("blob:https://www.owlbear.rodeo/123")).toMatch(/only work/);
     expect(checkAssetUrl("https://192.168.1.4/x.png")).toMatch(/not reachable/);
+  });
+});
+
+describe("token size (right-click → Set size)", () => {
+  const img = { width: 300, height: 280 };
+  it("reads a token's size from its image grid and scale", () => {
+    expect(sizeForCells(tokenCells(img, { dpi: 300 }))).toBe("M");
+    expect(sizeForCells(tokenCells(img, { dpi: 150 }))).toBe("L");
+    expect(sizeForCells(tokenCells(img, { dpi: 300 }, { x: 3, y: 3 }))).toBe("H"); // stretched by hand
+    expect(sizeForCells(tokenCells(img, { dpi: 600 }))).toBe("T");
+    expect(sizeForCells(tokenCells(img, { dpi: 200 }))).toBeNull(); // 1.5 cells: no category
+  });
+
+  it("each size: footprint, scale reset, and corner snapping only for even footprints", () => {
+    expect(TOKEN_SIZES.map((s) => [s, tokenCells(img, resizeFor(img, s).grid), resizeFor(img, s).snap])).toEqual([
+      ["T", 0.5, "center"], ["S", 1, "center"], ["M", 1, "center"], ["L", 2, "corners"], ["H", 3, "center"], ["G", 4, "corners"],
+    ]);
+    expect(resizeFor(img, "G").scale).toEqual({ x: 1, y: 1 });
+    expect(resizeFor(img, "L").grid.offset).toEqual({ x: 150, y: 140 }); // centred
   });
 });
