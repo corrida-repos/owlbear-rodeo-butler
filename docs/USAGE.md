@@ -85,7 +85,7 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 
 ## Recharge, legendary actions and daily uses
 
-Encounter Butler reads limited uses from the stat block's wording, for 5etools creatures and homebrew units. Characters synced from D&D Beyond get no counters: players track their uses and spell slots on D&D Beyond, and the card shows what the last sync brought (*Second Wind (2/Short Rest, 1 used)*).
+Encounter Butler counts limited uses for creatures and NPCs (5etools and homebrew stat blocks), read from the stat block's wording. **Player characters get no counters**, whether synced from D&D Beyond or added by hand. Players track their own uses, spell slots and Wild Shape uses on D&D Beyond or their sheet. Their card shows the totals only (*Second Wind (2/Short Rest)*, *Slots: L1 4, L2 2*), never how many are spent.
 
 - **Recharge** (*Fire Breath (Recharge 5–6)*): the card shows **Ready**. Rolling any dice from that ability marks it **Used**. At the start of the creature's turn Encounter Butler rolls the d6 for you (a private GM roll in the log) and sets it back to Ready on a 5 or 6. **🎲 d6** rolls it by hand.
 - **X/Day** (*Legendary Resistance (3/Day)*, *Dominate Mind (2/Day)*, spells *1/Day Each: …* or *3/Day: …*): pips next to the name. Click a filled pip to spend one, an empty pip to get it back. *Each* lists get a counter per spell.

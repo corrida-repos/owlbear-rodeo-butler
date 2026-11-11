@@ -282,7 +282,8 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
       seen.add(a.name);
       const lu = a.limitedUse;
       const uses = lu && (lu.maxUses || lu.useProficiencyBonus) ? (lu.maxUses ?? 0) + (lu.useProficiencyBonus ? pb : 0) : 0;
-      const usesText = uses ? ` (${uses}/${RESET[lu.resetType] ?? "rest"}${lu.numberUsed ? `, ${lu.numberUsed} used` : ""})` : "";
+      // Uses per rest, not how many are spent: the player tracks that on D&D Beyond.
+      const usesText = uses ? ` (${uses}/${RESET[lu.resetType] ?? "rest"})` : "";
       let desc = tpl(a.snippet || htmlToText(a.description));
       if (a.dice?.diceString) desc += ` ${withChip(a.dice.diceString)}`;
       const entry = { name: `${a.name}${usesText}`, text: desc };
@@ -469,12 +470,12 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
     const abilityId = k.definition?.spellCastingAbilityId ?? k.subclassDefinition?.spellCastingAbilityId;
     const a = statAbility(abilityId);
     const slots: number[] = k.definition?.spellRules?.levelSpellSlots?.[k.level] ?? [];
-    const used = new Map<number, number>((c.spellSlots ?? []).map((x: any) => [x.level, x.used]));
     if (a) {
       out.push({
         name: `Spellcasting — ${k.definition.name}`,
         text: `${ABILITY_NAME[a][0]!.toUpperCase()}${ABILITY_NAME[a].slice(1)}; spell save DC ${8 + ctx.pb + ctx.mod(a)}, spell attack ${fmtMod(ctx.pb + ctx.mod(a))} [1d20${fmtMod(ctx.pb + ctx.mod(a))}]. ` +
-          `Slots: ${slots.map((n, i) => (n ? `L${i + 1} ${n}${used.get(i + 1) ? ` (${used.get(i + 1)} used)` : ""}` : "")).filter(Boolean).join(", ") || "none"}.`,
+          // Totals only: spent slots are the player's to track on D&D Beyond (a synced count would go stale).
+          `Slots: ${slots.map((n, i) => (n ? `L${i + 1} ${n}` : "")).filter(Boolean).join(", ") || "none"}.`,
       });
     }
     // Prepared casters: include cantrips + prepared/always-prepared; if nothing is marked prepared, treat as a known-spells caster.

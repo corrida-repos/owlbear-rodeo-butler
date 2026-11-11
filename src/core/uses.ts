@@ -68,8 +68,9 @@ export function spellNames(text: string): string[] {
 
 /** Every limited-use resource of a sheet, in card order. */
 export function sheetUses(sheet: UnitSheet, opts: { inLair?: boolean } = {}): UseResource[] {
-  // D&D Beyond characters: the player tracks uses there; the card keeps the synced "(2/Short Rest, 1 used)" text.
-  if (isDdbSheet(sheet)) return [];
+  // Player characters (D&D Beyond or not): players track their own uses, spell slots and Wild Shape. Counters are
+  // for creatures and NPCs, the GM's stat blocks.
+  if (sheet.kind === "character" || isDdbSheet(sheet)) return [];
   const out: UseResource[] = [];
   const lists: [Section, SheetEntry[]][] = [...SECTIONS.map((s) => [s, sheet[s]] as [Section, SheetEntry[]]), ["lair", sheet.lair ?? []]];
   for (const [section, entries] of lists) {

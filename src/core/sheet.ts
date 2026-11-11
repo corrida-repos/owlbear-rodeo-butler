@@ -124,7 +124,7 @@ export interface HpLogEntry {
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);
 
-/** A character synced from D&D Beyond: D&D Beyond is where its player keeps limited uses and spell slots. */
+/** A character synced from D&D Beyond (its player keeps limited uses, spell slots and Wild Shape uses there). */
 export const isDdbSheet = (sheet: Pick<UnitSheet, "source">) => /dndbeyond\.com\/characters\//i.test(sheet.source.url ?? "");
 export const maxHp = (sheet: Pick<UnitSheet, "hp">, state: Pick<UnitState, "maxHpOverride">) => state.maxHpOverride ?? sheet.hp.max;
 export const saveBonus = (sheet: UnitSheet, a: Ability) => sheet.saves[a] ?? abilityMod(sheet.abilities[a]);

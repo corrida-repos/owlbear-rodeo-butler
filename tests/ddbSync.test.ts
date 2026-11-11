@@ -70,13 +70,23 @@ describe("conditions from D&D Beyond", () => {
 });
 
 describe("limited uses on D&D Beyond characters", () => {
-  it("D&D Beyond sheets get no counters (their uses stay on D&D Beyond); others still do", () => {
+  it("player characters get no counters (D&D Beyond or homebrew); creature stat blocks still do", () => {
     const m = memberWith([]);
     expect(isDdbSheet(m.sheet)).toBe(true);
     const withUses = { ...m.sheet, bonusActions: [...m.sheet.bonusActions, { name: "Second Wind (2/Short Rest, 1 used)", text: "" }] };
     expect(sheetUses(withUses)).toEqual([]);
-    const homebrew = { ...withUses, source: { provenance: "homebrew" as const } };
-    expect(isDdbSheet(homebrew)).toBe(false);
-    expect(sheetUses(homebrew).map((r) => r.label)).toContain("Second Wind");
+    // A player character from anywhere else gets none either; a creature stat block does.
+    const homebrewPc = { ...withUses, source: { provenance: "homebrew" as const } };
+    expect(isDdbSheet(homebrewPc)).toBe(false);
+    expect(sheetUses(homebrewPc)).toEqual([]);
+    const companion = { ...homebrewPc, kind: "creature" as const };
+    expect(sheetUses(companion).map((r) => r.label)).toContain("Second Wind");
+  });
+
+  it("synced card text shows totals, not D&D Beyond's spent counts (they'd go stale)", () => {
+    const m = partyFromDdbExport({ ...exportWith([]), characters: [{ ...fighter, spellSlots: [{ level: 1, used: 2, available: 4 }] }] }).members[0]!;
+    const all = [...m.sheet.actions, ...m.sheet.bonusActions, ...m.sheet.reactions, ...m.sheet.traits, ...m.sheet.spells].map((e) => `${e.name} ${e.text}`).join("\n");
+    expect(all).not.toMatch(/\bused\)/);
+    expect(all).toMatch(/Second Wind/);
   });
 });

@@ -40,7 +40,7 @@ describe("D&D Beyond character conversion (synthetic Fighter 3)", () => {
     expect(sword.text).toContain("Properties: Sap");
   });
   it("D&D Beyond actions go to the right list with uses; features up to current level only", () => {
-    expect(sh.bonusActions.map((a) => a.name)).toEqual(["Second Wind (2/Long Rest, 1 used)"]);
+    expect(sh.bonusActions.map((a) => a.name)).toEqual(["Second Wind (2/Long Rest)"]);
     const feats = sh.traits.map((a) => a.name);
     expect(feats).toEqual(expect.arrayContaining(["Fighting Style", "Improved Critical", "Darkvision", "Dwarven Resilience", "Tough", "Alert"]));
     expect(feats).not.toContain("Extra Attack");
