@@ -292,13 +292,17 @@ async function handleRequest(req: unknown) {
         break;
       }
       case "initiative": await setInitiative(obrGateway, req.unitId, req.value); break;
-      case "condition-add": await addConditionTo(obrGateway, [req.unitId], req.key, req); break;
+      case "condition-add": {
+        const reverted = await addConditionTo(obrGateway, [req.unitId], req.key, req);
+        if (reverted.length) await notify(`${name}'s Wild Shape ended (Incapacitated).`, "WARNING");
+        break;
+      }
       case "condition-remove": await removeConditionFrom(obrGateway, req.unitId, req.conditionId); break;
       case "wild-shape": {
         const rules = roomSystem().rules;
         if (req.op === "known-add") await addKnownShape(obrGateway, req.unitId, req.shape, rules);
         else if (req.op === "known-remove") await removeKnownShape(obrGateway, req.unitId, req.shape);
-        else if (req.op === "rest") await resetWildShapeUses(obrGateway, req.unitId);
+        else if (req.op === "rest") await resetWildShapeUses(obrGateway, req.unitId, req.rest ?? "long", rules);
         else if (req.op === "revert") { if (await revertWildShape(obrGateway, req.unitId)) await notify(`${name} returns to their normal form.`); }
         else {
           const r = await transformUnit(obrGateway, req.unitId, migrateSheet(req.sheet), req.image, { rules, form: req.form });

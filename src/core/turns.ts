@@ -37,8 +37,8 @@ export type WildShapeOp =
   | { op: "known-remove"; shape: { name: string; source: string } }
   | { op: "transform"; form: { name: string; source: string }; sheet: UnitSheet; image: ResolvedImage | null }
   | { op: "revert" }
-  /** A rest: Wild Shape uses come back. */
-  | { op: "rest" };
+  /** A rest: a Short Rest gives one use back (5.5E), a Long Rest all. */
+  | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
 export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest;
@@ -65,7 +65,8 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
     if (w.op === "known-remove") return ref(w.shape);
     if (w.op === "transform") return ref(w.form) && !!w.sheet && typeof w.sheet === "object"
       && (w.image === null || (!!w.image && typeof w.image.url === "string" && Number.isFinite(w.image.width) && Number.isFinite(w.image.height)));
-    return w.op === "revert" || w.op === "rest";
+    if (w.op === "rest") return w.rest === undefined || w.rest === "short" || w.rest === "long";
+    return w.op === "revert";
   }
   if (r.type === "sheet-sync") return !!r.member && typeof r.member === "object" && (r.hp === "ddb" || r.hp === "keep");
   return false;

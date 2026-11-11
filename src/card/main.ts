@@ -138,7 +138,7 @@ function wildShapePanel(state: UnitState): Child {
   const revert = () => void (role === "GM" ? revertWildShape(obrGateway, itemId) : sendRequest({ type: "wild-shape", unitId: itemId, op: "revert" })).catch(showErr);
   return h("div", { className: "panel row between", style: "border-color:var(--ok)" },
     h("span", {}, "🐾 ", h("strong", {}, `Wild Shape: ${ws.active.form.name}`),
-      h("span", { className: "small muted" }, ws.active.rules === "2014" ? " · beast HP, reverts at 0" : " · reverts at 0 HP")),
+      h("span", { className: "small muted" }, ws.active.rules === "2014" ? " · beast HP, reverts at 0" : " · reverts at 0 HP or Incapacitated")),
     h("span", { className: "row" },
       h("button", { className: "secondary small", onclick: open }, "Change"),
       h("button", { className: "small", onclick: revert }, "Revert")));

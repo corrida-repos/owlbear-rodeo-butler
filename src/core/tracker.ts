@@ -15,7 +15,7 @@ import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type
 import { isDead, type GameSystem } from "./systems";
 import { isUnitItem, readUnit } from "./unit";
 import { unitName } from "./card";
-import { finishRevert, readWildShape, wildShapeHp } from "./wildshape";
+import { finishRevert, readWildShape, revertIfIncapacitated, wildShapeHp } from "./wildshape";
 
 export interface TrackerUnit extends OrderUnit {
   sheet: UnitSheet;
@@ -211,6 +211,7 @@ export async function markUnitsDead(gw: SceneGateway, ids: string[]) {
   const enc = passTurnFrom(view.encounter, view.order, ids);
   if (enc !== view.encounter) await saveEncounter(gw, enc);
   await gw.patchMetadata(all.filter((u) => ids.includes(u.id)).map((u) => ({ id: u.id, key: STATE_KEY, patch: markDead(u.state) })));
+  await revertIfIncapacitated(gw, ids);
 }
 
 export async function reviveUnits(gw: SceneGateway, ids: string[]) {
@@ -259,6 +260,8 @@ export async function addConditionTo(gw: SceneGateway, ids: string[], key: strin
   if (opts.duration && opts.duration.kind !== "none" && !now) throw new Error("Durations count turns: start combat first, or add it without a duration.");
   const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
   await gw.patchMetadata(units.map((u) => ({ id: u.id, key: STATE_KEY, patch: addCondition(u.state, key, { ...opts, now }) })));
+  // 5.5E: Incapacitated (or Paralyzed, Petrified, Stunned, Unconscious) ends Wild Shape.
+  return revertIfIncapacitated(gw, ids);
 }
 
 export async function removeConditionFrom(gw: SceneGateway, id: string, conditionId: string) {

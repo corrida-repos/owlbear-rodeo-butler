@@ -86,18 +86,24 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 
 ## Wild Shape (druids)
 
-A druid synced from D&D Beyond gets Wild Shape automatically (Encounter Butler reads the druid level and Circle of the Moon from the class line, also in a multiclass, and follows level-ups). For any other party member, the GM right-clicks the token → **Set up Wild Shape** and enters the druid level and circle.
+Wild Shape follows the **5.5E (2024)** rules, the room's default. (A room set to 5E (2014) in **Combat → Game system** uses the 2014 version instead, described at the end.)
+
+A druid synced from D&D Beyond gets Wild Shape automatically. Encounter Butler reads the druid level and Circle of the Moon from the class line (also in a multiclass) and follows level-ups. For any other party member, the GM right-clicks the token → **Set up Wild Shape** and enters the druid level and circle.
 
 Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Shape** button on the unit card. The druid's player can use it on their own druid; the GM can use it on any.
 
-- **Known Shapes:** search the 5etools bestiary for beasts. The list only shows Beasts up to the druid's max CR for the room's edition, and swimming and flying speeds are checked when you add one. In 5.5E (2024) you can know 4, 6 or 8 forms (levels 2, 4 and 8); in 5E (2014) there's no limit, since any beast you have seen counts. Remove a shape with **✕**.
-- **Transform:** pick a Known Shape. The token takes the beast's picture and size, and the card shows the beast's body (AC, speed, Strength, Dexterity, Constitution, senses, attacks) with the druid's Intelligence, Wisdom and Charisma, languages and skill and save proficiencies (the higher bonus wins). There's no spellcasting in beast form. Uses are counted; **Rest: restore uses** gives them back.
-- **Hit points and reverting:**
-  - **5E (2014):** the form has the beast's own hit points. When they reach 0 the druid reverts, and leftover damage carries over to their normal HP (a wolf with 3 HP left that takes 8 damage reverts and takes 5).
-  - **5.5E (2024):** the druid keeps their own hit points and gains temporary HP equal to their druid level (3 × druid level for the Circle of the Moon, whose AC is also at least 13 + Wisdom). They revert when they drop to 0 HP.
-  - **Revert** on the card or in the Wild Shape panel ends it early (bonus action). In 5E this restores the HP the druid had before transforming.
+- **Known Forms:** search the 5etools bestiary. The list only shows Beasts up to your max CR: 1/4 at druid level 2, 1/2 at 4, 1 at 8. Circle of the Moon from level 3 uses druid level ÷ 3. Flying speeds are checked when you add a beast (allowed from level 8). You know 4, 6 or 8 forms (levels 2, 4 and 8). By the rules you swap one for another eligible beast when you finish a Long Rest; remove it with **✕** and add the new one.
+- **Transform** (a Wild Shape use, 2 / 3 / 4 at levels 2 / 6 / 17):
+  - The token takes the beast's picture and size.
+  - The card shows the beast's stat block. You keep your creature type, hit points, Intelligence, Wisdom and Charisma, class features, languages and feats, and your skill and save proficiencies (the higher bonus wins).
+  - You gain temporary HP equal to your druid level, or 3 × druid level for the Circle of the Moon.
+  - Moon druids also get AC of at least 13 + Wisdom and can cast their Circle Spells in beast form. From level 6 (Improved Circle Forms) their Wisdom modifier is added to Constitution saves.
+  - Anyone else can't cast spells in beast form.
+- **Reverting:** you return to your normal form when you drop to 0 HP, when you get Incapacitated (or Paralyzed, Petrified, Stunned, Unconscious), when you're marked dead, or with **Revert** (a bonus action).
+  - Picking another Known Form while transformed is a new use of Wild Shape, with fresh temp HP.
+- **Rests:** **Short Rest** gives one use back, **Long Rest** gives back all of them.
 
-Picking a different Known Shape while transformed switches forms without using another use.
+**5E (2014) rooms:** any beast you have seen (no limit on Known Shapes). Swimming speeds are allowed from level 4. Circle of the Moon gets CR 1 from level 2. The form has the beast's hit points: at 0 you revert and leftover damage carries over to your own HP. Uses come back on any rest.
 
 ## Give players their cards
 

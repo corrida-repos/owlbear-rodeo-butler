@@ -10,9 +10,11 @@
  *    Circle of the Moon: CR 1 from level 2, druid level ÷ 3 from level 6. The form has the BEAST'S hit points;
  *    at 0 the druid reverts and excess damage carries over to their own HP. Two uses per short rest.
  *  - 5.5E (2024): Known Forms 4 / 6 / 8 at levels 2 / 4 / 8, max CR 1/4 / 1/2 / 1, no fly speed before 8.
- *    Circle of the Moon (level 3+): CR druid level ÷ 3, AC at least 13 + Wis, temp HP 3 × druid level. The druid keeps
- *    their OWN hit points and gains temporary HP equal to the druid level; they revert when they drop to 0 HP.
- *    Uses 2 / 3 / 4 at levels 2 / 6 / 17 per long rest.
+ *    Circle of the Moon (level 3+): CR druid level ÷ 3, AC at least 13 + Wis, temp HP 3 × druid level, Circle Spells
+ *    castable in beast form; from level 6 (Improved Circle Forms) Wis is added to Con saves. The druid keeps their OWN
+ *    hit points and creature type and gains temporary HP equal to the druid level (each use); they revert at 0 HP,
+ *    when Incapacitated, or on death. Uses 2 / 3 / 4 at levels 2 / 6 / 17: one back on a Short Rest, all on a Long
+ *    Rest. One Known Form can be swapped on a Long Rest.
  *  In both editions the druid keeps Int, Wis and Cha, their skill and save proficiencies (the higher bonus wins)
  *  and can't cast spells in beast form.
  */
@@ -150,9 +152,10 @@ export function wildShapeLimits(rules: Rules, druidLevel: number, moon: boolean)
     available: L >= 2, maxCr, maxKnown, swim: true, fly, uses, tempHp, hours,
     summary: [
       `Max CR ${crText(maxCr)}${moon24 ? " (Circle Forms)" : ""}${!fly ? ", no flying speed" : ""}.`,
-      `Up to ${maxKnown} Known Forms.`,
-      `You keep your own hit points and gain ${tempHp} temporary HP${moon24 ? " (3 × druid level)" : " (druid level)"}${moon24 ? "; AC is at least 13 + your Wisdom modifier" : ""}. At 0 HP you revert.`,
-      `${uses} uses per long rest (one back on a short rest); lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
+      `Up to ${maxKnown} Known Forms; swap one for another eligible beast when you finish a Long Rest.`,
+      `You keep your own hit points and gain ${tempHp} temporary HP${moon24 ? " (3 × druid level)" : " (druid level)"} each time${moon24 ? "; AC is at least 13 + your Wisdom modifier" : ""}${moon24 && L >= 6 ? "; add your Wisdom modifier to Constitution saves" : ""}.`,
+      `No spellcasting${moon24 ? " except your Circle of the Moon spells" : ""}. You revert at 0 HP, when Incapacitated, if you die, or with a bonus action.`,
+      `${uses} uses: one back on a Short Rest, all on a Long Rest. A form lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
     ],
   };
 }
@@ -219,18 +222,21 @@ export function formSheet(orig: UnitSheet, beast: UnitSheet, rules: Rules, ws: P
   const perception = skills.get("perception") ?? abilityMod(abilities.wis);
 
   const moon24 = rules === "2024" && ws.moon && ws.druidLevel >= 3;
+  // Improved Circle Forms (Moon 6): add the Wisdom modifier to Constitution saving throws.
+  if (moon24 && ws.druidLevel >= 6) saves.con = (saves.con ?? abilityMod(abilities.con)) + abilityMod(abilities.wis);
   const moonAc = 13 + abilityMod(abilities.wis);
   const ac = moon24 ? Math.max(beast.ac, moonAc) : beast.ac;
   const retained = orig.traits.map((t) => t.name).filter((n) => n && !/^wild shape$/i.test(n));
   const rulesText = rules === "2014"
     ? `${orig.name} in the shape of a ${beast.name}. You have the beast's hit points; when they drop to 0 you revert and leftover damage carries over. You keep your Intelligence, Wisdom and Charisma and your skill and save proficiencies, and can't cast spells. Revert early with a bonus action.`
-    : `${orig.name} in the shape of a ${beast.name}. You keep your hit points, Intelligence, Wisdom and Charisma, class features, languages and feats, and your skill and save proficiencies. You can't cast spells. You revert at 0 HP, when Incapacitated, or with a bonus action.`;
+    : `${orig.name} in the shape of a ${beast.name}. You keep your creature type, hit points and Hit Point Dice, Intelligence, Wisdom and Charisma, class features, languages and feats, and your skill and save proficiencies (with your Proficiency Bonus). ${moon24 ? "You can't cast spells except your Circle of the Moon spells." : "You can't cast spells."}${moon24 && ws.druidLevel >= 6 ? " Improved Circle Forms: your Wisdom modifier is added to Constitution saves (included above)." : ""} You revert at 0 HP, when Incapacitated, if you die, or with a bonus action.`;
 
   return {
     ...beast,
     name: `${orig.name} (${beast.name})`,
     kind: orig.kind,
-    type: `${beast.type ?? "Beast"} · Wild Shape of ${orig.name}`,
+    // 2024: the druid keeps their own creature type.
+    type: rules === "2024" ? `${beast.name} form (Wild Shape) · ${orig.type ?? "Humanoid"}` : `${beast.type ?? "Beast"} · Wild Shape of ${orig.name}`,
     alignment: orig.alignment,
     ac,
     acNote: moon24 && moonAc > beast.ac ? `Circle Forms: 13 + Wis` : beast.acNote,
@@ -295,6 +301,10 @@ export function wildShapeHp(sheet: Pick<UnitSheet, "hp">, state: UnitState, acti
   return { patch, events: ["wild-shape-ended", ...r.events], revert: true };
 }
 
+/** 2024: Wild Shape ends when the druid has the Incapacitated condition (also through these) or dies. */
+export const ENDS_WILD_SHAPE = ["incapacitated", "paralyzed", "petrified", "stunned", "unconscious", "dead"];
+export const endsWildShape = (state: Pick<UnitState, "conditions">) => state.conditions.some((c) => ENDS_WILD_SHAPE.includes(c.key));
+
 // ------------------------------------------------------------------ scene operations
 
 async function unitWithWild(gw: SceneGateway, id: string) {
@@ -343,12 +353,13 @@ export async function removeKnownShape(gw: SceneGateway, id: string, shape: { na
   await gw.updateMetadata([{ id, metadata: { [WILD_KEY]: { ...ws, known: ws.known.filter((k) => !sameShape(k, shape)) } } }]);
 }
 
-/** A rest: Wild Shape uses come back. */
-export async function resetWildShapeUses(gw: SceneGateway, id: string) {
+/** A rest: a Long Rest restores every use; a Short Rest one (2024) or every use (2014). */
+export async function resetWildShapeUses(gw: SceneGateway, id: string, rest: "short" | "long" = "long", rules: Rules = "2024") {
   const { ws } = await unitWithWild(gw, id);
   if (!ws) return;
-  const { usesSpent: _, ...rest } = ws;
-  await gw.updateMetadata([{ id, metadata: { [WILD_KEY]: rest } }]);
+  const { usesSpent, ...others } = ws;
+  const left = rest === "short" && rules === "2024" ? Math.max(0, (usesSpent ?? 0) - 1) : 0;
+  await gw.updateMetadata([{ id, metadata: { [WILD_KEY]: left ? { ...others, usesSpent: left } : others } }]);
 }
 
 export interface TransformResult { name: string; form: string; warnings: string[] }
@@ -373,8 +384,10 @@ export async function transformUnit(gw: SceneGateway, id: string, beast: UnitShe
     if (bad) throw new Error(`${beast.name}: image ${bad}`);
   }
   const warnings: string[] = [];
-  const spent = (ws.usesSpent ?? 0) + (ws.active ? 0 : 1);
-  if (!ws.active && spent > limits.uses) warnings.push(`No Wild Shape uses left (${limits.uses}); transformed anyway.`);
+  // 2024: changing form is another use of Wild Shape (with its temp HP). 2014: switching keeps the current use.
+  const newUse = !ws.active || opts.rules === "2024";
+  const spent = (ws.usesSpent ?? 0) + (newUse ? 1 : 0);
+  if (newUse && spent > limits.uses) warnings.push(`No Wild Shape uses left (${limits.uses}); transformed anyway.`);
 
   const original: WildShapeOriginal = ws.active?.original ?? {
     sheet, hp: state.hp,
@@ -387,7 +400,7 @@ export async function transformUnit(gw: SceneGateway, id: string, beast: UnitShe
   const active: ActiveShape = { form: { name: opts.form.name, source: opts.form.source }, rules: opts.rules, since: (opts.now ?? (() => new Date()))().toISOString(), sheetName: form.name, original };
   const statePatch: Record<string, unknown> = opts.rules === "2014"
     ? { hp: form.hp.max, maxHpOverride: undefined, deathSaves: undefined, portraitUrl: undefined }
-    : { ...(ws.active ? {} : { tempHp: Math.max(state.tempHp, limits.tempHp) }), portraitUrl: undefined };
+    : { tempHp: Math.max(state.tempHp, limits.tempHp), portraitUrl: undefined };
   await gw.updateMetadata([{ id, metadata: { [SHEET_KEY]: form, [WILD_KEY]: { ...ws, usesSpent: spent, active } } }]);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch: statePatch }]);
   if (image) await gw.updateImages([{ id, image, grid: tokenImageGrid(image.width, image.height, SIZE_CELLS[form.size] ?? 1) }]);
@@ -423,6 +436,19 @@ export async function revertWildShape(gw: SceneGateway, id: string): Promise<str
   if (!ws?.active) return null;
   await writeRevert(gw, item, sheet, ws, null);
   return tokenName(item, sheet);
+}
+
+/** 2024: reverts the given units whose new conditions end Wild Shape (Incapacitated, Stunned… or Dead). Returns their names. */
+export async function revertIfIncapacitated(gw: SceneGateway, ids: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const item of (await gw.getItems()).filter((i) => ids.includes(i.id))) {
+    const ws = readWildShape(item.metadata);
+    const u = readUnit(item.metadata);
+    if (!u || ws?.active?.rules !== "2024" || !endsWildShape(u.state)) continue;
+    await writeRevert(gw, item, u.sheet, ws, null);
+    out.push(tokenName(item, u.sheet));
+  }
+  return out;
 }
 
 /** Used by changeHp after an HP change ended the form: restores sheet and picture; `statePatch` is the HP result. */

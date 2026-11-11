@@ -126,7 +126,11 @@ function rulesPanel(ws: WildShapeData): Child {
     h("ul", { className: "plain small" }, ...lim.summary.map((l) => h("li", {}, l))),
     h("div", { className: "row between" },
       h("span", { className: `small${lim.uses !== Infinity && spent >= lim.uses ? " warn" : ""}` }, usesText),
-      spent ? h("button", { className: "secondary small", disabled: !!busy, onclick: () => void act("Resting…", () => resetWildShapeUses(obrGateway, itemId), { op: "rest" }, "Asked the GM's client to restore your uses.") }, "Rest: restore uses") : null));
+      spent ? h("span", { className: "row" },
+        rules() === "2024" ? h("button", { className: "secondary small", disabled: !!busy, title: "Regain one expended use",
+          onclick: () => void act("Resting…", () => resetWildShapeUses(obrGateway, itemId, "short", rules()), { op: "rest", rest: "short" }, "Asked the GM's client to give you one use back.") }, "Short Rest") : null,
+        h("button", { className: "secondary small", disabled: !!busy, title: "Regain all uses",
+          onclick: () => void act("Resting…", () => resetWildShapeUses(obrGateway, itemId, "long", rules()), { op: "rest", rest: "long" }, "Asked the GM's client to restore your uses.") }, rules() === "2024" ? "Long Rest" : "Rest")) : null));
 }
 
 function activePanel(ws: WildShapeData, hp: { hp: number; tempHp: number; max: number }): Child {
@@ -138,7 +142,7 @@ function activePanel(ws: WildShapeData, hp: { hp: number; tempHp: number; max: n
       h("span", { className: "small" }, `HP ${hp.hp}/${hp.max}${hp.tempHp ? ` +${hp.tempHp}` : ""}`)),
     h("div", { className: "small muted" }, a.rules === "2014"
       ? `At 0 HP you return to your normal form with ${a.original.hp} HP, minus any leftover damage.`
-      : "At 0 HP you return to your normal form."),
+      : "You return to your normal form at 0 HP, when Incapacitated, or if you die. Picking another Known Shape uses Wild Shape again."),
     h("button", { disabled: !!busy, onclick: () => void act("Reverting…", () => revertWildShape(obrGateway, itemId), { op: "revert" }, "Asked the GM's client to end your Wild Shape.") }, "Revert to normal form"));
 }
 

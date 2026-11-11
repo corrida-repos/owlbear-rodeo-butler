@@ -3,12 +3,12 @@ import xmm from "./fixtures/5etools-xmm-sample.json";
 import { blankSheet } from "../src/core/collection";
 import { convertMonster, findMonster } from "../src/core/fivetools";
 import { newState, SHEET_KEY, STATE_KEY, validateSheet, type UnitSheet } from "../src/core/sheet";
-import { changeHp } from "../src/core/tracker";
+import { addConditionTo, changeHp, markUnitsDead } from "../src/core/tracker";
 import { isPlayerRequest } from "../src/core/turns";
 import { readUnit } from "../src/core/unit";
 import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import {
-  addKnownShape, detectWildShape, formSheet, knownShapeFrom, readWildShape, revertWildShape, setupWildShape, shapeProblem, transformUnit,
+  addKnownShape, detectWildShape, resetWildShapeUses, formSheet, knownShapeFrom, readWildShape, revertWildShape, setupWildShape, shapeProblem, transformUnit,
   wildShapeHp, wildShapeLimits, WILD_KEY, type KnownShape,
 } from "../src/core/wildshape";
 import { FakeScene } from "./fakeGateway";
@@ -80,6 +80,10 @@ describe("Wild Shape rules", () => {
     expect(f.spells).toEqual([]);
     expect(f.size).toBe(wolf.size);
     expect(f.actions).toEqual(wolf.actions);
+    expect(f.type).toContain("Druid 5"); // keeps the druid's creature type
+    const wolfCon = wolf.saves.con ?? Math.floor((wolf.abilities.con - 10) / 2);
+    expect(f.saves.con ?? wolfCon).toBe(wolfCon); // level 5: no Improved Circle Forms yet
+    expect(formSheet(druid(6), wolf, "2024", { druidLevel: 6, moon: true }).saves.con).toBe(wolfCon + 4); // level 6: + Wis
     expect(formSheet(druid(5), wolf, "2014", { druidLevel: 5, moon: true }).hp.max).toBe(wolf.hp.max);
   });
 });
@@ -130,6 +134,37 @@ describe("Wild Shape on the scene", () => {
     expect(unit().state.portraitUrl).toBe("https://example.com/face.png");
     expect(scene.items[0]!.image!.url).toBe(druidImage.url);
     expect(scene.items[0]!.grid).toEqual({ dpi: 300, offset: { x: 150, y: 150 } });
+  });
+
+  it("5.5E: Incapacitated, Stunned and the like end the form; so does Mark as dead", async () => {
+    await addKnownShape(scene, "d1", wolfShape, "2024");
+    await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    expect(await addConditionTo(scene, ["d1"], "prone")).toEqual([]);
+    expect(ws().active).toBeDefined();
+    expect(await addConditionTo(scene, ["d1"], "stunned")).toEqual(["Ysolde"]);
+    expect(ws().active).toBeUndefined();
+    expect(unit().sheet.name).toBe("Ysolde");
+    expect(unit().state.hp).toBe(38);
+
+    await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    await markUnitsDead(scene, ["d1"]);
+    expect(ws().active).toBeUndefined();
+  });
+
+  it("5.5E: changing form is another use with fresh temp HP; Short Rest gives one use back, Long Rest all", async () => {
+    await addKnownShape(scene, "d1", wolfShape, "2024");
+    await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    await changeHp(scene, ["d1"], { kind: "damage", amount: 10 }, { system: DND5E_2024 });
+    expect(unit().state.tempHp).toBe(5);
+    await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    expect(unit().state.tempHp).toBe(15);
+    expect(ws().usesSpent).toBe(2);
+    const r = await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    expect(r.warnings.join(" ")).toMatch(/No Wild Shape uses left/);
+    await resetWildShapeUses(scene, "d1", "short", "2024");
+    expect(ws().usesSpent).toBe(2);
+    await resetWildShapeUses(scene, "d1", "long", "2024");
+    expect(ws().usesSpent).toBeUndefined();
   });
 
   it("2014: the beast's HP take the damage, then the rest carries over to the druid", async () => {
