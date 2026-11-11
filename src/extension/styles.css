@@ -197,3 +197,6 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 .dice { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
 .dice.dice-damage { color: var(--bad); }
 .ab-detail .entry-text { max-height: 90px; }
+.ab-group { grid-column: 1 / -1; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
+button.tile.cost-move { border-bottom-color: var(--accent); } button.tile.cost-attack { border-bottom-color: var(--act); }
+.tile.cost-attack .tcost, .cost-text.cost-attack { color: var(--act); } .tile.cost-move .tcost, .cost-text.cost-move { color: var(--accent); }

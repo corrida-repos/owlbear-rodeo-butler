@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
 import { actionBar, explain, inTab, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf } from "../src/core/actions";
+import { combatOptions, skillBonus } from "../src/core/combatOptions";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
@@ -102,7 +103,9 @@ describe("action bar from a D&D Beyond character", () => {
     expect(strike[1]).toMatch(/^Make an attack roll: d20 \+\d+ against the target's Armor Class/);
     expect(explain(bar.items.find((i) => i.name === "Second Wind")!)).toContain("Limited: 2 times, back after a Long Rest.");
     // Common actions just explain their cost; their rule is the text.
-    expect(explain(bar.items.find((i) => i.name === "Opportunity Attack")!)[0]).toMatch(/Reaction/);
+    const oa = explain(bar.items.find((i) => i.name === "Opportunity Attack")!);
+    expect(oa[0]).toMatch(/^When a creature you can see leaves your reach/);
+    expect(oa[1]).toMatch(/Reaction/);
   });
 });
 
@@ -125,5 +128,46 @@ describe("action bar from a creature", () => {
   });
   it("nothing to track: no player request for it", () => {
     expect(EDIT_REQUESTS).not.toContain("use" as never);
+  });
+});
+
+describe("combat options anyone has (PHB + DMG optional rules)", () => {
+  const sheet = { ...brann.sheet, abilities: { ...brann.sheet.abilities, str: 16, dex: 14 }, proficiencyBonus: 2, speed: { walk: 30 },
+    skills: [{ name: "Athletics", bonus: 5 }], actions: brann.sheet.actions.filter((a) => a.name !== "Unarmed Strike") };
+  const opts = combatOptions(sheet, "2024");
+  const by = (n: string) => opts.find((o) => o.name === n)!;
+  it("works out this character's numbers", () => {
+    expect(by("Unarmed Strike")).toMatchObject({ cost: "attack", summary: "+5 · 4 Bludgeoning" });
+    expect(by("Grapple")).toMatchObject({ cost: "attack", summary: "DC 13 Str/Dex" });
+    expect(by("Grapple").text).toContain("against DC 13 (8 + Strength + proficiency)");
+    expect(by("Shove").text).toContain("push it 5 ft. away or knock it Prone");
+    expect(by("Escape a Grapple").summary).toBe("Athletics +5 or Acrobatics +2");
+    expect(by("Jump").summary).toBe("16 ft. / 6 ft.");
+    expect(by("Stand Up").summary).toBe("15 ft.");
+    expect(by("Dash").summary).toBe("+30 ft.");
+    expect(skillBonus(sheet, "Stealth", "dex")).toBe(2);
+  });
+  it("covers the PHB actions, attack options, movement and the DMG's optional ones", () => {
+    const names = opts.map((o) => o.name);
+    for (const n of ["Attack", "Dash", "Disengage", "Dodge", "Help", "Hide", "Influence", "Magic", "Ready", "Search", "Study", "Utilize",
+      "Grapple", "Shove", "Two-Weapon Fighting", "Opportunity Attack", "Improvised Weapon", "Drop Prone", "Stand Up", "Jump", "Climb", "Swim",
+      "Interact with an Object", "Stabilize", "Disarm", "Mark", "Overrun", "Shove Aside", "Tumble", "Climb onto a Bigger Creature"]) expect(names).toContain(n);
+    expect(opts.filter((o) => o.source === "DMG").every((o) => o.group === "DMG optional rules")).toBe(true);
+    expect(by("Drink or Administer a Potion").cost).toBe("bonus");
+  });
+  it("uses the 2014 wording and rules in a 5E room", () => {
+    const old = combatOptions(sheet, "2014");
+    const names = old.map((o) => o.name);
+    expect(names).toContain("Cast a Spell");
+    expect(names).toContain("Use an Object");
+    expect(names).not.toContain("Influence");
+    expect(old.find((o) => o.name === "Grapple")!.summary).toBe("Athletics +5");
+    expect(old.find((o) => o.name === "Drink a Potion")!.cost).toBe("action");
+  });
+  it("doesn't repeat an Unarmed Strike the sheet already has, and explains the DMG ones as optional", () => {
+    expect(combatOptions(brann.sheet).some((o) => o.name === "Unarmed Strike")).toBe(false);
+    const disarm = actionBar(sheet).items.find((i) => i.name === "Disarm")!;
+    expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide/);
+    expect(inTab(disarm, "common")).toBe(true);
   });
 });

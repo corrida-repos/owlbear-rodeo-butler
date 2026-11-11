@@ -5,10 +5,11 @@
  * so a re-sync updates it. Pure, so the parsing and explanations are unit-tested; the actions page renders it.
  */
 import { parseChips, rollSegments } from "./chips";
+import { combatOptions, type OptionGroup } from "./combatOptions";
 import type { SheetEntry, UnitSheet } from "./sheet";
 
 /** What using an entry costs. "longer": a casting time of a minute or more; "none": passive or unknown. */
-export type Cost = "action" | "bonus" | "reaction" | "legendary" | "free" | "longer" | "none";
+export type Cost = "action" | "bonus" | "reaction" | "legendary" | "free" | "longer" | "move" | "attack" | "none";
 export type Category = "common" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature";
 export type Reset = "short" | "long" | "turn" | "other";
 
@@ -35,6 +36,9 @@ export interface ActionItem {
   ritual?: boolean;
   /** "+5 · 1d8+3 Slashing · DC 13 Dex" */
   summary: string;
+  /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule). */
+  group?: OptionGroup;
+  source?: "PHB" | "DMG";
 }
 
 // ------------------------------------------------------------------ parsing
@@ -184,41 +188,13 @@ export function legendaryPerRound(sheet: Pick<UnitSheet, "legendary">): number {
   return words[m[1]!.toLowerCase()] ?? Number(m[1]);
 }
 
-// ------------------------------------------------------------------ common actions
+// ------------------------------------------------------------------ combat options (PHB + DMG)
 
-interface CommonDef { name: string; cost: Cost; text: string }
-const COMMON_2024: CommonDef[] = [
-  { name: "Attack", cost: "action", text: "Make an attack with a weapon or an Unarmed Strike. With Extra Attack you make more than one attack with this same action." },
-  { name: "Dash", cost: "action", text: "Gain extra movement equal to your Speed for this turn (so you can move twice as far)." },
-  { name: "Disengage", cost: "action", text: "Your movement doesn't provoke Opportunity Attacks for the rest of this turn." },
-  { name: "Dodge", cost: "action", text: "Until the start of your next turn, attack rolls against you have Disadvantage and you make Dexterity saving throws with Advantage. You lose this if you're Incapacitated or your Speed is 0." },
-  { name: "Help", cost: "action", text: "Help an ally with an ability check (they get Advantage on their next one), or distract an enemy within 5 ft. of you so an ally's next attack against it has Advantage." },
-  { name: "Hide", cost: "action", text: "While Heavily Obscured or behind Three-Quarters or Total Cover, make a DC 15 Dexterity (Stealth) check. On a success you have the Invisible condition until you're found, make noise or attack." },
-  { name: "Influence", cost: "action", text: "Try to get a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check." },
-  { name: "Magic", cost: "action", text: "Cast a spell with a casting time of an action, or use a magic item or magical feature that takes an action." },
-  { name: "Ready", cost: "action", text: "Choose a trigger (\"if the goblin steps out\") and an action. When the trigger happens, you can use your Reaction to take that action. A readied spell needs Concentration until it's released." },
-  { name: "Search", cost: "action", text: "Look for something: a Wisdom (Insight, Medicine, Perception or Survival) check." },
-  { name: "Study", cost: "action", text: "Recall or work something out: an Intelligence (Arcana, History, Investigation, Nature or Religion) check." },
-  { name: "Utilize", cost: "action", text: "Use a nonmagical object: pull a lever, light a torch, open a stuck door." },
-  { name: "Opportunity Attack", cost: "reaction", text: "When a creature you can see leaves your reach, you can make one melee attack against it." },
-];
-const COMMON_2014: CommonDef[] = [
-  { name: "Attack", cost: "action", text: "Make one melee or ranged attack. With Extra Attack you make more than one attack with this same action." },
-  { name: "Cast a Spell", cost: "action", text: "Cast a spell with a casting time of 1 action." },
-  { name: "Dash", cost: "action", text: "Gain extra movement equal to your speed for this turn (so you can move twice as far)." },
-  { name: "Disengage", cost: "action", text: "Your movement doesn't provoke opportunity attacks for the rest of the turn." },
-  { name: "Dodge", cost: "action", text: "Until your next turn, attack rolls against you have disadvantage (if you can see the attacker) and you make Dexterity saving throws with advantage." },
-  { name: "Help", cost: "action", text: "Give an ally advantage on their next ability check, or on their next attack against a creature within 5 ft. of you." },
-  { name: "Hide", cost: "action", text: "Make a Dexterity (Stealth) check to hide from creatures that can't clearly see you." },
-  { name: "Ready", cost: "action", text: "Choose a trigger and an action. When the trigger happens, you can use your reaction to take that action. A readied spell needs concentration." },
-  { name: "Search", cost: "action", text: "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check." },
-  { name: "Use an Object", cost: "action", text: "Use an object that needs your action, or interact with a second object this turn." },
-  { name: "Opportunity Attack", cost: "reaction", text: "When a hostile creature you can see moves out of your reach, you can make one melee attack against it." },
-];
-
-export function commonActions(rules: "2024" | "2014"): ActionItem[] {
-  return (rules === "2014" ? COMMON_2014 : COMMON_2024).map((c) => ({
-    key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost, summary: "",
+/** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers. */
+export function commonActions(sheet: UnitSheet, rules: "2024" | "2014"): ActionItem[] {
+  return combatOptions(sheet, rules).map((c) => ({
+    key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
+    ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
   }));
 }
 
@@ -239,7 +215,7 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): Ac
       items.push(it);
     }
   }
-  return { items: [...items, ...commonActions(rules)], legendary: legendaryPerRound(sheet) };
+  return { items: [...items, ...commonActions(sheet, rules)], legendary: legendaryPerRound(sheet) };
 }
 
 /** Which tab an item shows under. Spells and features show under their cost too. */
@@ -260,6 +236,8 @@ export const COST_EXPLAINED: Record<Cost, string> = {
   legendary: "A Legendary Action: taken right after another creature's turn ends. The creature has a few per round and gets them back at the start of its own turn.",
   free: "Doesn't take an action.",
   longer: "Takes longer than a turn to do, so it's usually not something for the middle of a fight.",
+  move: "Uses movement, not an action: spend it before, after or between your actions.",
+  attack: "Done as one of the attacks of your Attack action (so with Extra Attack you can mix it with other attacks).",
   none: "",
 };
 
@@ -275,8 +253,14 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   } else if (it.cost !== "none") {
     out.push(COST_EXPLAINED[it.cost]);
     if (it.cost === "reaction" && it.costNote) out.push(`Trigger: ${it.costNote.replace(/^Reaction:\s*/i, "")}.`);
+    if (it.category === "common" && it.costNote && it.cost !== "attack") out.push(`${it.costNote}.`);
   }
-  if (it.category === "common") return out;
+  if (it.category === "common") {
+    // The rule, with this unit's numbers, comes first; then what it costs.
+    out.unshift(it.text);
+    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide: only if your GM uses it.");
+    return out;
+  }
 
   const rolls = rollSegments(parseChips(it.text));
   const atk = rolls.find((r) => r.kind === "attack");

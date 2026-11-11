@@ -96,7 +96,8 @@ broadcast messages and visibility).
 **Action bar:** [actions.html](../actions.html) (`?id=<itemId>`, [src/actions/main.ts](../src/actions/main.ts)) renders
 [actions.ts](../src/core/actions.ts), a read-only reference built from the sheet: section → cost, `SheetEntry.cost`
 (D&D Beyond spell casting time), limits / recharge / legendary cost parsed from entry names, and `explain()` for the
-plain-language "How it works". It stores nothing; rolls stay on the card.
+plain-language "How it works". [combatOptions.ts](../src/core/combatOptions.ts) holds the PHB / DMG combat options with
+numbers from the sheet, per edition. It stores nothing; rolls stay on the card.
 
 **Limits (Owlbear docs, checked 2026-11-08):** broadcast messages ≤ 16 kB; room metadata ≤ 16 kB in total for all
 extensions. No documented limit for item metadata (256 kB on one token tested fine, see below).

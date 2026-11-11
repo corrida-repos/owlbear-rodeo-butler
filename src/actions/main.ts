@@ -1,7 +1,7 @@
 /**
  * Action bar popover (actions.html?id=<itemId>): a BG3-style hotbar for one unit, to consult.
  *  - Everything the unit can do as tiles, sorted by what it costs: ● Action, ▲ Bonus Action, ◆ Reaction, ★ Legendary,
- *    plus spells, limited features and the common actions anyone can take.
+ *    plus spells, limited features and every combat option the PHB (and the DMG's optional rules) give anyone.
  *  - A tile opens "how it works" in plain words and the sheet's text.
  * Read-only: nothing is spent or counted here (Butler only tracks HP); rolls are made from the unit card.
  * Built from the unit's sheet: for a party member that's their D&D Beyond sync, so re-syncing updates it.
@@ -9,6 +9,7 @@
 import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { actionBar, COST_EXPLAINED, explain, inTab, type ActionBar, type ActionItem, type Category, type Cost } from "../core/actions";
+import { OPTION_GROUPS } from "../core/combatOptions";
 import { cardAccess, controls, editionText, portraitUrl, unitName } from "../core/card";
 import { parseChips } from "../core/chips";
 import { BUTLER_ITEM_KEY } from "../core/constants";
@@ -33,10 +34,10 @@ const TABS: { tab: Tab; label: string; title: string }[] = [
   { tab: "legendary", label: "★ Legendary", title: COST_EXPLAINED.legendary },
   { tab: "spell", label: "✦ Spells", title: "Spells and spell lists" },
   { tab: "feature", label: "❖ Features", title: "Features with a limit or a recharge" },
-  { tab: "common", label: "Common", title: "Actions anyone can take (Dash, Dodge, Help…)" },
+  { tab: "common", label: "⚔ Combat", title: "What anyone can do in combat by the rules: actions, Unarmed Strike, Grapple, Shove, movement, and the DMG's optional options" },
 ];
-const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", free: "○", longer: "⧗", none: "" };
-const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", free: "No action", longer: "Longer casting time", none: "" };
+const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
+const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
 
 let item: Item | null = null;
 let role: "GM" | "PLAYER" = "PLAYER";
@@ -70,8 +71,8 @@ function tabsRow(bar: ActionBar): Child {
 }
 
 function tile(it: ActionItem): HTMLElement {
-  const icon = it.category === "spell" ? "✦" : it.category === "common" ? "⬡" : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
-  const badge = it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
+  const icon = it.category === "spell" ? "✦" : it.category === "common" ? (it.source === "DMG" ? "◇" : "⬡") : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
+  const badge = it.source === "DMG" ? "DMG" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
   return h("button", {
     className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}`,
     title: `${it.name}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}`,
@@ -158,7 +159,12 @@ function render() {
       head(sheet, state),
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
-      h("div", { className: "ab-grid" }, ...(shown.length ? shown.map(tile) : [h("div", { className: "small muted" }, "Nothing here.")])),
+      h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
+        : tab === "common" ? OPTION_GROUPS.flatMap((g) => {
+          const inGroup = shown.filter((it) => it.group === g);
+          return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (ask your GM)" : g), ...inGroup.map(tile)] : [];
+        })
+          : shown.map(tile))),
       sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
       footer(sheet, state));
