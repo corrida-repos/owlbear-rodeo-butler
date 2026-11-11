@@ -27,6 +27,7 @@ const EVENTS: Record<string, string> = {
   "creature-at-zero": "at 0 HP", "dropped-to-zero": "down: death saves", "death-save-failure": "death save failure",
   "three-failures": "three failures", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
   "concentration-check": "Concentration check (on its card)", "concentration-lost": "Concentration lost",
+  "wild-shape-ended": "Wild Shape ended (back to normal form)",
 };
 
 async function apply(kind: HpChange["kind"]) {

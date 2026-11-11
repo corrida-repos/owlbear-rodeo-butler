@@ -6,6 +6,7 @@
  *  - Turns: "It's your turn" / "You're up next" for the controlling player, the active-turn ring on the map
  *    (a local item, so each client draws its own), and optionally following the active unit.
  *  - The GM's client applies players' "end my turn" requests.
+ *  - Wild Shape: the menu entry, players' Wild Shape requests, and (primary GM) setting up druids found on the map.
  */
 import "../extension/devlog";
 import OBR, { buildShape, type Item, type KeyFilter } from "@owlbear-rodeo/sdk";
@@ -31,6 +32,11 @@ import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
 import { pushRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
+import { openWildShape } from "../extension/wildShapePopover";
+import {
+  addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
+} from "../core/wildshape";
+import { migrateSheet } from "../core/sheet";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -57,6 +63,17 @@ async function createMenus() {
     icons: [{ icon, label: "View unit card", filter: { max: 1, every: [...UNIT_FILTER] } }],
     onClick: async (ctx, elementId) => {
       logClick("view-unit", ctx.items); if (ctx.items[0]) await openCard(ctx.items[0].id, elementId); },
+  });
+  // Wild Shape: on druids (set up from their sheet or by the GM); the GM can set it up on any party member.
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/wild-shape`,
+    icons: [
+      { icon, label: "Wild Shape: revert or change", filter: { max: 1, every: [...UNIT_FILTER, { key: ["metadata", WILD_KEY, "active"], value: undefined, operator: "!=" }] } },
+      { icon, label: "Wild Shape", filter: { max: 1, every: [...UNIT_FILTER, { key: ["metadata", WILD_KEY], value: undefined, operator: "!=" }, { key: ["metadata", WILD_KEY], value: null, operator: "!=" }] } },
+      { icon, label: "Set up Wild Shape", filter: { roles: ["GM"], max: 1, every: [...UNIT_FILTER, { key: ["metadata", STATE_KEY, "party"], value: true }] } },
+    ],
+    onClick: async (ctx, elementId) => {
+      logClick("wild-shape", ctx.items); if (ctx.items[0]) await openWildShape(ctx.items[0].id, elementId); },
   });
   const gm = { roles: ["GM" as const] };
   await OBR.contextMenu.create({
@@ -176,6 +193,7 @@ async function onSceneChange() {
       const v = trackerView(lite, meta);
       await updateRing(v, items, role);
       const primary = await isPrimaryGm();
+      if (primary) await setupDruids(lite);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
       // Movement: the primary GM client records; every client shows the active unit's label.
       const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
@@ -218,6 +236,23 @@ async function onSceneChange() {
   }
 }
 
+/**
+ * Primary GM client: units whose sheet shows Wild Shape (a druid class line from D&D Beyond, or a Wild Shape trait) get
+ * it set up; a druid set up that way follows level-ups and subclass changes. Hand-set values aren't touched.
+ */
+async function setupDruids(items: Awaited<ReturnType<typeof obrGateway.getItems>>) {
+  for (const it of items) {
+    if (it.layer !== "CHARACTER" || it.type !== "IMAGE" || !(SHEET_KEY in it.metadata)) continue;
+    const u = readUnit(it.metadata);
+    if (!u) continue;
+    const ws = readWildShape(it.metadata);
+    if (ws?.active || (ws && !ws.auto) || it.metadata[WILD_KEY] === null) continue; // transformed, set by hand, or removed by the GM
+    const found = detectWildShape(u.sheet);
+    if (!found || (ws && ws.druidLevel === found.druidLevel && ws.moon === found.moon)) continue;
+    await setupWildShape(obrGateway, it.id, { ...found, auto: true }).catch((e) => console.error("[Butler] Wild Shape setup failed", e));
+  }
+}
+
 /** Applies a request from a player's (or GM's) client; only the primary GM client acts on it. */
 async function handleRequest(req: unknown) {
   try {
@@ -252,12 +287,29 @@ async function handleRequest(req: unknown) {
       }
       case "hp": {
         const [r] = await changeHp(obrGateway, [req.unitId], req.change, { system: roomSystem() });
+        if (r?.events.includes("wild-shape-ended")) await notify(`${name}'s Wild Shape ended: back to their normal form.`, "WARNING");
         if (r?.events.includes("dropped-to-zero")) await notify(`${name} dropped to 0 HP.`, "WARNING");
         break;
       }
       case "initiative": await setInitiative(obrGateway, req.unitId, req.value); break;
-      case "condition-add": await addConditionTo(obrGateway, [req.unitId], req.key, req); break;
+      case "condition-add": {
+        const reverted = await addConditionTo(obrGateway, [req.unitId], req.key, req);
+        if (reverted.length) await notify(`${name}'s Wild Shape ended (Incapacitated).`, "WARNING");
+        break;
+      }
       case "condition-remove": await removeConditionFrom(obrGateway, req.unitId, req.conditionId); break;
+      case "wild-shape": {
+        const rules = roomSystem().rules;
+        if (req.op === "known-add") await addKnownShape(obrGateway, req.unitId, req.shape, rules);
+        else if (req.op === "known-remove") await removeKnownShape(obrGateway, req.unitId, req.shape);
+        else if (req.op === "rest") await resetWildShapeUses(obrGateway, req.unitId, req.rest ?? "long", rules);
+        else if (req.op === "revert") { if (await revertWildShape(obrGateway, req.unitId)) await notify(`${name} returns to their normal form.`); }
+        else {
+          const r = await transformUnit(obrGateway, req.unitId, migrateSheet(req.sheet), req.image, { rules, form: req.form });
+          await notify(`${r.name} turns into a ${r.form}.${r.warnings.length ? ` ${r.warnings.join(" ")}` : ""}`, "SUCCESS");
+        }
+        break;
+      }
       case "sheet-sync": {
         const who = await applySelfSync(obrGateway, req.unitId, req.member, req.hp);
         await notify(`${req.playerName} synced ${who} from D&D Beyond.`, "SUCCESS");

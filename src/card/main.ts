@@ -28,6 +28,8 @@ import { saveToCollection } from "../extension/collectionPanel";
 import { obrGateway } from "../extension/obrGateway";
 import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
+import { readWildShape, revertWildShape } from "../core/wildshape";
+import { openWildShape } from "../extension/wildShapePopover";
 import { h, store, type Child } from "../extension/dom";
 import { onRollLog, readRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
@@ -123,6 +125,23 @@ async function refreshSceneUnits() {
   const units = trackerUnits(items);
   const order = turnOrder(units);
   sceneUnits = [...order, ...units.filter((u) => !order.includes(u))].map((u) => ({ id: u.id, name: u.name }));
+}
+
+/** Wild Shape: the current form with Revert, and the button to the Known Shapes popover. */
+function wildShapePanel(state: UnitState): Child {
+  if (!item) return null;
+  const ws = readWildShape(item.metadata);
+  if (!ws && !(role === "GM" && state.party)) return null;
+  const open = () => void openWildShape(itemId).catch(showErr);
+  if (!ws) return h("div", { className: "row" }, h("button", { className: "secondary small", onclick: open }, "Set up Wild Shape"));
+  if (!ws.active) return h("div", { className: "row" }, h("button", { className: "secondary small", onclick: open, title: "Known Shapes and transforming" }, "🐾 Wild Shape"));
+  const revert = () => void (role === "GM" ? revertWildShape(obrGateway, itemId) : sendRequest({ type: "wild-shape", unitId: itemId, op: "revert" })).catch(showErr);
+  return h("div", { className: "panel row between", style: "border-color:var(--ok)" },
+    h("span", {}, "🐾 ", h("strong", {}, `Wild Shape: ${ws.active.form.name}`),
+      h("span", { className: "small muted" }, ws.active.rules === "2014" ? " · beast HP, reverts at 0" : " · reverts at 0 HP or Incapacitated")),
+    h("span", { className: "row" },
+      h("button", { className: "secondary small", onclick: open }, "Change"),
+      h("button", { className: "small", onclick: revert }, "Revert")));
 }
 
 let addOpen = false;
@@ -414,7 +433,7 @@ function render() {
       nodes.push(header(info, u.sheet, u.state, access));
       if (access === "full") {
         
-        nodes.push(statsBar(u.sheet, u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        nodes.push(statsBar(u.sheet, u.state), wildShapePanel(u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
         if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
       } else {
         nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));

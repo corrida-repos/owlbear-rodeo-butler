@@ -33,7 +33,7 @@ export class FakeScene implements SceneGateway {
       const metadata = JSON.parse(JSON.stringify(s.metadata));
       const k = this.grid.dpi / s.grid.dpi;
       this.items.push({
-        id: s.id, type: "IMAGE", layer: s.layer, name: s.name, label: s.label, image: { ...s.image }, metadata, spec: s,
+        id: s.id, type: "IMAGE", layer: s.layer, name: s.name, label: s.label, image: { ...s.image }, grid: { dpi: s.grid.dpi, offset: { ...s.grid.offset } }, metadata, spec: s,
         position: { x: s.position.x - s.grid.offset.x * k, y: s.position.y - s.grid.offset.y * k },
         size: { w: s.image.width * k, h: s.image.height * k },
       });
@@ -43,7 +43,7 @@ export class FakeScene implements SceneGateway {
   async updateImages(updates: { id: string; image: any; grid: { dpi: number; offset: { x: number; y: number } } }[]) {
     for (const u of updates) {
       const it = this.items.find((i) => i.id === u.id);
-      if (it) { it.image = { ...u.image }; it.spec = it.spec ? { ...it.spec, image: u.image, grid: u.grid } : it.spec; }
+      if (it) { it.image = { ...u.image }; it.grid = { dpi: u.grid.dpi, offset: { ...u.grid.offset } }; it.spec = it.spec ? { ...it.spec, image: u.image, grid: u.grid } : it.spec; }
     }
   }
   async updateMetadata(updates: { id: string; metadata: Record<string, unknown> }[]) {

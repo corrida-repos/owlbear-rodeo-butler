@@ -9,9 +9,9 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { customFromFivetools, parseFivetoolsJson, quickStatblock } from "../core/custom";
 import { describeInitiative, fmtMod } from "../core/dice";
-import { convertMonster, fivetoolsArtUrl, fivetoolsTokenUrl } from "../core/fivetools";
+import { convertMonster } from "../core/fivetools";
 import { resolveCopy } from "../core/fivetools-copy";
-import { FivetoolsLibrary } from "../core/fivetools-library";
+import { fetchMonsterIndex, fivetoolsImage, getLib } from "./bestiary";
 import { rollbackImport, type ResolvedImage } from "../core/importer";
 import { quickAdd, type QuickAddReport } from "../core/quickadd";
 import type { Statblock } from "../core/schema";
@@ -24,7 +24,7 @@ import { searchableSource } from "../core/systems";
 // ------------------------------------------------------------------ 5etools index + library (shared, lazy)
 
 import { activeFilterCount, browse, CR_STEPS, CREATURE_TYPES, matchesFilters, NO_FILTERS, SIZES, type IndexRow, type SearchFilters } from "../core/search";
-import { decodeEnvs, ENV_LABEL, ENVS } from "../core/habitat";
+import { ENV_LABEL, ENVS } from "../core/habitat";
 import { SIZE_NAMES } from "../core/constants";
 import { store } from "./dom";
 
@@ -43,19 +43,11 @@ let indexLoading: Promise<void> | null = null;
 const indexListeners = new Set<() => void>();
 function loadIndex() {
   indexLoading ??= (async () => {
-    const res = await fetch(new URL("data/monsters.json", location.href));
-    if (!res.ok) throw new Error(`monster index: HTTP ${res.status}`);
-    const j = await res.json();
-    index = (j.rows as any[]).map(([name, source, cr, type, size, token, env, caster]) => {
-      const e = decodeEnvs(String(env ?? "*"));
-      return { name, source, cr, type, size, token: !!token, book: j.books[source]?.[0] ?? source, rules: j.books[source]?.[1] ?? "", envs: e.envs, envAssigned: e.assigned, caster: caster === 1 };
-    });
+    index = await fetchMonsterIndex();
     for (const f of indexListeners) f(); // only the result lists: a full re-render would steal focus from a search box
   })().catch((e) => { indexLoading = null; showError(e); });
   return indexLoading;
 }
-let lib: Promise<FivetoolsLibrary> | null = null;
-const getLib = () => (lib ??= new FivetoolsLibrary().init());
 
 const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 /** Text search (2+ letters), narrowed by the filters; with filters and no text, every match by CR then name. */
@@ -145,20 +137,6 @@ function createSearchBox(placeholder: string, onPick: (r: IndexRow) => Promise<v
   filterListeners.add(update);
   const el = h("div", {}, h("div", { className: "row", style: "flex-wrap:nowrap" }, input, filterBtn), panelWrap, results);
   return { el, refresh: () => { if (!index) void loadIndex(); update(); } };
-}
-
-/** 5etools artwork: own token, then own art, then the base creature's token/art. */
-async function fivetoolsImage(m: any): Promise<{ image: ResolvedImage | null; note: string }> {
-  const c = [fivetoolsTokenUrl(m.source, m.name), fivetoolsArtUrl(m.source, m.name)];
-  if (m._copiedFrom) c.push(fivetoolsTokenUrl(m._copiedFrom.source, m._copiedFrom.name), fivetoolsArtUrl(m._copiedFrom.source, m._copiedFrom.name));
-  for (const [i, url] of c.entries()) {
-    try {
-      const size = await measure(url);
-      const note = i === 0 ? "5etools token" : i === 1 ? "5etools artwork (no token)" : i === 2 ? "base creature's token" : "base creature's artwork";
-      return { image: { url, ...size, mime: "image/webp" }, note };
-    } catch { /* try next */ }
-  }
-  return { image: null, note: "no 5etools artwork — choose an image" };
 }
 
 const placeholderImage = (): ResolvedImage => ({ url: new URL("tokens/party-placeholder.png", location.href).toString(), width: 256, height: 256, mime: "image/png" });

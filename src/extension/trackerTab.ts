@@ -48,6 +48,7 @@ const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
   "revived-from-zero": (n) => `${n} is back above 0 HP.`,
   "concentration-check": (n) => `${n} must make a Concentration save: the prompt is on its card.`,
   "concentration-lost": (n) => `${n} dropped to 0 HP and lost Concentration.`,
+  "wild-shape-ended": (n) => `${n}'s Wild Shape ended: back to their normal form.`,
 };
 
 function report(rs: HpReport[]) {
