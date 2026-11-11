@@ -24,8 +24,8 @@ let condNote = "";
 const mode = new URLSearchParams(location.search).get("focus") === "conditions" ? "conditions" : "hp";
 
 const EVENTS: Record<string, string> = {
-  "creature-at-zero": "at 0 HP", "dropped-to-zero": "down: death saves", "death-save-failure": "death save failure",
-  "three-failures": "three failures", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
+  "creature-at-zero": "at 0 HP", "dropped-to-zero": "down: death saves", "damage-at-zero": "hit at 0 HP (death save failure)",
+  "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
   "concentration-check": "Concentration check (on its card)", "concentration-lost": "Concentration lost",
   "wild-shape-ended": "Wild Shape ended (back to normal form)",
 };

@@ -15,7 +15,7 @@ import { BUTLER_NS } from "../core/constants";
 import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls";
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import {
-  addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
+  addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, removeConditionFrom, resolveConcentration,
   rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, undoHp, revealOnTurnStart, setSurprised, isLairTurn, isWorldTurn, LAIR_TURN_ID, type TrackerView,
 } from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
@@ -314,12 +314,6 @@ async function handleRequest(req: unknown) {
       }
       case "rewind": await rewindActive(await OBR.scene.getMetadata(), req.unitId); break;
       case "dash": await setDash(await OBR.scene.getMetadata(), req.unitId, req.on); break;
-      case "death-save": {
-        const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
-        if (outcome === "dead") await notify(`${name}: third death save failure. Mark as dead?`, "WARNING");
-        if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
-        break;
-      }
       case "hp": {
         const [r] = await changeHp(obrGateway, [req.unitId], req.change, { system: roomSystem() });
         if (r?.events.includes("wild-shape-ended")) await notify(`${name}'s Wild Shape ended: back to their normal form.`, "WARNING");

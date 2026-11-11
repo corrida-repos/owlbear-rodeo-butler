@@ -70,9 +70,9 @@ Below the sync, **Import published / homebrewed party member** work exactly like
    | `12` | Set current HP to 12. |
    | `t5` | Grant 5 temporary HP; keeps the higher amount rather than stacking. |
 
-   Typed `-70` instead of `-7`? **↶** next to the HP box undoes the last change, including what it set off: death saves, lost Concentration, or an automatic Mark as dead. Each unit keeps its last five changes; **Recent HP changes** under the order lists them. Undo also works on the unit card, and players can undo changes to their own units.
+   Typed `-70` instead of `-7`? **↶** next to the HP box undoes the last change, including what it set off: lost Concentration, Stable, or an automatic Mark as dead. Each unit keeps its last five changes; **Recent HP changes** under the order lists them. Undo also works on the unit card, and players can undo changes to their own units.
 
-5. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
+5. A party member at 0 HP shows **Death Saves**. Butler only tracks that they're making them; keep successes and failures at the table. Their card has **Roll death save** (just the d20), and for you **Stable** and **☠ Dead**. Healing them above 0 HP also ends Death Saves. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
 6. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
 
 **World turns:** for anything that should happen at a point in the order but isn't a creature (lair actions you run yourself, a collapsing ceiling, a storm, rising water, reinforcements), press **+ World turn**. It adds a *Lair / world actions* slot on initiative 20, losing ties. In its row you can rename it, change its initiative, and add a reminder note (*DC 13 Dex save under the cracks*). When its turn comes, **Next turn** stops there and you get a notice with the name and note. Encounter Butler doesn't resolve anything for you. Add as many as you need. World turns belong to the scene, so they stay through **End combat** and **Reset** until you remove them with **✕**. Players don't see them unless you click **🙈** to show one (**👁**).
@@ -134,7 +134,7 @@ What a player sees under the Encounter Butler button:
 
 - **Whose turn it is** and who's next, with **End my turn** on their own turn and the movement bar.
 - **Initiative:** every unit they can see, by name (or the alias you gave it), picture and conditions. Hidden tokens never appear. Their own units also show HP, an HP box (`-7`, `+5`, `12`, `t5`) and their initiative box. Clicking another unit's name shows only its name, picture and conditions.
-- **My units:** each with **Card** (roll, conditions, death saves, Concentration saves) and, for a character, **⟳ D&D Beyond**: it opens their character on D&D Beyond; they click the same *Copy party for Encounter Butler* bookmark there (set it up once from the panel), and your Encounter Butler updates that unit's stat block. HP is kept unless they choose to take it from D&D Beyond.
+- **My units:** each with **Card** (roll, conditions, death save rolls, Concentration saves) and, for a character, **⟳ D&D Beyond**: it opens their character on D&D Beyond; they click the same *Copy party for Encounter Butler* bookmark there (set it up once from the panel), and your Encounter Butler updates that unit's stat block. HP is kept unless they choose to take it from D&D Beyond.
 
 Player changes go through your Encounter Butler, so it must be open in the room. To stop players changing their units, untick **Players may change their own units…** in **Combat → Room settings**. Rolls, the movement tracker and cards still work.
 

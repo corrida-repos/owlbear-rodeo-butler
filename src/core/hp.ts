@@ -4,12 +4,11 @@
  *
  * Rules (same in 2014 and 2024 unless noted):
  *  - Damage removes temporary HP first. Temp HP doesn't stack: the higher value is kept.
- *  - Healing can't go above max HP. A unit at 0 HP that is healed stops making death saves (and loses Stable).
- *  - Damage to a party member already at 0 HP is a death save failure (two on a critical hit). Damage while Stable
- *    removes Stable and death saves resume. Damage at 0 HP that equals or exceeds max HP kills outright (massive
- *    damage); Butler offers Mark as dead rather than doing it silently.
- *  - Death save: 10+ succeeds, a natural 1 counts as two failures, a natural 20 restores 1 HP. Three successes:
- *    Stable. Three failures: dead (offered).
+ *  - Healing can't go above max HP. A party member at 0 HP that is healed leaves Death Saves (and loses Stable).
+ *  - Death Saves is a status only: a party member at 0 HP who is neither Stable nor Dead. Butler doesn't count
+ *    successes and failures; the table does, and the GM sets Stable or Mark as dead when they're settled.
+ *  - Damage while Stable removes Stable (back to Death Saves). Damage at 0 HP that equals or exceeds max HP kills
+ *    outright (massive damage); Butler offers Mark as dead rather than doing it silently.
  */
 import { maxHp, type ConditionInstance, type HpLogEntry, type UnitSheet, type UnitState } from "./sheet";
 import { DND5E_2024, isDead, isStable, type GameSystem } from "./systems";
@@ -33,11 +32,10 @@ export function parseHpInput(raw: string): HpChange | null {
 
 export type HpEvent =
   | "dropped-to-zero"        // reached 0 HP from above
-  | "death-save-failure"     // damaged while at 0 HP (party)
-  | "three-failures"         // death saves: offer Mark as dead
+  | "damage-at-zero"         // a party member making death saves took damage (a failure at the table; two on a crit)
   | "massive-damage"         // damage at 0 HP ≥ max HP: offer Mark as dead
   | "stable-lost"
-  | "revived-from-zero"      // healed above 0 HP: death saves / Stable cleared
+  | "revived-from-zero"      // a party member healed above 0 HP: out of Death Saves (Stable cleared)
   | "creature-at-zero"       // a non-party unit at 0 HP: offer Mark as dead (or automatic, by setting)
   | "concentration-check"    // damaged while concentrating: Con save pending (state.concentrationCheck)
   | "concentration-lost"     // dropped to 0 HP while concentrating: Concentration ends
@@ -45,10 +43,9 @@ export type HpEvent =
 
 export interface HpResult { patch: Partial<UnitState>; events: HpEvent[] }
 
-type S = Pick<UnitState, "hp" | "tempHp" | "maxHpOverride" | "party" | "conditions" | "deathSaves" | "concentrationCheck">;
+type S = Pick<UnitState, "hp" | "tempHp" | "maxHpOverride" | "party" | "conditions" | "concentrationCheck">;
 
 const without = (conds: ConditionInstance[], key: string) => conds.filter((c) => c.key !== key);
-const ZERO = { successes: 0, failures: 0 };
 
 export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange, system: Pick<GameSystem, "concentrationDc"> = DND5E_2024): HpResult {
   const max = maxHp(sheet, state);
@@ -63,7 +60,6 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
 
   let hp = state.hp;
   let conditions = state.conditions;
-  let deathSaves = state.deathSaves;
 
   if (change.kind === "damage") {
     if (n === 0) return { patch, events };
@@ -80,18 +76,14 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
         }
       } else if (state.party && !isDead(state)) {
         if (rest >= max) events.push("massive-damage");
-        if (isStable(state)) { conditions = without(conditions, "stable"); events.push("stable-lost"); deathSaves = { ...ZERO }; }
-        const ds = deathSaves ?? ZERO;
-        deathSaves = { ...ds, failures: Math.min(3, ds.failures + (change.critical ? 2 : 1)) };
-        events.push("death-save-failure");
-        if (deathSaves.failures >= 3) events.push("three-failures");
+        if (isStable(state)) { conditions = without(conditions, "stable"); events.push("stable-lost"); }
+        else events.push("damage-at-zero");
       }
     }
   } else {
     const target = change.kind === "heal" ? Math.min(max, hp + n) : Math.min(max, n);
     if (state.hp <= 0 && target > 0) {
-      if (deathSaves || isStable(state)) events.push("revived-from-zero");
-      deathSaves = undefined;
+      if (state.party && !isDead(state)) events.push("revived-from-zero");
       if (isStable(state)) conditions = without(conditions, "stable");
     } else if (state.hp > 0 && target === 0 && !isDead(state)) {
       events.push(state.party ? "dropped-to-zero" : "creature-at-zero");
@@ -107,24 +99,7 @@ export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange
 
   if (hp !== state.hp) patch.hp = hp;
   if (conditions !== state.conditions) patch.conditions = conditions;
-  if (deathSaves !== state.deathSaves) patch.deathSaves = deathSaves;
-  if (hp === 0 && state.hp > 0 && state.party && !isDead(state)) patch.deathSaves = { ...ZERO };
   return { patch, events };
-}
-
-export type DeathSaveOutcome = "success" | "failure" | "two-failures" | "regain-1-hp" | "stable" | "dead";
-
-/** Applies a death saving throw with the given natural d20. */
-export function applyDeathSave(state: S, natural: number): { patch: Partial<UnitState>; outcome: DeathSaveOutcome } {
-  const ds = state.deathSaves ?? ZERO;
-  if (natural >= 20) return { patch: { hp: 1, deathSaves: undefined, conditions: without(state.conditions, "stable") }, outcome: "regain-1-hp" };
-  if (natural >= 10) {
-    const successes = ds.successes + 1;
-    if (successes >= 3) return { patch: { deathSaves: { ...ZERO }, conditions: [...without(state.conditions, "stable"), condition("stable")] }, outcome: "stable" };
-    return { patch: { deathSaves: { ...ds, successes } }, outcome: "success" };
-  }
-  const failures = Math.min(3, ds.failures + (natural <= 1 ? 2 : 1));
-  return { patch: { deathSaves: { ...ds, failures } }, outcome: failures >= 3 ? "dead" : natural <= 1 ? "two-failures" : "failure" };
 }
 
 let counter = 0;
@@ -137,7 +112,7 @@ export function condition(key: string, extra: Partial<ConditionInstance> = {}): 
 /** Mark as dead (F10): Dead replaces Death Saves and Stable, and the unit leaves initiative. */
 export function markDead(state: Pick<UnitState, "conditions">): Partial<UnitState> {
   if (isDead(state)) return { inEncounter: false };
-  return { conditions: [...without(without(state.conditions, "stable"), "dead"), condition("dead")], deathSaves: undefined, inEncounter: false };
+  return { conditions: [...without(without(state.conditions, "stable"), "dead"), condition("dead")], inEncounter: false };
 }
 
 /** Revive: removes Dead. The unit can then be added back to initiative. */
@@ -145,10 +120,10 @@ export function revive(state: Pick<UnitState, "conditions">): Partial<UnitState>
   return { conditions: without(state.conditions, "dead") };
 }
 
-/** Stable set by hand on a party member at 0 HP: supersedes Death Saves (counters reset; stays in initiative). */
+/** Stable set on a party member at 0 HP: ends Death Saves (the unit stays in initiative). */
 export function setStable(state: Pick<UnitState, "conditions" | "hp" | "party">): Partial<UnitState> {
   if (!state.party || state.hp > 0) throw new Error("Only a party member at 0 HP can be Stable.");
-  return { conditions: [...without(state.conditions, "stable"), condition("stable")], deathSaves: { ...ZERO } };
+  return { conditions: [...without(state.conditions, "stable"), condition("stable")] };
 }
 
 // ------------------------------------------------------------------ undo
@@ -167,7 +142,7 @@ export function hpChangeText(change: HpChange): string {
   }
 }
 
-type LogState = Pick<UnitState, "hp" | "tempHp" | "conditions" | "deathSaves" | "concentrationCheck" | "inEncounter" | "hpLog">;
+type LogState = Pick<UnitState, "hp" | "tempHp" | "conditions" | "concentrationCheck" | "inEncounter" | "hpLog">;
 
 /**
  * The log entry for an HP change: what it overwrote (only the fields its patch touches) and the HP it left, so Undo
@@ -176,7 +151,6 @@ type LogState = Pick<UnitState, "hp" | "tempHp" | "conditions" | "deathSaves" | 
 export function hpLogEntry(state: LogState, patch: Partial<UnitState>, change: HpChange, at: number): HpLogEntry | null {
   if (!Object.keys(patch).length) return null;
   const before: HpLogEntry["before"] = { hp: state.hp, tempHp: state.tempHp };
-  if ("deathSaves" in patch) before.deathSaves = state.deathSaves ?? null;
   if ("concentrationCheck" in patch) before.concentrationCheck = state.concentrationCheck ?? null;
   if ("inEncounter" in patch) before.inEncounter = state.inEncounter;
   const entry: HpLogEntry = { at, text: hpChangeText(change), before, after: { hp: patch.hp ?? state.hp, tempHp: patch.tempHp ?? state.tempHp } };
@@ -195,9 +169,9 @@ export function hpLogEntry(state: LogState, patch: Partial<UnitState>, change: H
 export const withHpLog = (state: Pick<UnitState, "hpLog">, entry: HpLogEntry): HpLogEntry[] => [...(state.hpLog ?? []), entry].slice(-HP_LOG_MAX);
 
 /**
- * Undo the newest logged HP change: HP, temp HP, death saves, the Concentration check and initiative membership go
+ * Undo the newest logged HP change: HP, temp HP, the Concentration check and initiative membership go
  * back; conditions it added (Dead, Stable…) are removed and those it removed (Concentration, Stable) come back.
- * Refuses if the HP moved since (by something that isn't logged, e.g. a death save of 20).
+ * Refuses if the HP moved since (by something that isn't logged, e.g. a Wild Shape revert or a re-sync).
  */
 export function undoHpPatch(state: LogState): { patch: Partial<UnitState>; entry: HpLogEntry } {
   const log = state.hpLog ?? [];
@@ -208,7 +182,6 @@ export function undoHpPatch(state: LogState): { patch: Partial<UnitState>; entry
   }
   const b = entry.before;
   const patch: Partial<UnitState> = { hp: b.hp, tempHp: b.tempHp, hpLog: log.length > 1 ? log.slice(0, -1) : undefined };
-  if ("deathSaves" in b) patch.deathSaves = b.deathSaves ?? undefined;
   if ("concentrationCheck" in b) patch.concentrationCheck = b.concentrationCheck ?? undefined;
   if ("inEncounter" in b) patch.inEncounter = b.inEncounter;
   if (entry.addedConditions?.length || entry.removedConditions?.length) {

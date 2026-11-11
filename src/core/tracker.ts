@@ -9,7 +9,7 @@ import {
   activeAndNext, compareOrder, endCombat, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat,
   turnOrder, waitingForInitiative, type EncounterState, type OrderUnit,
 } from "./encounter";
-import { applyDeathSave, applyHp, condition, hpLogEntry, markDead, revive, setStable, undoHpPatch, withHpLog, type DeathSaveOutcome, type HpChange, type HpEvent } from "./hp";
+import { applyHp, condition, hpLogEntry, markDead, revive, setStable, undoHpPatch, withHpLog, type HpChange, type HpEvent } from "./hp";
 import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
@@ -267,7 +267,7 @@ export async function revealOnTurnStart(gw: SceneGateway, id: string): Promise<s
 
 export async function setParty(gw: SceneGateway, ids: string[], on: boolean) {
   await requireGm(gw);
-  await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { party: on, ...(on ? {} : { deathSaves: undefined }) } })));
+  await gw.patchMetadata(ids.map((id) => ({ id, key: STATE_KEY, patch: { party: on } })));
 }
 
 // ------------------------------------------------------------------ HP, death, revive
@@ -400,15 +400,6 @@ export async function makeStable(gw: SceneGateway, id: string) {
   const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
   if (!u) throw new Error("That token is no longer in the scene.");
   await gw.patchMetadata([{ id, key: STATE_KEY, patch: setStable(u.state) }]);
-}
-
-/** Records a death saving throw rolled from the card (natural d20 value). */
-export async function recordDeathSave(gw: SceneGateway, id: string, natural: number): Promise<DeathSaveOutcome> {
-  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
-  if (!u) throw new Error("That token is no longer in the scene.");
-  const { patch, outcome } = applyDeathSave(u.state, natural);
-  await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
-  return outcome;
 }
 
 /** Sets a max HP override (or clears it with null), keeping current HP within the new maximum. */

@@ -42,11 +42,10 @@ export function resetTrackerTab() { view = null; notes = []; }
 const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
   "creature-at-zero": (n) => `${n} is at 0 HP: mark it dead (☠) when it's out.`,
   "dropped-to-zero": (n) => `${n} dropped to 0 HP and makes death saves.`,
-  "death-save-failure": (n) => `${n} took damage at 0 HP: one death save failure.`,
-  "three-failures": (n) => `${n} has three death save failures: mark as dead (☠)?`,
+  "damage-at-zero": (n) => `${n} took damage at 0 HP: a death save failure (two on a critical hit).`,
   "massive-damage": (n) => `${n} took massive damage (at least their max HP past 0): instant death by the rules. Mark as dead (☠)?`,
   "stable-lost": (n) => `${n} is no longer Stable.`,
-  "revived-from-zero": (n) => `${n} is back above 0 HP.`,
+  "revived-from-zero": (n) => `${n} is back above 0 HP: no more death saves.`,
   "concentration-check": (n) => `${n} must make a Concentration save: the prompt is on its card.`,
   "concentration-lost": (n) => `${n} dropped to 0 HP and lost Concentration.`,
   "wild-shape-ended": (n) => `${n}'s Wild Shape ended: back to their normal form.`,
@@ -162,7 +161,7 @@ function row(u: TrackerUnit, v: TrackerView, tie: { up: boolean; down: boolean }
   const isActive = v.active === u.id;
   const uses = usesSummary(u.sheet, u.state);
   const conds = displayConditions(roomSystem(), u.sheet, u.state);
-  const offerDead = !u.dead && u.hp <= 0 && (!u.party || (u.state.deathSaves?.failures ?? 0) >= 3);
+  const offerDead = !u.dead && u.hp <= 0 && !u.party;
   return h("div", { className: `trow${isActive ? " active" : ""}${v.next === u.id ? " next" : ""}${u.hp <= 0 ? " down" : ""}` },
     h("div", { className: "tinit" }, initBox(u)),
     u.imageUrl ? h("img", { className: "thumb round small", src: u.imageUrl, alt: "" }) : h("div", { className: "thumb empty small" }, "?"),

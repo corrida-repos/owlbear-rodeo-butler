@@ -287,9 +287,9 @@ export function wildShapeHp(sheet: Pick<UnitSheet, "hp">, state: UnitState, acti
   if (overflow === null) return { ...applyHp(sheet, state, change, system), revert: false };
 
   const o = active.original;
-  const restored: UnitState = { ...state, hp: o.hp, maxHpOverride: o.maxHpOverride, tempHp: tempLeft, deathSaves: undefined };
+  const restored: UnitState = { ...state, hp: o.hp, maxHpOverride: o.maxHpOverride, tempHp: tempLeft };
   const r = overflow > 0 ? applyHp(o.sheet, restored, { kind: "damage", amount: overflow, critical: change.kind === "damage" ? change.critical : undefined }, system) : { patch: {}, events: [] as HpEvent[] };
-  const patch: Partial<UnitState> = { hp: o.hp, maxHpOverride: o.maxHpOverride, tempHp: tempLeft, deathSaves: undefined, portraitUrl: o.portraitUrl, ...r.patch };
+  const patch: Partial<UnitState> = { hp: o.hp, maxHpOverride: o.maxHpOverride, tempHp: tempLeft, portraitUrl: o.portraitUrl, ...r.patch };
   // The Concentration save is against the whole hit, not just the part that carried over.
   const concentrating = (patch.conditions ?? state.conditions).some((c) => c.key === "concentration");
   if (change.kind === "damage" && n > 0 && concentrating) {
@@ -384,7 +384,7 @@ export async function transformUnit(gw: SceneGateway, id: string, beast: UnitShe
   const form = formSheet(original.sheet, beast, opts.rules, ws);
   const active: ActiveShape = { form: { name: opts.form.name, source: opts.form.source }, rules: opts.rules, since: (opts.now ?? (() => new Date()))().toISOString(), sheetName: form.name, original };
   const statePatch: Record<string, unknown> = opts.rules === "2014"
-    ? { hp: form.hp.max, maxHpOverride: undefined, deathSaves: undefined, portraitUrl: undefined }
+    ? { hp: form.hp.max, maxHpOverride: undefined, portraitUrl: undefined }
     : { tempHp: Math.max(state.tempHp, limits.tempHp), portraitUrl: undefined };
   await gw.updateMetadata([{ id, metadata: { [SHEET_KEY]: form, [WILD_KEY]: { ...ws, active } } }]);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch: statePatch }]);

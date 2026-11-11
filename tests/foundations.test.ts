@@ -60,9 +60,7 @@ describe("game systems", () => {
     const stable = { ...pc, conditions: [{ id: "1", key: "stable" }] };
     expect(needsDeathSaves(stable)).toBe(false);
     expect(displayConditions(DND5E_2014, wolf, stable).map((c) => c.key)).toEqual(["stable"]);
-    expect(displayConditions(DND5E_2014, wolf, { ...pc, deathSaves: { successes: 1, failures: 2 } })).toEqual([
-      { key: "death-saves", label: "Death Saves", automatic: true, detail: "1 ✓ / 2 ✗" },
-    ]);
+    expect(displayConditions(DND5E_2014, wolf, pc)).toEqual([{ key: "death-saves", label: "Death Saves", automatic: true }]);
   });
   it("automatic conditions are derived, never read from storage", () => {
     const st = { ...newState(wolf), hp: 11, conditions: [{ id: "1", key: "bloodied" }, { id: "2", key: "prone" }] };

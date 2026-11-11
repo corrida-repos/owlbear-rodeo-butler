@@ -30,7 +30,7 @@ A combat assistant for [Owlbear Rodeo](https://www.owlbear.rodeo): bring in crea
 | Creatures & party | Published creatures, homebrew, quantities, rolled HP, D&D Beyond party sync and prepared encounter imports. |
 | Cards & dice | Native stat blocks, clickable rolls, advantage/disadvantage, critical damage, public/private rolls and a session log. |
 | Unit identity | Portraits, names, aliases and controlling players. Players can open their own cards. |
-| Combat core | Tracker, turn controls, rounds, HP/temp HP, death saves, Stable, Dead, turn notices and an active-turn ring. |
+| Combat core | Tracker, turn controls, rounds, HP/temp HP, Death Saves status, Stable, Dead, turn notices and an active-turn ring. |
 | Conditions & movement | Conditions with durations, concentration checks, token badges, and a movement tracker with Dash and Rewind. |
 | Players & party | Player initiative view, player edits to their own units, party view, and players re-syncing their own character from D&D Beyond. |
 | Collection & rules | A saved creature collection with tags and export, search filters, and both 5.5E (2024) and 5E (2014) rules. |

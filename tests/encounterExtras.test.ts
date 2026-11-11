@@ -104,16 +104,15 @@ describe("lair actions", () => {
 });
 
 describe("HP undo", () => {
-  it("undoes a mistyped hit: HP, death saves and the conditions it changed", async () => {
+  it("undoes a mistyped hit: HP (out of Death Saves) and the conditions it changed", async () => {
     add("pc", sheet("Thorn", { kind: "character" }), { party: true, hp: 15, inEncounter: true, initiative: 10 });
     await addConditionTo(scene, ["pc"], "concentration");
     await changeHp(scene, ["pc"], { kind: "damage", amount: 70 }, { system: DND5E_2024 });
-    expect(state("pc")).toMatchObject({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
+    expect(state("pc").hp).toBe(0);
     expect(state("pc").conditions.map((c) => c.key)).toEqual([]); // 0 HP ended Concentration
     expect(state("pc").hpLog!.map((e) => e.text)).toEqual(["-70"]);
     expect(await undoHp(scene, "pc")).toEqual({ text: "-70", hp: 15 });
     expect(state("pc").hp).toBe(15);
-    expect(state("pc").deathSaves).toBeUndefined();
     expect(state("pc").conditions.map((c) => c.key)).toEqual(["concentration"]);
     expect(state("pc").hpLog).toBeUndefined();
     await expect(undoHp(scene, "pc")).rejects.toThrow(/No HP change/);
@@ -139,7 +138,7 @@ describe("HP undo", () => {
     expect(state("w")).toMatchObject({ hp: 17, tempHp: 0 });
     await undoHp(scene, "w");
     expect(state("w")).toMatchObject({ hp: 20, tempHp: 5 });
-    // Someone set HP outside the log (a death save of 20, an import): undoing would overwrite it.
+    // Someone set HP outside the log (an import, a Wild Shape revert): undoing would overwrite it.
     await scene.patchMetadata([{ id: "w", key: STATE_KEY, patch: { hp: 3 } }]);
     await expect(undoHp(scene, "w")).rejects.toThrow(/HP changed since t5/);
   });

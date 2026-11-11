@@ -6,7 +6,7 @@ import { newState, SHEET_KEY, STATE_KEY, validateSheet, type UnitSheet } from ".
 import { addConditionTo, changeHp, markUnitsDead } from "../src/core/tracker";
 import { isPlayerRequest } from "../src/core/turns";
 import { readUnit } from "../src/core/unit";
-import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
+import { DND5E_2014, DND5E_2024, needsDeathSaves } from "../src/core/systems";
 import {
   addKnownShape, detectWildShape, formSheet, knownShapeFrom, readWildShape, revertWildShape, setupWildShape, shapeProblem, transformUnit,
   wildShapeHp, wildShapeLimits, WILD_KEY, type KnownShape,
@@ -130,7 +130,7 @@ describe("Wild Shape on the scene", () => {
     expect(ws().active).toBeUndefined();
     expect(unit().sheet.name).toBe("Ysolde");
     expect(unit().state.hp).toBe(0);
-    expect(unit().state.deathSaves).toEqual({ successes: 0, failures: 0 });
+    expect(needsDeathSaves(unit().state)).toBe(true);
     expect(unit().state.portraitUrl).toBe("https://example.com/face.png");
     expect(scene.items[0]!.image!.url).toBe(druidImage.url);
     expect(scene.items[0]!.grid).toEqual({ dpi: 300, offset: { x: 150, y: 150 } });

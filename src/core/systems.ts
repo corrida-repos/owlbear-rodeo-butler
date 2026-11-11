@@ -54,7 +54,7 @@ const STANDARD: ConditionDef[] = [
 const BUTLER: ConditionDef[] = [
   { key: "concentration", label: "Concentration" },
   { key: "dead", label: "Dead" },
-  /** Party member at 0 HP who no longer makes death saves (set by hand or by 3 successes); supersedes Death Saves. */
+  /** Party member at 0 HP who no longer makes death saves (set by the GM, or a player with edits); supersedes Death Saves. */
   { key: "stable", label: "Stable" },
 ];
 /** Party members at 0 HP that aren't Dead or Stable (both supersede it). Both systems. */
@@ -119,10 +119,7 @@ export function displayConditions(system: GameSystem, sheet: Pick<UnitSheet, "hp
   const out: ShownCondition[] = state.conditions
     .filter((c) => !defs.get(c.key)?.automatic)
     .map((c) => ({ key: c.key, label: c.label ?? defs.get(c.key)?.label ?? c.key, level: c.level }));
-  if (needsDeathSaves(state)) {
-    const ds = state.deathSaves ?? { successes: 0, failures: 0 };
-    out.push({ key: "death-saves", label: "Death Saves", automatic: true, detail: `${ds.successes} ✓ / ${ds.failures} ✗` });
-  }
+  if (needsDeathSaves(state)) out.push({ key: "death-saves", label: "Death Saves", automatic: true });
   if (isBloodied(system, sheet, state)) out.push({ key: "bloodied", label: "Bloodied", automatic: true });
   return out;
 }

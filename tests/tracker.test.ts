@@ -4,13 +4,14 @@ import {
   activeAndNext, EMPTY_ENCOUNTER, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat, turnOrder,
   waitingForInitiative, type OrderUnit,
 } from "../src/core/encounter";
-import { applyDeathSave, applyHp, markDead, parseHpInput, revive, setStable } from "../src/core/hp";
+import { applyHp, markDead, parseHpInput, revive, setStable } from "../src/core/hp";
 import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet, type UnitState } from "../src/core/sheet";
 import {
-  changeHp, encounterAction, endTurnFor, markUnitsDead, moveTie, recordDeathSave, reviveUnits, rollInitiativeFor, setInEncounter,
+  changeHp, encounterAction, endTurnFor, markUnitsDead, moveTie, reviveUnits, rollInitiativeFor, setInEncounter,
   setInitiative, setMaxHp, trackerView,
 } from "../src/core/tracker";
 import { readUnit } from "../src/core/unit";
+import { needsDeathSaves } from "../src/core/systems";
 import { FakeScene } from "./fakeGateway";
 
 const sheet = (name: string, over: Partial<UnitSheet> = {}): UnitSheet => ({
@@ -114,26 +115,24 @@ describe("HP rules", () => {
     expect(applyHp(wolf, { ...pc(), hp: 15, maxHpOverride: 30 }, { kind: "heal", amount: 99 }).patch).toEqual({ hp: 30 });
   });
 
-  it("party member: 0 HP starts death saves; damage at 0 is a failure; massive damage is reported", () => {
+  it("party member: 0 HP means Death Saves (a status, no counters); damage at 0 is reported; massive damage too", () => {
     const r = applyHp(wolf, pc({ hp: 5 }), { kind: "damage", amount: 9 });
-    expect(r.patch).toEqual({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
+    expect(r.patch).toEqual({ hp: 0 });
     expect(r.events).toEqual(["dropped-to-zero"]);
-    const f = applyHp(wolf, pc({ hp: 0, deathSaves: { successes: 1, failures: 1 } }), { kind: "damage", amount: 3, critical: true });
-    expect(f.patch.deathSaves).toEqual({ successes: 1, failures: 3 });
-    expect(f.events).toEqual(["death-save-failure", "three-failures"]);
+    expect(needsDeathSaves({ ...pc(), hp: 0 })).toBe(true);
+    const f = applyHp(wolf, pc({ hp: 0 }), { kind: "damage", amount: 3, critical: true });
+    expect(f).toEqual({ patch: {}, events: ["damage-at-zero"] });
     expect(applyHp(wolf, pc({ hp: 5 }), { kind: "damage", amount: 25 }).events).toEqual(["dropped-to-zero", "massive-damage"]);
   });
 
-  it("Stable is lost on damage; healing above 0 clears death saves and Stable", () => {
-    const stable = pc({ hp: 0, conditions: [{ id: "s", key: "stable" }], deathSaves: { successes: 0, failures: 0 } });
+  it("damage while Stable puts the unit back in Death Saves; healing above 0 ends Death Saves and Stable", () => {
+    const stable = pc({ hp: 0, conditions: [{ id: "s", key: "stable" }] });
     const d = applyHp(wolf, stable, { kind: "damage", amount: 1 });
-    expect(d.patch.conditions).toEqual([]);
-    expect(d.patch.deathSaves).toEqual({ successes: 0, failures: 1 });
-    expect(d.events).toContain("stable-lost");
-    const h = applyHp(wolf, pc({ hp: 0, deathSaves: { successes: 2, failures: 1 } }), { kind: "heal", amount: 4 });
-    expect(h.patch).toEqual({ hp: 4, deathSaves: undefined });
-    expect(h.events).toEqual(["revived-from-zero"]);
-    expect("deathSaves" in h.patch).toBe(true); // undefined = remove the key
+    expect(d.patch).toEqual({ conditions: [] });
+    expect(d.events).toEqual(["stable-lost"]);
+    const h = applyHp(wolf, pc({ hp: 0 }), { kind: "heal", amount: 4 });
+    expect(h).toEqual({ patch: { hp: 4 }, events: ["revived-from-zero"] });
+    expect(applyHp(wolf, stable, { kind: "heal", amount: 4 }).patch).toEqual({ hp: 4, conditions: [] });
   });
 
   it("a unit that is already Dead reports nothing at 0 HP", () => {
@@ -146,21 +145,10 @@ describe("HP rules", () => {
     expect(r.events).toEqual(["creature-at-zero"]);
   });
 
-  it("death saves: success, failures, nat 1, nat 20, three successes → Stable", () => {
-    const s = pc({ hp: 0, deathSaves: { successes: 2, failures: 0 } });
-    expect(applyDeathSave(s, 12).outcome).toBe("stable");
-    expect(applyDeathSave(s, 12).patch.conditions!.map((c) => c.key)).toEqual(["stable"]);
-    expect(applyDeathSave(pc({ hp: 0 }), 10)).toEqual({ patch: { deathSaves: { successes: 1, failures: 0 } }, outcome: "success" });
-    expect(applyDeathSave(pc({ hp: 0 }), 9).outcome).toBe("failure");
-    expect(applyDeathSave(pc({ hp: 0 }), 1).patch.deathSaves).toEqual({ successes: 0, failures: 2 });
-    expect(applyDeathSave(pc({ hp: 0, deathSaves: { successes: 0, failures: 2 } }), 5).outcome).toBe("dead");
-    expect(applyDeathSave(pc({ hp: 0 }), 20).patch).toMatchObject({ hp: 1, deathSaves: undefined });
-  });
-
   it("Mark as dead supersedes Death Saves and Stable; Revive removes Dead; Stable only at 0 HP", () => {
     const p = markDead({ conditions: [{ id: "s", key: "stable" }, { id: "p", key: "poisoned" }] });
     expect(p.conditions!.map((c) => c.key)).toEqual(["poisoned", "dead"]);
-    expect(p).toMatchObject({ inEncounter: false, deathSaves: undefined });
+    expect(p).toMatchObject({ inEncounter: false });
     expect(revive({ conditions: p.conditions! }).conditions!.map((c) => c.key)).toEqual(["poisoned"]);
     expect(() => setStable({ conditions: [], hp: 3, party: true })).toThrow();
     expect(setStable({ conditions: [], hp: 0, party: true }).conditions!.map((c) => c.key)).toEqual(["stable"]);
@@ -233,13 +221,14 @@ describe("tracker operations in a scene", () => {
     expect(r2[0]).toMatchObject({ events: ["creature-at-zero"], markedDead: false });
   });
 
-  it("death saves from the card, PC down then marked dead", async () => {
+  it("PC down (Death Saves), then marked dead; old counters on a token are ignored", async () => {
     await changeHp(scene, ["pc"], { kind: "damage", amount: 20 });
-    expect(state("pc").deathSaves).toEqual({ successes: 0, failures: 0 });
-    expect(await recordDeathSave(scene, "pc", 4)).toBe("failure");
-    expect(await recordDeathSave(scene, "pc", 1)).toBe("dead");
+    expect(needsDeathSaves(state("pc"))).toBe(true);
+    // A token from an earlier version still carries counters: they're not read.
+    await scene.patchMetadata([{ id: "pc", key: STATE_KEY, patch: { deathSaves: { successes: 1, failures: 2 } } }]);
+    expect(state("pc")).not.toHaveProperty("deathSaves");
     await markUnitsDead(scene, ["pc"]);
-    expect(state("pc").deathSaves).toBeUndefined();
+    expect(needsDeathSaves(state("pc"))).toBe(false);
     expect(state("pc").conditions.map((c) => c.key)).toEqual(["dead"]);
   });
 

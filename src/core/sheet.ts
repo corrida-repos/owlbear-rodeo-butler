@@ -93,8 +93,6 @@ export interface UnitState {
   conditions: ConditionInstance[];
   /** A pending Constitution save to keep Concentration after taking damage (cleared when rolled or dismissed). */
   concentrationCheck?: { dc: number; damage: number };
-  /** Death saving throws while a party member is at 0 HP (cleared when healed or marked dead). */
-  deathSaves?: { successes: number; failures: number };
   /** Portrait shown on the card/tracker; defaults to the token image. */
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
@@ -116,7 +114,7 @@ export interface HpLogEntry {
   at: number;
   /** "-7", "+5", "=12", "t5" (with "crit" for a critical hit at 0 HP). */
   text: string;
-  before: { hp: number; tempHp: number; deathSaves?: UnitState["deathSaves"] | null; concentrationCheck?: UnitState["concentrationCheck"] | null; inEncounter?: boolean };
+  before: { hp: number; tempHp: number; concentrationCheck?: UnitState["concentrationCheck"] | null; inEncounter?: boolean };
   after: { hp: number; tempHp: number };
   addedConditions?: string[];
   removedConditions?: ConditionInstance[];
@@ -175,7 +173,8 @@ export function migrateSheet(x: unknown): UnitSheet {
 
 /** Fills missing state fields (older or hand-written tokens) without touching present ones. */
 export function normalizeState(x: unknown, sheet?: UnitSheet): UnitState {
-  const s = isObj(x) ? x : {};
+  // `deathSaves` (success/failure counts) was stored by earlier versions; Death Saves is now a status only.
+  const { deathSaves: _, ...s } = isObj(x) ? x : {};
   return {
     ...s,
     hp: isNum(s.hp) ? s.hp : sheet?.hp.max ?? 0,
