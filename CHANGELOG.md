@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Recharge, legendary actions and daily uses:** the unit card counts limited uses read from the stat block. *Recharge* abilities are marked used when you roll them and roll their d6 at the start of the creature's turn. *X/Day* traits and spells (per spell for *Each* lists) get pips, and legendary actions get a pool with **Use** buttons (costs included) that refills each turn. **Reset uses** gives everything back. The tracker shows a summary under each creature.
+- **Lair actions:** creatures with lair actions bring them from 5etools onto their card. With **In its lair** on, the order gets a *Lair actions* turn on initiative 20, losing ties. 5.5E creatures use the same switch for their in-lair legendary action and Legendary Resistance counts.
+- **Undo HP changes:** **↶** next to any HP box undoes the last change, with what it triggered (death saves, Concentration, an automatic Mark as dead). There's also a *Recent HP changes* list in the tracker, and players can undo changes to their own units.
+- **Surprise:** mark units **Surprised** before combat (tracker or right-click). 5.5E rolls their initiative with disadvantage; 5E gives *Surprised* until the end of their first turn.
+- **Hidden creatures** can be revealed automatically when their turn starts, or with **Reveal now**.
+- **Wild Shape** no longer counts uses or shows Short/Long Rest buttons; track uses on your character sheet.
+- Browser smoke tests (Playwright) run the built extension in a stand-in for Owlbear on every pull request.
+
 - **Wild Shape for druids (5.5E rules):** right-click a druid's token → *Wild Shape*, or use the button on the unit card. Keep your **Known Forms** (4 / 6 / 8 by level), picked from the 5etools bestiary: Beasts up to your max CR (Circle of the Moon: druid level ÷ 3), no flying speed before level 8. **Transform** changes the token's picture and size and the card's stat block. You keep your own HP, creature type, mental scores and proficiencies, and gain temp HP (druid level, or 3 × for the Moon). Moon druids also get AC at least 13 + Wis, Circle Spells in beast form, and Wis added to Con saves from level 6. You revert at 0 HP, when Incapacitated, when marked dead, or with **Revert**. Druids synced from D&D Beyond are set up automatically. Rooms set to 5E (2014) use the 2014 version (beast HP with damage carrying over).
 
 ## 2.0.0 — 2026-11-08

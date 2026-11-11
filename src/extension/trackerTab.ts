@@ -165,7 +165,7 @@ function controls(v: TrackerView): Child {
   const activeName = v.turns.find((u) => u.id === v.active)?.name;
   return h("div", { className: "panel stack tight" },
     h("div", { className: "row between" },
-      h("div", {}, e.started ? h("span", {}, h("strong", { className: "round" }, `Round ${e.round}`), activeName ? ` · ${activeName}'s turn` : "") : h("strong", {}, "Not in combat")),
+      h("div", {}, e.started ? h("span", {}, h("strong", { className: "round" }, `Round ${e.round}`), isLairTurn(v.turns.find((t) => t.id === v.active)) ? " · Lair actions (initiative 20)" : activeName ? ` · ${activeName}'s turn` : "") : h("strong", {}, "Not in combat")),
       e.started
         ? h("div", { className: "row" },
           h("button", { className: "secondary", disabled: ui.busy || !e.history.length, onclick: act("previous") }, "◀ Prev"),

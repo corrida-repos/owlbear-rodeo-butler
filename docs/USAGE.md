@@ -58,9 +58,10 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 
 
 
-1. Choose **Roll all** or **Roll creatures**, or type a player's roll into their initiative box.
-2. Press **Start combat**. Use **Next turn** and **Prev** to move through the order; the round advances when the order wraps.
-3. Apply HP changes in a unit's HP box and press **Enter**:
+1. **Surprise?** Before rolling, click **Surprise?** under any unit that's caught off guard (or right-click tokens → **Surprised**). In 5.5E they roll initiative with disadvantage. In 5E they get *Surprised* until the end of their first turn (no move, action or reaction).
+2. Choose **Roll all** or **Roll creatures**, or type a player's roll into their initiative box.
+3. Press **Start combat**. Use **Next turn** and **Prev** to move through the order; the round advances when the order wraps.
+4. Apply HP changes in a unit's HP box and press **Enter**:
 
    | Input | Effect |
    |---|---|
@@ -69,10 +70,28 @@ Below the sync, **Import published / homebrewed party member** work exactly like
    | `12` | Set current HP to 12. |
    | `t5` | Grant 5 temporary HP; keeps the higher amount rather than stacking. |
 
-4. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
-5. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
+   Typed `-70` instead of `-7`? **↶** next to the HP box undoes the last change, including what it set off: death saves, lost Concentration, or an automatic Mark as dead. Each unit keeps its last five changes; **Recent HP changes** under the order lists them. Undo also works on the unit card, and players can undo changes to their own units.
+
+5. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
+6. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
+
+**Hidden creatures:** a token hidden from players shows **Reveal on its turn?** in the tracker. Turn it on and the token appears to the players when its turn starts; **Reveal now** shows it straight away.
 
 The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits.
+
+## Recharge, legendary actions and daily uses
+
+Encounter Butler reads limited uses from the stat block's wording, so 5etools creatures, homebrew and D&D Beyond characters all work:
+
+- **Recharge** (*Fire Breath (Recharge 5–6)*): the card shows **Ready**. Rolling any dice from that ability marks it **Used**. At the start of the creature's turn Encounter Butler rolls the d6 for you (a private GM roll in the log) and sets it back to Ready on a 5 or 6. **🎲 d6** rolls it by hand.
+- **X/Day** (*Legendary Resistance (3/Day)*, *Dominate Mind (2/Day)*, spells *1/Day Each: …* or *3/Day: …*): pips next to the name. Click a filled pip to spend one, an empty pip to get it back. *Each* lists get a counter per spell.
+- **Legendary actions:** the header shows the pool (*3/3*). **Use** on each action spends its cost (*Costs 2 Actions* spends two) and is greyed out when there aren't enough left. The pool refills at the start of the creature's turn.
+- *Recharges after a Short or Long Rest* and *N/Long Rest* abilities have the same Ready/Used switch.
+- **Reset uses** (GM, on the card) gives everything back: a new day or a rest.
+
+The tracker lists each creature's uses under its name (*Fire Breath ✗ · Legendary Resistance 2/3 · Legendary actions 1/3*). The card is where you spend them. A player's own unit works the same way, through the GM's client.
+
+**Lairs:** creatures with lair actions (from the 2014 books) show **In its lair?** in the tracker and on their card. Turn it on and the order gets a **Lair actions** turn on initiative 20, losing ties. **Next turn** stops there, and the card's *Lair Actions* section lists the options. In 5.5E, where lair actions became extra uses, the same switch raises the in-lair counts: *Legendary Action Uses: 3 (4 in Lair)* and *Legendary Resistance (3/Day, or 4/Day in Lair)*.
 
 ## Conditions, concentration and movement
 

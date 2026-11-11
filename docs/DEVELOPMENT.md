@@ -47,7 +47,8 @@ Owlbear scene: MAP item + CHARACTER tokens with dev.owlbear-butler/sheet + /stat
 
 ```bash
 npm install
-npm test                 # 28 unit + end-to-end tests (no Owlbear needed)
+npm test                 # unit + end-to-end tests in Vitest (no Owlbear needed)
+npm run test:smoke       # build, then browser smoke tests in Playwright (see below)
 npm run dev              # serves the extension at http://localhost:5173
 ```
 
@@ -253,6 +254,38 @@ Manual / CLI route:
    - right-click a wolf → *View unit card* opens the card for that wolf
 5. Click Import again. The duplicate warning should appear and block the import. Try *Replace*, then *Undo this import*.
 6. Repeat from the Pages URL with a player connected, to confirm they see the map and tokens.
+
+## Browser smoke tests
+
+`npm run test:smoke` builds the extension, serves it with `vite preview` and runs `tests/smoke/*.smoke.ts` in Chromium.
+Owlbear isn't needed: `tests/smoke/obrHost.js` is a small stand-in that loads each page in an iframe, the way Owlbear
+does, and answers the SDK's postMessage requests (player, party, room and scene metadata, items, broadcast, context
+menus, popovers). Item and metadata writes are applied and change events sent back, so pages react as they would in a
+room. Scene contents come from `tests/smoke/fixtures.ts`. Each test fails on any uncaught error or `console.error` in
+any frame. Requests to other hosts (5etools, D&D Beyond) are blocked. CI (`.github/workflows/ci.yml`) runs them on
+every pull request. To debug a failure, run `npx playwright test --headed --trace on`.
+
+The tests use `@playwright/test` pinned to the version of the Playwright install you run them with. On a fresh machine,
+run `npx playwright install chromium` once.
+
+## Limited uses, lair actions, undo, surprise
+
+- `src/core/uses.ts` reads limited uses from entry names: `(Recharge 5–6)`, `(3/Day, or 4/Day in Lair)`, spell lists
+  `1/Day Each: …` (a counter per spell), `(Recharges after a Short or Long Rest)`, `N/Long Rest`, and the legendary
+  pool (from the header's count, or 3; `(Costs 2 Actions)`). Spent counts live in `state.uses` (key → spent). On a
+  forward turn change, the primary GM client calls `applyTurnStartUses` for the new active unit: the legendary pool is
+  refilled, and expended Recharge abilities roll a d6 as a GM-private roll message.
+- Lair actions come from 5etools `bestiary/legendarygroups.json` (one `_copy` level followed) into the optional
+  `sheet.lair`. `tracker.ts` adds a virtual turn (`LAIR_TURN_ID`) on initiative 20 with the lowest tie-break while a
+  living unit in the order has `state.inLair` and lair actions. `TrackerView.turns` (units plus the lair turn) is what
+  Next/Previous, passing the turn and duration positions use; `order` stays tokens only.
+- HP undo: `changeHp` stores a `HpLogEntry` (the fields its patch overwrote, the conditions it added or removed, and
+  the HP it left) in `state.hpLog`, up to 5. `undoHp` restores them, and refuses if HP changed outside the log. A Wild
+  Shape revert isn't logged and clears the log, because the sheet and picture changed too.
+- Surprise: `state.surprised`. `initiativeSetupFor` and the card's initiative roll add disadvantage in 2024 rooms.
+  Start combat clears the flag and, in 2014, adds a `surprised` condition that ends at the end of the unit's first turn
+  (`from.round` 0). Reveal on turn: `state.revealOnTurn`, applied by the primary GM client when the unit's turn starts
+  (`revealOnTurnStart`).
 
 ## Known limits
 - Square grids only. No fog, walls or lighting (out of scope by request).
