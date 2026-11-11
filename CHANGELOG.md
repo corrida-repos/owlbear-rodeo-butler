@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Wild Shape for druids:** right-click a druid's token → *Wild Shape*, or use the button on the unit card. Keep a list of **Known Shapes**, picked from the 5etools bestiary (Beasts up to the max CR for your druid level and Circle of the Moon; swim and fly limits checked). The 5.5E limit on Known Forms applies. **Transform** changes the token's picture and size and the card's stat block (the beast's body, the druid's mind and proficiencies). The form ends at 0 HP: in 5E (2014) the beast's HP take the damage and the rest carries over; in 5.5E (2024) the druid keeps their own HP plus temporary HP and reverts when they drop to 0. **Revert** ends it early. Druids synced from D&D Beyond are set up automatically; the GM can set up anyone else.
+
 ## 2.0.0 — 2026-11-08
 
 Encounter Butler now runs a whole D&D combat on its own. If you're upgrading from 1.x and the right-click *View unit card* or turn notices don't appear, remove the extension in Owlbear (**Profile → Extensions**) and add the link again.

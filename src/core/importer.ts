@@ -16,6 +16,8 @@ export interface SceneItemLite {
   label?: string;
   /** Current picture (image items only). */
   image?: { url: string; width: number; height: number; mime: string };
+  /** Image grid (dpi, offset): how big the picture is drawn on the map (image items only). */
+  grid?: { dpi: number; offset: Vec2 };
   metadata: Record<string, unknown>;
   /** False for tokens hidden from players (missing = visible). */
   visible?: boolean;

@@ -40,7 +40,8 @@ export type HpEvent =
   | "revived-from-zero"      // healed above 0 HP: death saves / Stable cleared
   | "creature-at-zero"       // a non-party unit at 0 HP: offer Mark as dead (or automatic, by setting)
   | "concentration-check"    // damaged while concentrating: Con save pending (state.concentrationCheck)
-  | "concentration-lost";    // dropped to 0 HP while concentrating: Concentration ends
+  | "concentration-lost"     // dropped to 0 HP while concentrating: Concentration ends
+  | "wild-shape-ended";      // a druid's beast form ended at 0 HP (see wildshape.ts)
 
 export interface HpResult { patch: Partial<UnitState>; events: HpEvent[] }
 

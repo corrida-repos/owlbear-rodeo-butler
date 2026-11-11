@@ -15,6 +15,7 @@ import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type
 import { isDead, type GameSystem } from "./systems";
 import { isUnitItem, readUnit } from "./unit";
 import { unitName } from "./card";
+import { finishRevert, readWildShape, wildShapeHp } from "./wildshape";
 
 export interface TrackerUnit extends OrderUnit {
   sheet: UnitSheet;
@@ -172,19 +173,25 @@ export interface HpReport { id: string; name: string; events: HpEvent[]; markedD
  * setting says so; everything else is reported so the UI can offer it.
  */
 export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange, opts: { autoDeadAtZero?: boolean; system?: GameSystem } = {}): Promise<HpReport[]> {
-  const { view } = await load(gw);
+  const { view, items } = await load(gw);
   const all = [...view.order, ...view.waiting, ...view.outside];
   const reports: HpReport[] = [];
   const patches: { id: string; key: string; patch: Record<string, unknown> }[] = [];
+  const reverts: { item: SceneItemLite; patch: Record<string, unknown> }[] = [];
   const dying: string[] = [];
   for (const id of ids) {
     const u = all.find((x) => x.id === id);
     if (!u) continue;
-    const { patch, events } = applyHp(u.sheet, u.state, change, opts.system);
+    // Wild Shape: the beast form takes the hit (2014) or ends at 0 HP (2024), see wildshape.ts.
+    const item = items.find((i) => i.id === id);
+    const active = item ? readWildShape(item.metadata)?.active : undefined;
+    const wild = active ? wildShapeHp(u.sheet, u.state, active, change, opts.system) : null;
+    const { patch, events } = wild ?? applyHp(u.sheet, u.state, change, opts.system);
     let full: Partial<UnitState> = patch;
     const autoDead = opts.autoDeadAtZero && events.includes("creature-at-zero");
     if (autoDead) { full = { ...patch, ...markDead({ conditions: patch.conditions ?? u.state.conditions }) }; dying.push(id); }
-    if (Object.keys(full).length) patches.push({ id, key: STATE_KEY, patch: full });
+    if (wild?.revert && item) reverts.push({ item, patch: full });
+    else if (Object.keys(full).length) patches.push({ id, key: STATE_KEY, patch: full });
     reports.push({ id, name: u.name, events, markedDead: !!autoDead });
   }
   if (dying.length) {
@@ -192,6 +199,7 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
     if (enc !== view.encounter) await saveEncounter(gw, enc);
   }
   if (patches.length) await gw.patchMetadata(patches);
+  for (const r of reverts) await finishRevert(gw, r.item, r.patch);
   return reports;
 }
 

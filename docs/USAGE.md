@@ -84,6 +84,21 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 - **Concentration:** when a unit with the Concentration condition takes damage, its card shows a **Concentration check** with the DC. **Roll Con save** rolls it and keeps or ends Concentration; the GM can also **Dismiss** it. A player rolls it from their own card. Dropping to 0 HP ends Concentration.
 - **Movement:** during a unit's turn, its token shows how far it has moved since the turn started against its speed, e.g. **25/40 ft**. It turns red past the limit. **Dash** doubles the limit for the turn. **Rewind** moves the token back to the last 5 ft point of its path (from 13 ft back to 10; pressing again goes back another 5 ft). The GM has these on the active row in **Tracker**, and the unit's player has them under the turn in their Encounter Butler panel.
 
+## Wild Shape (druids)
+
+A druid synced from D&D Beyond gets Wild Shape automatically (Encounter Butler reads the druid level and Circle of the Moon from the class line, also in a multiclass, and follows level-ups). For any other party member, the GM right-clicks the token → **Set up Wild Shape** and enters the druid level and circle.
+
+Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Shape** button on the unit card. The druid's player can use it on their own druid; the GM can use it on any.
+
+- **Known Shapes:** search the 5etools bestiary for beasts. The list only shows Beasts up to the druid's max CR for the room's edition, and swimming and flying speeds are checked when you add one. In 5.5E (2024) you can know 4, 6 or 8 forms (levels 2, 4 and 8); in 5E (2014) there's no limit, since any beast you have seen counts. Remove a shape with **✕**.
+- **Transform:** pick a Known Shape. The token takes the beast's picture and size, and the card shows the beast's body (AC, speed, Strength, Dexterity, Constitution, senses, attacks) with the druid's Intelligence, Wisdom and Charisma, languages and skill and save proficiencies (the higher bonus wins). There's no spellcasting in beast form. Uses are counted; **Rest: restore uses** gives them back.
+- **Hit points and reverting:**
+  - **5E (2014):** the form has the beast's own hit points. When they reach 0 the druid reverts, and leftover damage carries over to their normal HP (a wolf with 3 HP left that takes 8 damage reverts and takes 5).
+  - **5.5E (2024):** the druid keeps their own hit points and gains temporary HP equal to their druid level (3 × druid level for the Circle of the Moon, whose AC is also at least 13 + Wisdom). They revert when they drop to 0 HP.
+  - **Revert** on the card or in the Wild Shape panel ends it early (bonus action). In 5E this restores the HP the druid had before transforming.
+
+Picking a different Known Shape while transformed switches forms without using another use.
+
 ## Give players their cards
 
 On a unit card, the GM opens **Edit unit** and sets **Controlled by** (or picks the player in the **Party** list at the top of **Add Party**). That player then finds the unit under **My units**, opens its card and rolls from it. Players do not install another extension.

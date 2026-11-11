@@ -10,6 +10,7 @@ export const obrGateway: SceneGateway = {
       id: i.id, type: i.type, layer: i.layer, name: i.name, metadata: i.metadata, visible: i.visible, createdUserId: i.createdUserId,
       label: (i as any).text?.plainText || undefined,
       image: (i as any).image ? { ...(i as any).image } : undefined,
+      grid: (i as any).grid ? { dpi: (i as any).grid.dpi, offset: { ...(i as any).grid.offset } } : undefined,
     }));
   },
   getItemBounds: (ids) => OBR.scene.items.getItemBounds(ids),
