@@ -15,7 +15,7 @@ import { searchableSource } from "../core/systems";
 import type { WildShapeOp } from "../core/turns";
 import { readUnit } from "../core/unit";
 import {
-  addKnownShape, crText, detectWildShape, isBeast, knownShapeFrom, readWildShape, removeKnownShape, removeWildShape, resetWildShapeUses,
+  addKnownShape, crText, detectWildShape, isBeast, knownShapeFrom, readWildShape, removeKnownShape, removeWildShape,
   revertWildShape, setupWildShape, shapeProblem, transformUnit, wildShapeLimits, type KnownShape, type WildShapeData,
 } from "../core/wildshape";
 import { fetchMonsterIndex, fivetoolsImage, getLib } from "../extension/bestiary";
@@ -116,21 +116,12 @@ function setupPanel(ws: WildShapeData | null, detected: ReturnType<typeof detect
 
 function rulesPanel(ws: WildShapeData): Child {
   const lim = wildShapeLimits(rules(), ws.druidLevel, ws.moon);
-  const spent = ws.usesSpent ?? 0;
-  const usesText = lim.uses === Infinity ? "Unlimited uses" : `Uses: ${Math.max(0, lim.uses - spent)} of ${lim.uses} left`;
   return h("div", { className: "panel stack tight" },
     h("div", { className: "row between" },
       h("strong", {}, `Druid ${ws.druidLevel}${ws.moon ? " · Circle of the Moon" : ""}`),
       h("span", { className: "small muted" }, roomSystem().label)),
     !lim.available ? h("div", { className: "small warn" }, "Wild Shape starts at druid level 2.") : null,
-    h("ul", { className: "plain small" }, ...lim.summary.map((l) => h("li", {}, l))),
-    h("div", { className: "row between" },
-      h("span", { className: `small${lim.uses !== Infinity && spent >= lim.uses ? " warn" : ""}` }, usesText),
-      spent ? h("span", { className: "row" },
-        rules() === "2024" ? h("button", { className: "secondary small", disabled: !!busy, title: "Regain one expended use",
-          onclick: () => void act("Resting…", () => resetWildShapeUses(obrGateway, itemId, "short", rules()), { op: "rest", rest: "short" }, "Asked the GM's client to give you one use back.") }, "Short Rest") : null,
-        h("button", { className: "secondary small", disabled: !!busy, title: "Regain all uses",
-          onclick: () => void act("Resting…", () => resetWildShapeUses(obrGateway, itemId, "long", rules()), { op: "rest", rest: "long" }, "Asked the GM's client to restore your uses.") }, rules() === "2024" ? "Long Rest" : "Rest")) : null));
+    h("ul", { className: "plain small" }, ...lim.summary.map((l) => h("li", {}, l))));
 }
 
 function activePanel(ws: WildShapeData, hp: { hp: number; tempHp: number; max: number }): Child {

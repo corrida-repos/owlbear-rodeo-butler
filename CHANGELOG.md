@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Wild Shape for druids (5.5E rules):** right-click a druid's token → *Wild Shape*, or use the button on the unit card. Keep your **Known Forms** (4 / 6 / 8 by level), picked from the 5etools bestiary: Beasts up to your max CR (Circle of the Moon: druid level ÷ 3), no flying speed before level 8. **Transform** changes the token's picture and size and the card's stat block. You keep your own HP, creature type, mental scores and proficiencies, and gain temp HP (druid level, or 3 × for the Moon). Moon druids also get AC at least 13 + Wis, Circle Spells in beast form, and Wis added to Con saves from level 6. You revert at 0 HP, when Incapacitated, when marked dead, or with **Revert**. Uses are counted: one back on a Short Rest, all on a Long Rest. Druids synced from D&D Beyond are set up automatically. Rooms set to 5E (2014) use the 2014 version (beast HP with damage carrying over).
+- **Wild Shape for druids (5.5E rules):** right-click a druid's token → *Wild Shape*, or use the button on the unit card. Keep your **Known Forms** (4 / 6 / 8 by level), picked from the 5etools bestiary: Beasts up to your max CR (Circle of the Moon: druid level ÷ 3), no flying speed before level 8. **Transform** changes the token's picture and size and the card's stat block. You keep your own HP, creature type, mental scores and proficiencies, and gain temp HP (druid level, or 3 × for the Moon). Moon druids also get AC at least 13 + Wis, Circle Spells in beast form, and Wis added to Con saves from level 6. You revert at 0 HP, when Incapacitated, when marked dead, or with **Revert**. Druids synced from D&D Beyond are set up automatically. Rooms set to 5E (2014) use the 2014 version (beast HP with damage carrying over).
 
 ## 2.0.0 — 2026-11-08
 

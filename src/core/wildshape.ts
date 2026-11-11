@@ -2,19 +2,19 @@
  * Wild Shape (druid): Known Shapes, turning into a beast and turning back.
  *
  * Stored on the unit token under `dev.owlbear-butler/wildshape` (WildShapeData): the druid level and circle, the
- * Known Shapes (5etools references), uses spent, and while transformed the form plus everything needed to restore
+ * Known Shapes (5etools references), and while transformed the form plus everything needed to restore
  * the character (sheet, HP, picture).
  *
  * Rules, by the room's edition:
  *  - 5E (2014): beasts the druid has seen (no cap). Max CR 1/4 (no swim/fly) at 2, 1/2 (no fly) at 4, 1 at 8.
  *    Circle of the Moon: CR 1 from level 2, druid level ÷ 3 from level 6. The form has the BEAST'S hit points;
- *    at 0 the druid reverts and excess damage carries over to their own HP. Two uses per short rest.
+ *    at 0 the druid reverts and excess damage carries over to their own HP.
  *  - 5.5E (2024): Known Forms 4 / 6 / 8 at levels 2 / 4 / 8, max CR 1/4 / 1/2 / 1, no fly speed before 8.
  *    Circle of the Moon (level 3+): CR druid level ÷ 3, AC at least 13 + Wis, temp HP 3 × druid level, Circle Spells
  *    castable in beast form; from level 6 (Improved Circle Forms) Wis is added to Con saves. The druid keeps their OWN
  *    hit points and creature type and gains temporary HP equal to the druid level (each use); they revert at 0 HP,
- *    when Incapacitated, or on death. Uses 2 / 3 / 4 at levels 2 / 6 / 17: one back on a Short Rest, all on a Long
- *    Rest. One Known Form can be swapped on a Long Rest.
+ *    when Incapacitated, or on death. One Known Form can be swapped on a Long Rest.
+ *  Uses of Wild Shape aren't counted: the table tracks them (D&D Beyond does for synced characters).
  *  In both editions the druid keeps Int, Wis and Cha, their skill and save proficiencies (the higher bonus wins)
  *  and can't cast spells in beast form.
  */
@@ -68,7 +68,6 @@ export interface WildShapeData {
   /** Set from the sheet (D&D Beyond class line); follows level-ups until the GM sets the level by hand. */
   auto?: boolean;
   known: KnownShape[];
-  usesSpent?: number;
   active?: ActiveShape;
 }
 
@@ -79,7 +78,9 @@ const isObj = (v: unknown): v is Record<string, any> => typeof v === "object" &&
 export function readWildShape(meta: Record<string, unknown>): WildShapeData | null {
   const x = meta[WILD_KEY];
   if (!isObj(x) || x.v !== 1 || typeof x.druidLevel !== "number") return null;
-  return { ...x, known: Array.isArray(x.known) ? x.known.filter(isKnownShape) : [] } as WildShapeData;
+  // `usesSpent` was written by earlier versions, which counted uses; it's dropped.
+  const { usesSpent: _, ...rest } = x;
+  return { ...rest, known: Array.isArray(x.known) ? x.known.filter(isKnownShape) : [] } as WildShapeData;
 }
 
 export function isKnownShape(x: unknown): x is KnownShape {
@@ -114,7 +115,6 @@ export interface WildShapeLimits {
   maxKnown: number | null;
   swim: boolean;
   fly: boolean;
-  uses: number;
   /** 2024: temporary HP gained on transforming. */
   tempHp: number;
   hours: number;
@@ -131,14 +131,13 @@ export function wildShapeLimits(rules: Rules, druidLevel: number, moon: boolean)
   if (rules === "2014") {
     const maxCr = moon ? (L >= 6 ? Math.max(1, Math.floor(L / 3)) : 1) : base;
     const swim = L >= 4, fly = L >= 8;
-    const uses = L >= 20 ? Infinity : 2;
     return {
-      available: L >= 2, maxCr, maxKnown: null, swim, fly, uses, tempHp: 0, hours,
+      available: L >= 2, maxCr, maxKnown: null, swim, fly, tempHp: 0, hours,
       summary: [
         `Max CR ${crText(maxCr)}${moon ? " (Circle of the Moon)" : ""}${!swim ? ", no swimming speed" : ""}${!fly ? ", no flying speed" : ""}.`,
         "Any beast you have seen (no limit on Known Shapes).",
         "You take the beast's hit points. At 0 you revert, and leftover damage carries over to your normal form.",
-        `${uses === Infinity ? "Unlimited uses" : "2 uses per short or long rest"}; lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
+        `Lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
       ],
     };
   }
@@ -146,16 +145,15 @@ export function wildShapeLimits(rules: Rules, druidLevel: number, moon: boolean)
   const maxCr = moon24 ? Math.max(base, Math.floor(L / 3)) : base;
   const maxKnown = L >= 8 ? 8 : L >= 4 ? 6 : 4;
   const fly = L >= 8;
-  const uses = L >= 17 ? 4 : L >= 6 ? 3 : 2;
   const tempHp = L * (moon24 ? 3 : 1);
   return {
-    available: L >= 2, maxCr, maxKnown, swim: true, fly, uses, tempHp, hours,
+    available: L >= 2, maxCr, maxKnown, swim: true, fly, tempHp, hours,
     summary: [
       `Max CR ${crText(maxCr)}${moon24 ? " (Circle Forms)" : ""}${!fly ? ", no flying speed" : ""}.`,
       `Up to ${maxKnown} Known Forms; swap one for another eligible beast when you finish a Long Rest.`,
       `You keep your own hit points and gain ${tempHp} temporary HP${moon24 ? " (3 × druid level)" : " (druid level)"} each time${moon24 ? "; AC is at least 13 + your Wisdom modifier" : ""}${moon24 && L >= 6 ? "; add your Wisdom modifier to Constitution saves" : ""}.`,
       `No spellcasting${moon24 ? " except your Circle of the Moon spells" : ""}. You revert at 0 HP, when Incapacitated, if you die, or with a bonus action.`,
-      `${uses} uses: one back on a Short Rest, all on a Long Rest. A form lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
+      `A form lasts up to ${hours} hour${hours === 1 ? "" : "s"}.`,
     ],
   };
 }
@@ -353,15 +351,6 @@ export async function removeKnownShape(gw: SceneGateway, id: string, shape: { na
   await gw.updateMetadata([{ id, metadata: { [WILD_KEY]: { ...ws, known: ws.known.filter((k) => !sameShape(k, shape)) } } }]);
 }
 
-/** A rest: a Long Rest restores every use; a Short Rest one (2024) or every use (2014). */
-export async function resetWildShapeUses(gw: SceneGateway, id: string, rest: "short" | "long" = "long", rules: Rules = "2024") {
-  const { ws } = await unitWithWild(gw, id);
-  if (!ws) return;
-  const { usesSpent, ...others } = ws;
-  const left = rest === "short" && rules === "2024" ? Math.max(0, (usesSpent ?? 0) - 1) : 0;
-  await gw.updateMetadata([{ id, metadata: { [WILD_KEY]: left ? { ...others, usesSpent: left } : others } }]);
-}
-
 export interface TransformResult { name: string; form: string; warnings: string[] }
 
 /**
@@ -384,10 +373,6 @@ export async function transformUnit(gw: SceneGateway, id: string, beast: UnitShe
     if (bad) throw new Error(`${beast.name}: image ${bad}`);
   }
   const warnings: string[] = [];
-  // 2024: changing form is another use of Wild Shape (with its temp HP). 2014: switching keeps the current use.
-  const newUse = !ws.active || opts.rules === "2024";
-  const spent = (ws.usesSpent ?? 0) + (newUse ? 1 : 0);
-  if (newUse && spent > limits.uses) warnings.push(`No Wild Shape uses left (${limits.uses}); transformed anyway.`);
 
   const original: WildShapeOriginal = ws.active?.original ?? {
     sheet, hp: state.hp,
@@ -401,7 +386,7 @@ export async function transformUnit(gw: SceneGateway, id: string, beast: UnitShe
   const statePatch: Record<string, unknown> = opts.rules === "2014"
     ? { hp: form.hp.max, maxHpOverride: undefined, deathSaves: undefined, portraitUrl: undefined }
     : { tempHp: Math.max(state.tempHp, limits.tempHp), portraitUrl: undefined };
-  await gw.updateMetadata([{ id, metadata: { [SHEET_KEY]: form, [WILD_KEY]: { ...ws, usesSpent: spent, active } } }]);
+  await gw.updateMetadata([{ id, metadata: { [SHEET_KEY]: form, [WILD_KEY]: { ...ws, active } } }]);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch: statePatch }]);
   if (image) await gw.updateImages([{ id, image, grid: tokenImageGrid(image.width, image.height, SIZE_CELLS[form.size] ?? 1) }]);
   else warnings.push(`${beast.name} has no 5etools picture; the token keeps its image.`);

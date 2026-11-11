@@ -34,7 +34,7 @@ import { pushRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 import { openWildShape } from "../extension/wildShapePopover";
 import {
-  addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
+  addKnownShape, detectWildShape, readWildShape, removeKnownShape, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
 import { migrateSheet } from "../core/sheet";
 
@@ -302,7 +302,6 @@ async function handleRequest(req: unknown) {
         const rules = roomSystem().rules;
         if (req.op === "known-add") await addKnownShape(obrGateway, req.unitId, req.shape, rules);
         else if (req.op === "known-remove") await removeKnownShape(obrGateway, req.unitId, req.shape);
-        else if (req.op === "rest") await resetWildShapeUses(obrGateway, req.unitId, req.rest ?? "long", rules);
         else if (req.op === "revert") { if (await revertWildShape(obrGateway, req.unitId)) await notify(`${name} returns to their normal form.`); }
         else {
           const r = await transformUnit(obrGateway, req.unitId, migrateSheet(req.sheet), req.image, { rules, form: req.form });

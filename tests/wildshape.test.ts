@@ -8,7 +8,7 @@ import { isPlayerRequest } from "../src/core/turns";
 import { readUnit } from "../src/core/unit";
 import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import {
-  addKnownShape, detectWildShape, resetWildShapeUses, formSheet, knownShapeFrom, readWildShape, revertWildShape, setupWildShape, shapeProblem, transformUnit,
+  addKnownShape, detectWildShape, formSheet, knownShapeFrom, readWildShape, revertWildShape, setupWildShape, shapeProblem, transformUnit,
   wildShapeHp, wildShapeLimits, WILD_KEY, type KnownShape,
 } from "../src/core/wildshape";
 import { FakeScene } from "./fakeGateway";
@@ -47,11 +47,11 @@ describe("Wild Shape rules", () => {
 
   it("2024: Known Forms, CR and fly limits by level; Circle Forms for the Moon", () => {
     const l2 = wildShapeLimits("2024", 2, false);
-    expect([l2.maxKnown, l2.maxCr, l2.fly, l2.uses, l2.tempHp]).toEqual([4, 0.25, false, 2, 2]);
+    expect([l2.maxKnown, l2.maxCr, l2.fly, l2.tempHp]).toEqual([4, 0.25, false, 2]);
     const l4 = wildShapeLimits("2024", 4, false);
     expect([l4.maxKnown, l4.maxCr]).toEqual([6, 0.5]);
     const l8 = wildShapeLimits("2024", 8, false);
-    expect([l8.maxKnown, l8.maxCr, l8.fly, l8.uses]).toEqual([8, 1, true, 3]);
+    expect([l8.maxKnown, l8.maxCr, l8.fly]).toEqual([8, 1, true]);
     const moon9 = wildShapeLimits("2024", 9, true);
     expect([moon9.maxCr, moon9.tempHp]).toEqual([3, 27]);
     expect(wildShapeLimits("2024", 2, true).maxCr).toBe(0.25); // the subclass starts at 3
@@ -119,7 +119,7 @@ describe("Wild Shape on the scene", () => {
     expect(unit().sheet.name).toBe("Ysolde (Wolf)");
     expect(unit().state).toMatchObject({ hp: 38, tempHp: 15 }); // Moon: 3 × druid level
     expect(unit().state.portraitUrl).toBeUndefined();
-    expect(ws().usesSpent).toBe(1);
+    expect(ws()).not.toHaveProperty("usesSpent"); // uses aren't counted
 
     const [rep] = await changeHp(scene, ["d1"], { kind: "damage", amount: 20 }, { system: DND5E_2024 });
     expect(rep!.events).not.toContain("wild-shape-ended");
@@ -151,20 +151,22 @@ describe("Wild Shape on the scene", () => {
     expect(ws().active).toBeUndefined();
   });
 
-  it("5.5E: changing form is another use with fresh temp HP; Short Rest gives one use back, Long Rest all", async () => {
+  it("5.5E: changing form gives fresh temp HP; uses aren't counted (no warning, old counters dropped)", async () => {
     await addKnownShape(scene, "d1", wolfShape, "2024");
     await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
     await changeHp(scene, ["d1"], { kind: "damage", amount: 10 }, { system: DND5E_2024 });
     expect(unit().state.tempHp).toBe(5);
     await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
     expect(unit().state.tempHp).toBe(15);
-    expect(ws().usesSpent).toBe(2);
-    const r = await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
-    expect(r.warnings.join(" ")).toMatch(/No Wild Shape uses left/);
-    await resetWildShapeUses(scene, "d1", "short", "2024");
-    expect(ws().usesSpent).toBe(2);
-    await resetWildShapeUses(scene, "d1", "long", "2024");
-    expect(ws().usesSpent).toBeUndefined();
+    for (let i = 0; i < 4; i++) {
+      const r = await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+      expect(r.warnings.join(" ")).not.toMatch(/uses/);
+    }
+    // A token from an earlier version still carries a counter: it's ignored and not written back.
+    scene.items[0]!.metadata[WILD_KEY] = { ...(scene.items[0]!.metadata[WILD_KEY] as object), usesSpent: 3 };
+    expect(ws()).not.toHaveProperty("usesSpent");
+    await transformUnit(scene, "d1", wolf, wolfImage, { rules: "2024", form: { name: "Wolf", source: "XMM" } });
+    expect(scene.items[0]!.metadata[WILD_KEY]).not.toHaveProperty("usesSpent");
   });
 
   it("2014: the beast's HP take the damage, then the rest carries over to the druid", async () => {
@@ -225,7 +227,7 @@ describe("Wild Shape requests", () => {
     expect(isPlayerRequest({ ...base, op: "transform", form: { name: "Wolf", source: "XMM" }, sheet: wolf, image: wolfImage })).toBe(true);
     expect(isPlayerRequest({ ...base, op: "transform", form: { name: "Wolf", source: "XMM" }, sheet: wolf, image: { url: 3 } })).toBe(false);
     expect(isPlayerRequest({ ...base, op: "revert" })).toBe(true);
-    expect(isPlayerRequest({ ...base, op: "rest" })).toBe(true);
+    expect(isPlayerRequest({ ...base, op: "rest" })).toBe(false); // rests were removed
     expect(isPlayerRequest({ ...base, op: "fly" })).toBe(false);
   });
 });
