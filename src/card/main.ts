@@ -13,14 +13,14 @@ import {
   speedLine, typeLine, unitName, type CardAccess, type StandardRoll,
 } from "../core/card";
 import { damageAfter, parseChips, rollLabel, type RollSegment, type Segment } from "../core/chips";
-import { cryptoRng, fmtMod } from "../core/dice";
-import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
+import { fmtMod } from "../core/dice";
+import { rollDetail, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
 import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
 import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
 import { addConditionTo, changeHp, makeStable, recordDeathSave, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
-import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
+import { conditionText, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
 import { conditionEditor } from "../extension/conditionEditor";
@@ -30,6 +30,8 @@ import { sendRequest } from "../extension/requests";
 import { readUnit } from "../core/unit";
 import { readWildShape, revertWildShape } from "../core/wildshape";
 import { openWildShape } from "../extension/wildShapePopover";
+import { openActions } from "../extension/actionsPopover";
+import { sendUnitRoll } from "../extension/unitRoll";
 import { h, store, type Child } from "../extension/dom";
 import { onRollLog, readRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
@@ -59,17 +61,11 @@ async function roll(formula: string, label: string, kind: RollMessage["kind"], e
   const u = item && readUnit(item.metadata);
   if (!item || !u) return null;
   let sent: RollMessage | null = null;
-  // 2024 exhaustion: −2 per level on every d20 test.
-  const penalty = kind === "attack" || kind === "save" || kind === "check" ? d20Penalty(roomSystem(), u.state) : 0;
-  if (penalty) { formula = `${formula.replace(/\s+/g, "")}${fmtMod(penalty)}`; label = `${label} (exhaustion ${fmtMod(penalty)})`; }
   const clicked: RollMode = ev?.shiftKey ? "advantage" : ev && (ev.ctrlKey || ev.metaKey) ? "disadvantage" : nextMode;
   const mode = combineModes(clicked, opts.builtIn);
-  // Public rolls name the unit the way players know it (alias), private ones by its real name.
-  const name = visibility === "public" && u.state.alias?.trim() ? u.state.alias.trim() : unitName(itemInfo(item), u.sheet, u.state);
   try {
-    const msg = makeRoll(formula, label, { id: me.id, name: me.name, role }, visibility,
-      { rng: cryptoRng, unit: { id: item.id, name }, kind, mode, crit: opts.crit });
-    await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: rollDestination(msg) });
+    const msg = await sendUnitRoll({ id: item.id, info: itemInfo(item), ...u }, formula, label, kind,
+      { by: { id: me.id, name: me.name, role }, visibility, mode, crit: opts.crit });
     // Damage rolled from the result panel keeps the attack's other damage buttons (e.g. Slashing + Fire, or a crit).
     const damage = kind === "attack" && opts.segs && opts.seg ? damageAfter(opts.segs, opts.seg) : opts.followUp && last ? last.damage : [];
     const attackNatural = kind === "attack" ? msg.natural : opts.followUp ? last?.attackNatural : undefined;
@@ -248,7 +244,8 @@ function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, 
         h("h1", {}, name),
         access === "full" && sheet ? h("div", { className: "small muted" }, typeLine(sheet)) : null,
         role === "GM" && state.alias?.trim() ? h("div", { className: "small warn" }, `Players see: ${state.alias.trim()}`) : null,
-        role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null)),
+        role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null),
+      access === "full" && sheet ? h("button", { className: "small", title: "Actions, bonus actions, reactions, spells and uses at a glance", onclick: () => void openActions(itemId).catch(showErr) }, "⚔ Actions") : null),
     conds.length ? h("div", { className: "conds" }, ...conds.map((c) =>
       h("span", { className: `cond${c.automatic ? " auto" : ""}`, title: c.detail ?? "" }, c.label, c.level ? ` ${c.level}` : "", c.detail ? ` (${c.detail})` : ""))) : null);
 }

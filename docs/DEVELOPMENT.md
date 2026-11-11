@@ -93,6 +93,13 @@ every client) and [card.html](../card.html) (unit card popover, `?id=<itemId>`).
 concentration DC), [settings.ts](../src/core/settings.ts) (room settings) and [rolls.ts](../src/core/rolls.ts) (roll
 broadcast messages and visibility).
 
+**Action bar:** [actions.html](../actions.html) (`?id=<itemId>`, [src/actions/main.ts](../src/actions/main.ts)) renders
+[actions.ts](../src/core/actions.ts), which builds the hotbar from the sheet: section → cost, `SheetEntry.cost` (D&D Beyond
+spell casting time), uses / recharge / legendary cost parsed from entry names, and spell slots from the D&D Beyond
+"Spellcasting — Class" text or a creature's "Level N (k slots)" list. Live state is `UnitState.turn` (economy, valid for the
+round of the unit's own latest turn, see `ownTurnRound`) and `UnitState.used` (counts by key; cleared on a D&D Beyond sync).
+Players change it through the `use` request; rolls go through [unitRoll.ts](../src/extension/unitRoll.ts), shared with the card.
+
 **Limits (Owlbear docs, checked 2026-11-08):** broadcast messages ≤ 16 kB; room metadata ≤ 16 kB in total for all
 extensions. No documented limit for item metadata (256 kB on one token tested fine, see below).
 

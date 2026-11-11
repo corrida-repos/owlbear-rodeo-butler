@@ -105,6 +105,19 @@ Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Sh
 
 **5E (2014) rooms:** any beast you have seen (no limit on Known Shapes). Swimming speeds are allowed from level 4. Circle of the Moon gets CR 1 from level 2. The form has the beast's hit points: at 0 you revert and leftover damage carries over to your own HP. Uses come back on any rest.
 
+## Action bar (what can I do this turn?)
+
+A hotbar for one unit, in the style of Baldur's Gate 3: everything the unit can do, grouped by what it costs. Open it from the token's right-click menu (**Actions**), the **⚔ Actions** button on the unit card, or, for players, **⚔ Actions** under **My units** and **⚔ My actions** on their turn. It docks at the bottom of the screen. Players can tick **Open my action bar on my turn** to have it open by itself when their turn starts (each browser remembers its own choice).
+
+- **This turn:** **● Action**, **▲ Bonus Action** and **◆ Reaction**, plus ★ Legendary Actions for creatures that have them, and the movement tracker's feet. Click one to mark it used, or click again to get it back. They come back on their own when the unit's turn starts. Outside combat, **↺** starts a fresh turn.
+- **Tiles:** weapons and attacks, actions, bonus actions, reactions, legendary actions, spells, and features with limited uses or a recharge. Tabs filter by cost: **Action**, **Bonus**, **Reaction**, **Legendary**, **Spells**, **Features**. Spells also appear under their casting time, so a bonus-action spell shows under **Bonus**. **Common** lists the actions anyone can take (Attack, Dash, Dodge, Help, Hide, Ready… for the room's edition) and Opportunity Attack. Each tile shows the attack bonus, damage or save DC, uses left (`1/2`), the spell level (`C` for cantrips, `L2`) and ◎ for Concentration. A tile is greyed out when you can't use it right now: its cost is spent, it has no uses or slots left, or it's recharging. **Available** hides those.
+- **Click a tile** for its full text with clickable dice (Shift: advantage, Ctrl/Cmd: disadvantage; damage and crit follow an attack, as on the card). **Use** or **Cast** spends what it costs. A levelled spell offers one button per slot level that has a slot left. A Concentration spell also adds Concentration to the unit. **Dash** turns on Dash in the movement tracker. A recharging ability offers **Roll recharge**.
+- **Spell slots** show as pips (Pact Magic in purple). Click a filled pip to spend a slot, or an empty one to get it back. **Short rest** brings back Short Rest uses and Pact Magic. **Long rest** brings back everything.
+
+**Synced with D&D Beyond.** For a party member, the bar is built from their D&D Beyond sync: actions and bonus actions as D&D Beyond sorts them, each spell's casting time, uses (with what was already used on D&D Beyond), and spell slots. Re-sync (the player's **⟳ D&D Beyond**, the **⟳** on the bar, or the GM's party sync) and the bar follows the sheet, taking D&D Beyond's used uses and slots as the new starting point. What you spend in Owlbear is not written back to D&D Beyond, which has no way for other apps to save to a sheet. Characters synced before this version need one re-sync to get spell casting times.
+
+Players track their own units while **Players may change their own units…** is on. With it off, they can still look and roll.
+
 ## Give players their cards
 
 On a unit card, the GM opens **Edit unit** and sets **Controlled by** (or picks the player in the **Party** list at the top of **Add Party**). That player then finds the unit under **My units**, opens its card and rolls from it. Players do not install another extension.

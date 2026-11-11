@@ -152,6 +152,7 @@ export function syncedState(m: PartyMember, prev: UnitState | undefined, hp: Par
     inEncounter: prev?.inEncounter ?? true,
   };
   delete state.maxHpOverride; // the sheet's max HP is the character's real max
+  delete state.used; // the action bar starts again from D&D Beyond's uses and spell slots
   return state;
 }
 

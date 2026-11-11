@@ -20,7 +20,14 @@ export const ABILITY_NAMES: Record<Ability, string> = {
 export type SizeCode = keyof typeof SIZE_CELLS;
 
 /** One named block of text: a trait, an action, a spell, an item. `text` may contain `[formula]` chips. */
-export interface SheetEntry { name: string; text: string }
+export interface SheetEntry {
+  name: string;
+  text: string;
+  /** What using it costs, when the source says (a D&D Beyond spell's casting time). Otherwise the section decides. */
+  cost?: "action" | "bonus" | "reaction" | "free" | "longer";
+  /** Casting time or condition worth showing ("1 minute", "1 reaction, which you take when you are hit"). */
+  costNote?: string;
+}
 
 export interface UnitSheet {
   schema: typeof SHEET_SCHEMA;
@@ -96,6 +103,10 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
+  /** Action bar: Action / Bonus Action / Reaction / Legendary Actions spent in the unit's current turn (see actions.ts). */
+  turn?: { round: number; action?: boolean; bonus?: boolean; reaction?: boolean; legendary?: number };
+  /** Action bar: uses spent of limited features and spell slots, by key; replaces the sheet's count (D&D Beyond's at sync). */
+  used?: Record<string, number>;
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

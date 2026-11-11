@@ -33,10 +33,12 @@ import { obrGateway } from "../extension/obrGateway";
 import { pushRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 import { openWildShape } from "../extension/wildShapePopover";
+import { openActions } from "../extension/actionsPopover";
 import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
 import { migrateSheet } from "../core/sheet";
+import { useOnUnit } from "../core/actions";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -63,6 +65,13 @@ async function createMenus() {
     icons: [{ icon, label: "View unit card", filter: { max: 1, every: [...UNIT_FILTER] } }],
     onClick: async (ctx, elementId) => {
       logClick("view-unit", ctx.items); if (ctx.items[0]) await openCard(ctx.items[0].id, elementId); },
+  });
+  // Action bar (BG3-style hotbar): same reach as the card.
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/actions`,
+    icons: [{ icon, label: "Actions", filter: { max: 1, every: [...UNIT_FILTER] } }],
+    onClick: async (ctx) => {
+      logClick("actions", ctx.items); if (ctx.items[0]) await openActions(ctx.items[0].id); },
   });
   // Wild Shape: on druids (set up from their sheet or by the GM); the GM can set it up on any party member.
   await OBR.contextMenu.create({
@@ -221,6 +230,7 @@ async function onSceneChange() {
       const activeU = unit(v.active), next = unit(v.next);
       if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
         await notify(`It's your turn: ${activeU.name}`, "SUCCESS");
+        if (store.get("butler.autoActions") === "1") await openActions(activeU.id).catch((e) => console.error("[Butler] action bar failed", e));
       } else if (next && item(next.id) && role === "PLAYER" && controls(me, item(next.id)!, next.state)) {
         await notify(`You're up next: ${next.name}`, "INFO");
       }
@@ -310,6 +320,7 @@ async function handleRequest(req: unknown) {
         }
         break;
       }
+      case "use": await useOnUnit(obrGateway, req.unitId, req.change, roomSystem().rules); break;
       case "sheet-sync": {
         const who = await applySelfSync(obrGateway, req.unitId, req.member, req.hp);
         await notify(`${req.playerName} synced ${who} from D&D Beyond.`, "SUCCESS");
