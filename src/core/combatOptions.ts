@@ -1,6 +1,6 @@
 /**
  * Combat options every creature has by the rules, beyond what its sheet lists: the Player's Handbook actions
- * (Dash, Dodge, Help…), Unarmed Strike with Grapple and Shove, movement (jumping, climbing, standing up…), and the
+ * (Dash, Dodge, Help…; Ready is the action bar's right-click option on each action, not a tile), Unarmed Strike with Grapple and Shove, movement (jumping, climbing, standing up…), and the
  * Dungeon Master's Guide optional action options (Disarm, Overrun, Tumble…). Worded for the room's edition, with the
  * numbers worked out from the unit's sheet (to-hit, DCs, skill bonuses, jump distances). Reference only.
  */
@@ -83,7 +83,6 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
       { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher." },
       { name: "Magic", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Cast a spell with a casting time of an action, or use a magic item or magical feature that takes an action. If you cast a spell with a Bonus Action, you can't cast another spell with a spell slot that turn." },
     ] : []),
-    { name: "Ready", cost: "action", group: "Actions", source: "PHB", text: "Choose a trigger you can see (\"if the orc steps through the door\") and an action, or movement up to your Speed. When it happens, you can use your Reaction to do it, or ignore it. A readied spell is cast now and held with Concentration until it's released; it's lost if you don't use it before your next turn." },
     { name: "Search", cost: "action", group: "Actions", source: "PHB", text: o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check." },
     ...(o2024 ? [{ name: "Study", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Recall or work something out: an Intelligence check (Arcana, History, Investigation, Nature or Religion)." }] : []),
     { name: o2024 ? "Utilize" : "Use an Object", cost: "action", group: "Actions", source: "PHB", text: o2024

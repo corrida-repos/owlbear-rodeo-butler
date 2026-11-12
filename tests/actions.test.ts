@@ -151,11 +151,14 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
   });
   it("covers the PHB actions, attack options, movement and the DMG's optional ones", () => {
     const names = opts.map((o) => o.name);
-    for (const n of ["Attack", "Dash", "Disengage", "Dodge", "Help", "Hide", "Influence", "Magic", "Ready", "Search", "Study", "Utilize",
+    for (const n of ["Attack", "Dash", "Disengage", "Dodge", "Help", "Hide", "Influence", "Magic", "Search", "Study", "Utilize",
       "Grapple", "Shove", "Two-Weapon Fighting", "Opportunity Attack", "Improvised Weapon", "Drop Prone", "Stand Up", "Jump", "Climb", "Swim",
       "Interact with an Object", "Stabilize", "Disarm", "Mark", "Overrun", "Shove Aside", "Tumble", "Climb onto a Bigger Creature"]) expect(names).toContain(n);
     expect(opts.filter((o) => o.source === "DMG").every((o) => o.group === "DMG optional rules")).toBe(true);
     expect(by("Drink or Administer a Potion").cost).toBe("bonus");
+    // Ready isn't a tile: it's the right-click option on each action.
+    expect(names).not.toContain("Ready");
+    expect(combatOptions(sheet, "2014").some((o) => o.name === "Ready")).toBe(false);
   });
   it("uses the 2014 wording and rules in a 5E room", () => {
     const old = combatOptions(sheet, "2014");

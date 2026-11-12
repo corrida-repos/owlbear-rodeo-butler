@@ -117,7 +117,7 @@ const sendEconomy = (change: EconomyChange) => role === "GM" ? setEconomy(obrGat
 /** Can this option be readied now? Ready takes the Action on your own turn; the option fires later with the Reaction. */
 function readyCheck(it: ActionItem, state: UnitState): { ok: boolean; why?: string; cost?: "action" | "bonus" } {
   const cost = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : null;
-  if (!cost || it.key === "common:Ready") return { ok: false, why: "Only an Action (or, with your GM's OK, a Bonus Action) can be readied." };
+  if (!cost) return { ok: false, why: "Only an Action (or, with your GM's OK, a Bonus Action) can be readied." };
   if (!item || (role !== "GM" && !controls({ id: meId, role }, itemInfo(item), state))) return { ok: false, why: "Not your unit." };
   const v = trackerView(lite, sceneMeta);
   if (!v.encounter.started || !v.order.some((u) => u.id === itemId)) return { ok: false, why: "Ready is for combat." };
@@ -142,10 +142,8 @@ function contextMenu(bar: ActionBar, state: UnitState): Child {
 
 function readyForm(it: ActionItem, state: UnitState): Child {
   const chk = readyCheck(it, state);
-  if (readyFor !== it.key) {
-    return chk.cost ? h("button", { className: "secondary small", disabled: !chk.ok, title: chk.why ?? "Hold it until a trigger (uses your Action now, your Reaction when it triggers)",
-      onclick: () => { readyFor = it.key; render(); } }, "⏳ Ready…") : null;
-  }
+  // Ready is only offered from the tile's right-click menu; the form opens here once chosen.
+  if (readyFor !== it.key) return null;
   const trigger = h("input", { type: "text", maxLength: 160, placeholder: "Trigger, e.g. \"when the orc comes around the corner\"" }) as HTMLInputElement;
   const go = () => {
     const t = trigger.value.trim();
@@ -212,7 +210,7 @@ function footer(sheet: UnitSheet, state: UnitState): Child {
   const record = item?.metadata[BUTLER_ITEM_KEY] as PartyRecord | undefined;
   const mine = !!item && role === "PLAYER" && controls({ id: meId, role }, itemInfo(item), state);
   return h("div", { className: "ab-footer small muted" },
-    h("span", { className: "grow" }, "To roll, open the unit card."),
+    h("span", { className: "grow" }, "Right-click an action to Ready it. To roll, open the unit card."),
     record?.ddbId ? h("span", {},
       `From D&D Beyond · synced ${record.syncedAt ? new Date(record.syncedAt).toLocaleDateString() : ""}`,
       mine && sheet.kind === "character" && roomSettings().playerEdits
