@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
 import { actionBar, explain, inTab, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf } from "../src/core/actions";
-import { combatOptions, skillBonus } from "../src/core/combatOptions";
+import { combatOptions, DMG_OPTIONS, skillBonus } from "../src/core/combatOptions";
+import { DEFAULT_SETTINGS, readSettings, SETTINGS_KEY, settingsUpdate } from "../src/core/settings";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
@@ -134,7 +135,8 @@ describe("action bar from a creature", () => {
 describe("combat options anyone has (PHB + DMG optional rules)", () => {
   const sheet = { ...brann.sheet, abilities: { ...brann.sheet.abilities, str: 16, dex: 14 }, proficiencyBonus: 2, speed: { walk: 30 },
     skills: [{ name: "Athletics", bonus: 5 }], actions: brann.sheet.actions.filter((a) => a.name !== "Unarmed Strike") };
-  const opts = combatOptions(sheet, "2024");
+  const allDmg = DMG_OPTIONS.map((o) => o.id);
+  const opts = combatOptions(sheet, "2024", allDmg);
   const by = (n: string) => opts.find((o) => o.name === n)!;
   it("works out this character's numbers", () => {
     expect(by("Unarmed Strike")).toMatchObject({ cost: "attack", summary: "+5 · 4 Bludgeoning" });
@@ -166,8 +168,26 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
   });
   it("doesn't repeat an Unarmed Strike the sheet already has, and explains the DMG ones as optional", () => {
     expect(combatOptions(brann.sheet).some((o) => o.name === "Unarmed Strike")).toBe(false);
-    const disarm = actionBar(sheet).items.find((i) => i.name === "Disarm")!;
-    expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide/);
+    const disarm = actionBar(sheet, "2024", ["disarm"]).items.find((i) => i.name === "Disarm")!;
+    expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide, switched on by your GM/);
     expect(inTab(disarm, "common")).toBe(true);
+  });
+});
+
+describe("DMG optional combat rules: switched on one by one in Room settings", () => {
+  const dmgNames = (dmg: string[]) => combatOptions(brann.sheet, "2024", dmg).filter((o) => o.source === "DMG").map((o) => o.name);
+  it("are all off by default, and each shows only when switched on", () => {
+    expect(DEFAULT_SETTINGS.dmgOptions).toEqual([]);
+    expect(dmgNames([])).toEqual([]);
+    expect(dmgNames(["tumble"])).toEqual(["Tumble"]);
+    expect(dmgNames(["mark", "overrun"])).toEqual(["Mark", "Overrun"]);
+    expect(dmgNames(DMG_OPTIONS.map((o) => o.id))).toHaveLength(6);
+    expect(actionBar(brann.sheet).items.some((i) => i.source === "DMG")).toBe(false);
+  });
+  it("are stored in the room settings, ignoring unknown or repeated ids", () => {
+    const meta = settingsUpdate({}, { dmgOptions: ["disarm", "tumble"] });
+    expect(readSettings(meta).dmgOptions).toEqual(["disarm", "tumble"]);
+    expect(readSettings({ [SETTINGS_KEY]: { dmgOptions: ["disarm", "disarm", "fly", 3] } }).dmgOptions).toEqual(["disarm"]);
+    expect(readSettings({ [SETTINGS_KEY]: { dmgOptions: "disarm" } }).dmgOptions).toEqual([]);
   });
 });

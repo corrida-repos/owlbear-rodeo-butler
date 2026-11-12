@@ -11,7 +11,21 @@ export type OptionCost = "action" | "bonus" | "reaction" | "free" | "move" | "at
 export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Other" | "DMG optional rules";
 export const OPTION_GROUPS: OptionGroup[] = ["Actions", "Attack options", "Movement", "Other", "DMG optional rules"];
 
+/** The Dungeon Master's Guide optional action options, each switched on by the GM in Room settings (all off by default). */
+export const DMG_OPTIONS = [
+  { id: "disarm", name: "Disarm", hint: "knock an item out of a creature's grasp instead of an attack" },
+  { id: "mark", name: "Mark", hint: "Opportunity Attacks against your melee target with Advantage, without using your Reaction" },
+  { id: "overrun", name: "Overrun", hint: "force your way through a hostile creature's space" },
+  { id: "shove-aside", name: "Shove Aside", hint: "shove a creature 5 ft. sideways" },
+  { id: "tumble", name: "Tumble", hint: "duck and weave through a hostile creature's space" },
+  { id: "climb-onto", name: "Climb onto a Bigger Creature", hint: "cling to a much larger creature" },
+] as const;
+export type DmgOptionId = (typeof DMG_OPTIONS)[number]["id"];
+export const isDmgOptionId = (x: unknown): x is DmgOptionId => DMG_OPTIONS.some((o) => o.id === x);
+
 export interface CombatOption {
+  /** DMG optional options: the id the GM's setting switches on. */
+  id?: DmgOptionId;
   name: string;
   cost: OptionCost;
   /** Shown with the cost ("Action or Bonus Action", "Replaces one attack"). */
@@ -30,7 +44,8 @@ export function skillBonus(sheet: Pick<UnitSheet, "skills" | "abilities">, skill
   return s ? s.bonus : abilityMod(sheet.abilities[ability]);
 }
 
-export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): CombatOption[] {
+/** `dmg`: the DMG optional options the GM switched on (Room settings); the others are left out. */
+export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = []): CombatOption[] {
   const str = abilityMod(sheet.abilities.str);
   const pb = sheet.proficiencyBonus;
   const ath = skillBonus(sheet, "Athletics", "str");
@@ -109,12 +124,12 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024")
     { name: "Speak", cost: "free", group: "Other", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
 
     // ---- DMG optional rules
-    { name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },
-    { name: "Mark", cost: "free", costNote: "With a melee attack", group: "DMG optional rules", source: "DMG", text: "When you make a melee attack, mark the target. Until the end of your next turn, your Opportunity Attacks against it have Advantage and don't use your Reaction (still only one per turn, and not while something stops you taking reactions)." },
-    { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
-    { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
-    { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
-    { name: "Climb onto a Bigger Creature", cost: "action", group: "DMG optional rules", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
+    { id: "disarm", name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },
+    { id: "mark", name: "Mark", cost: "free", costNote: "With a melee attack", group: "DMG optional rules", source: "DMG", text: "When you make a melee attack, mark the target. Until the end of your next turn, your Opportunity Attacks against it have Advantage and don't use your Reaction (still only one per turn, and not while something stops you taking reactions)." },
+    { id: "overrun", name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
+    { id: "shove-aside", name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
+    { id: "tumble", name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
+    { id: "climb-onto", name: "Climb onto a Bigger Creature", cost: "action", group: "DMG optional rules", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
-  return list;
+  return list.filter((o) => o.source !== "DMG" || (o.id && dmg.includes(o.id)));
 }

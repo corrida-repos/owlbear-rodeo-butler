@@ -116,7 +116,7 @@ Open it from the token's right-click menu (**Actions**), the **⚔ Actions** but
   - **Attack options:** Unarmed Strike (if the sheet doesn't list one), Grapple, Shove, Two-Weapon Fighting, Opportunity Attack, Improvised Weapon.
   - **Movement:** Move, Drop Prone, Stand Up, Jump, Climb, Swim, Mount or Dismount.
   - **Other:** Interact with an Object, Drink or Administer a Potion, Speak.
-  - **DMG optional rules** (marked *DMG*, only if your GM uses them): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature.
+  - **DMG optional rules** (marked *DMG*): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature. They're all off by default; the GM switches each one on separately in **Combat → Room settings → DMG optional combat rules in the action bar**, and only those appear for everyone in the room.
 
   The numbers come from the sheet: Unarmed Strike to-hit and damage, the Grapple / Shove DC (8 + Strength + proficiency; Athletics in 5E), Athletics, Acrobatics, Stealth and Medicine bonuses, Dash distance, half Speed to stand up, and jump distances from Strength. Hover a tab to see what that cost means.
 - **Tiles** show the attack bonus, damage or save DC, the spell level (`C` for cantrips, `L2`), a limit as written on the sheet (`2/Long Rest`, `5–6` for a recharge) and ◎ for Concentration.

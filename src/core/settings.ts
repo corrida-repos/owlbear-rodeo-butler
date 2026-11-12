@@ -3,6 +3,7 @@
  * together, so only small values belong here.
  */
 import { BUTLER_NS } from "./constants";
+import { isDmgOptionId, type DmgOptionId } from "./combatOptions";
 import { DEFAULT_SYSTEM, SYSTEMS, type SystemId } from "./systems";
 
 export const SETTINGS_KEY = `${BUTLER_NS}/settings`;
@@ -13,9 +14,11 @@ export interface RoomSettings {
   playerEdits: boolean;
   /** Creatures reaching 0 HP are marked dead automatically (otherwise Butler offers it). */
   autoDeadAtZero: boolean;
+  /** DMG optional combat options shown in the action bar (each switched on by the GM). */
+  dmgOptions: DmgOptionId[];
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: [] };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -24,6 +27,7 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     system: typeof s.system === "string" && s.system in SYSTEMS ? (s.system as SystemId) : DEFAULT_SETTINGS.system,
     playerEdits: typeof s.playerEdits === "boolean" ? s.playerEdits : DEFAULT_SETTINGS.playerEdits,
     autoDeadAtZero: typeof s.autoDeadAtZero === "boolean" ? s.autoDeadAtZero : DEFAULT_SETTINGS.autoDeadAtZero,
+    dmgOptions: Array.isArray(s.dmgOptions) ? [...new Set(s.dmgOptions.filter(isDmgOptionId))] : [],
   };
 }
 

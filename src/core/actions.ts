@@ -191,8 +191,8 @@ export function legendaryPerRound(sheet: Pick<UnitSheet, "legendary">): number {
 // ------------------------------------------------------------------ combat options (PHB + DMG)
 
 /** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers. */
-export function commonActions(sheet: UnitSheet, rules: "2024" | "2014"): ActionItem[] {
-  return combatOptions(sheet, rules).map((c) => ({
+export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", dmg: readonly string[] = []): ActionItem[] {
+  return combatOptions(sheet, rules, dmg).map((c) => ({
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
   }));
@@ -202,7 +202,8 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014"): ActionI
 
 export interface ActionBar { items: ActionItem[]; legendary: number }
 
-export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): ActionBar {
+/** `dmg`: the DMG optional combat options switched on in Room settings. */
+export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = []): ActionBar {
   const items: ActionItem[] = [];
   const seen = new Set<string>();
   for (const section of ["actions", "bonusActions", "reactions", "legendary", "spells", "traits"] as const) {
@@ -215,7 +216,7 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): Ac
       items.push(it);
     }
   }
-  return { items: [...items, ...commonActions(sheet, rules)], legendary: legendaryPerRound(sheet) };
+  return { items: [...items, ...commonActions(sheet, rules, dmg)], legendary: legendaryPerRound(sheet) };
 }
 
 /** Which tab an item shows under. Spells and features show under their cost too. */
@@ -258,7 +259,7 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   if (it.category === "common") {
     // The rule, with this unit's numbers, comes first; then what it costs.
     out.unshift(it.text);
-    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide: only if your GM uses it.");
+    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide, switched on by your GM for this room.");
     return out;
   }
 

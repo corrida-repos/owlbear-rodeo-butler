@@ -151,7 +151,7 @@ function render() {
   else if (cardAccess({ id: meId, role }, itemInfo(item), u.state) !== "full") nodes.push(h("div", { className: "panel warn" }, "These actions belong to the GM or another player."));
   else {
     const { sheet, state } = u;
-    const bar = actionBar(sheet, roomSystem().rules);
+    const bar = actionBar(sheet, roomSystem().rules, roomSettings().dmgOptions);
     const shown = bar.items.filter((it) => inTab(it, tab));
     const sel = bar.items.find((it) => it.key === selected);
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
@@ -162,7 +162,7 @@ function render() {
       h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
         : tab === "common" ? OPTION_GROUPS.flatMap((g) => {
           const inGroup = shown.filter((it) => it.group === g);
-          return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (ask your GM)" : g), ...inGroup.map(tile)] : [];
+          return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g), ...inGroup.map(tile)] : [];
         })
           : shown.map(tile))),
       sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Click an option to see how it works."),

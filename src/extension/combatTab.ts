@@ -11,6 +11,7 @@ import { openCard } from "./cardPopover";
 import { renderRollLog } from "./rollLogView";
 import { roomSettings, roomSystem, setRoomSettings } from "./roomSettings";
 import { SYSTEMS, type SystemId } from "../core/systems";
+import { DMG_OPTIONS, type DmgOptionId } from "../core/combatOptions";
 
 let combatants: Combatant[] | null = null;
 let lastRoll: InitiativeReport | null = null;
@@ -143,7 +144,23 @@ function renderSettings(): Child {
     h("label", { className: "small" }, h("input", { type: "checkbox", checked: roomSettings().playerEdits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ playerEdits: (e.target as HTMLInputElement).checked }))() }),
       "Players may change their own units' HP, conditions and initiative, end their own turn and re-sync from D&D Beyond"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoDeadAtZero, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoDeadAtZero: (e.target as HTMLInputElement).checked }))() }),
-      "Mark creatures dead automatically at 0 HP (party members still make death saves)"));
+      "Mark creatures dead automatically at 0 HP (party members still make death saves)"),
+    dmgOptionsSettings());
+}
+
+/** The DMG's optional combat options, each shown in players' action bars only when switched on here. */
+function dmgOptionsSettings(): Child {
+  const on = roomSettings().dmgOptions;
+  const set = (id: DmgOptionId, checked: boolean) => {
+    const next = checked ? [...new Set([...on, id])] : on.filter((x) => x !== id);
+    void action(() => setRoomSettings({ dmgOptions: next }))();
+  };
+  return h("details", { className: "small", style: "margin-top:8px", open: on.length > 0 },
+    h("summary", {}, `DMG optional combat rules in the action bar (${on.length} of ${DMG_OPTIONS.length} on)`),
+    h("div", { className: "stack tight", style: "margin-top:4px" },
+      ...DMG_OPTIONS.map((o) => h("label", { className: "small" },
+        h("input", { type: "checkbox", checked: on.includes(o.id), disabled: ui.busy, onchange: (e: Event) => set(o.id, (e.target as HTMLInputElement).checked) }),
+        h("strong", {}, o.name), ` · ${o.hint}`))));
 }
 
 export function renderCombatTab(): Child[] {
