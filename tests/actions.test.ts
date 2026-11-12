@@ -4,6 +4,7 @@ import { actionBar, explain, inTab, legendaryPerRound, parseEntryName, saveOf, s
 import { combatOptions, DMG_OPTIONS, skillBonus } from "../src/core/combatOptions";
 import { DEFAULT_SETTINGS, readSettings, SETTINGS_KEY, settingsUpdate } from "../src/core/settings";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
+import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
 
@@ -217,5 +218,32 @@ describe("Free tab: what costs no Action or Bonus Action", () => {
     expect(surge).toMatchObject({ cost: "free", category: "feature", limit: { max: 1, reset: "short" } });
     expect(inTab(surge, "free")).toBe(true);
     expect(explain(surge)[0]).toBe("Doesn't take an action.");
+  });
+});
+
+describe("Mounted combat: only while mounted", () => {
+  const rider = { ...brann.sheet, saves: { ...brann.sheet.saves, dex: 4 }, speed: { walk: 30 } };
+  it("shows the mounted options (with the mount's name) only while the unit is Mounted", () => {
+    expect(combatOptions(rider).some((o) => o.group === "Mounted")).toBe(false);
+    const opts = combatOptions(rider, "2024", [], { mount: "Warhorse" });
+    const mounted = opts.filter((o) => o.group === "Mounted").map((o) => o.name);
+    expect(mounted).toEqual(["Ride (controlled mount)", "Mount's Action", "Independent Mount", "Attacks against your mount", "Stay in the Saddle", "Mount Falls", "Dismount"]);
+    expect(opts[0]!.group).toBe("Mounted"); // first in the Combat tab
+    const saddle = opts.find((o) => o.name === "Stay in the Saddle")!;
+    expect(saddle.summary).toBe("DC 10 Dex · +4");
+    expect(saddle.text).toContain("moves Warhorse against its will");
+    expect(opts.find((o) => o.name === "Dismount")!.summary).toBe("15 ft.");
+    expect(opts.find((o) => o.name === "Mount Falls")!.cost).toBe("reaction");
+    expect(combatOptions(rider, "2024", [], {}).find((o) => o.name === "Mount Falls")!.text).toContain("your mount");
+  });
+  it("on the bar: in the Combat tab, and the free / movement ones in the Free tab", () => {
+    const bar = actionBar(rider, "2024", [], { mount: "Pony" });
+    expect(bar.items.find((i) => i.name === "Ride (controlled mount)")).toMatchObject({ category: "common", group: "Mounted", cost: "free" });
+    expect(bar.items.filter((i) => inTab(i, "free")).map((i) => i.name)).toEqual(expect.arrayContaining(["Ride (controlled mount)", "Dismount"]));
+    expect(bar.items.filter((i) => inTab(i, "free")).map((i) => i.name)).not.toContain("Mount Falls");
+  });
+  it("Mounted is a condition in both editions", () => {
+    expect(DND5E_2024.conditions.some((c) => c.key === "mounted")).toBe(true);
+    expect(DND5E_2014.conditions.some((c) => c.key === "mounted")).toBe(true);
   });
 });

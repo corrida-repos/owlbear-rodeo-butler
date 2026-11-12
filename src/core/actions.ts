@@ -191,8 +191,8 @@ export function legendaryPerRound(sheet: Pick<UnitSheet, "legendary">): number {
 // ------------------------------------------------------------------ combat options (PHB + DMG)
 
 /** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers. */
-export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", dmg: readonly string[] = []): ActionItem[] {
-  return combatOptions(sheet, rules, dmg).map((c) => ({
+export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", dmg: readonly string[] = [], mounted: { mount?: string } | null = null): ActionItem[] {
+  return combatOptions(sheet, rules, dmg, mounted).map((c) => ({
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
   }));
@@ -203,7 +203,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", dmg: rea
 export interface ActionBar { items: ActionItem[]; legendary: number }
 
 /** `dmg`: the DMG optional combat options switched on in Room settings. */
-export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = []): ActionBar {
+export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = [], mounted: { mount?: string } | null = null): ActionBar {
   const items: ActionItem[] = [];
   const seen = new Set<string>();
   for (const section of ["actions", "bonusActions", "reactions", "legendary", "spells", "traits"] as const) {
@@ -216,7 +216,7 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg
       items.push(it);
     }
   }
-  return { items: [...items, ...commonActions(sheet, rules, dmg)], legendary: legendaryPerRound(sheet) };
+  return { items: [...items, ...commonActions(sheet, rules, dmg, mounted)], legendary: legendaryPerRound(sheet) };
 }
 
 /** Which tab an item shows under. Spells and features show under their cost too. */

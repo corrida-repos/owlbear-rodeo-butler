@@ -16,6 +16,7 @@ import { BUTLER_ITEM_KEY } from "../core/constants";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import type { UnitSheet, UnitState } from "../core/sheet";
 import { readUnit } from "../core/unit";
+import { addConditionTo, removeConditionFrom } from "../core/tracker";
 import { currentEconomy, currentReadied, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy, type EconomyChange } from "../core/economy";
 import type { SceneItemLite } from "../core/importer";
 import { trackerView } from "../core/tracker";
@@ -168,6 +169,46 @@ function readyForm(it: ActionItem, state: UnitState): Child {
 }
 
 /** What's readied right now, shown at the top of the bar. */
+// ------------------------------------------------------------------ mounted
+
+/** The unit's Mounted condition (the note names the mount), or null. */
+const mountedOf = (state: UnitState) => state.conditions.find((c) => c.key === "mounted") ?? null;
+
+/** Mounting adds the Mounted condition (a badge everyone sees), dismounting removes it: like any condition change. */
+function setMounted(state: UnitState, on: boolean, mount?: string) {
+  const cur = mountedOf(state);
+  const done = () => { note = on ? `Mounted${mount ? ` on ${mount}` : ""}: the 🐎 Mounted options are at the top of ⚔ Combat.` : "Dismounted."; render(); };
+  const fail = (e: unknown) => { note = String(e); render(); };
+  if (on) {
+    const opts = mount ? { note: mount } : {};
+    void (role === "GM" ? addConditionTo(obrGateway, [itemId], "mounted", opts) : sendRequest({ type: "condition-add", unitId: itemId, key: "mounted", ...opts })).then(done, fail);
+  } else if (cur) {
+    void (role === "GM" ? removeConditionFrom(obrGateway, itemId, cur.id) : sendRequest({ type: "condition-remove", unitId: itemId, conditionId: cur.id })).then(done, fail);
+  }
+}
+
+const canChangeConditions = (state: UnitState) =>
+  !!item && (role === "GM" || (roomSettings().playerEdits && controls({ id: meId, role }, itemInfo(item), state)));
+
+/** On the Mount or Dismount / Dismount tiles: mark the unit mounted or not. */
+function mountButtons(it: ActionItem, state: UnitState): Child {
+  if (it.key !== "common:Mount or Dismount" && it.key !== "common:Dismount") return null;
+  if (!canChangeConditions(state)) return h("span", { className: "small muted" }, "Ask your GM to mark you Mounted.");
+  if (mountedOf(state)) return h("button", { className: "secondary small", onclick: () => setMounted(state, false) }, "I've dismounted");
+  const name = h("input", { type: "text", maxLength: 40, placeholder: "Mount (optional), e.g. Warhorse", style: "width:180px" }) as HTMLInputElement;
+  const go = () => { const n = name.value.trim(); name.blur(); setMounted(state, true, n || undefined); };
+  name.onkeydown = (e: KeyboardEvent) => { if (e.key === "Enter") go(); };
+  return h("span", { className: "row" }, name, h("button", { className: "small", onclick: go }, "🐎 I'm mounted"));
+}
+
+function mountedLine(state: UnitState): Child {
+  const m = mountedOf(state);
+  if (!m) return null;
+  return h("div", { className: "mountline small" },
+    h("span", { className: "grow" }, "🐎 Mounted", m.note ? h("strong", {}, ` on ${m.note}`) : null, h("span", { className: "muted" }, " · mounted options in ⚔ Combat")),
+    canChangeConditions(state) ? h("button", { className: "secondary small", onclick: () => setMounted(state, false) }, "Dismount") : null);
+}
+
 function readiedLine(state: UnitState): Child {
   const v = trackerView(lite, sceneMeta);
   const r = currentReadied(state, ownTurnRound(v.encounter, v.order, itemId));
@@ -204,7 +245,7 @@ function detail(it: ActionItem, bar: ActionBar, state: UnitState): Child {
       h("ul", { className: "small" }, ...how.map((line) => h("li", {}, line)))) : null,
     it.category !== "common" ? h("details", { className: "small", open: !how.length },
       h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null,
-    h("div", { className: "row" }, economyButton(it, state), readyForm(it, state)));
+    h("div", { className: "row" }, economyButton(it, state), mountButtons(it, state), readyForm(it, state)));
 }
 
 function footer(sheet: UnitSheet, state: UnitState): Child {
@@ -254,13 +295,15 @@ function render() {
   else if (cardAccess({ id: meId, role }, itemInfo(item), u.state) !== "full") nodes.push(h("div", { className: "panel warn" }, "These actions belong to the GM or another player."));
   else {
     const { sheet, state } = u;
-    const bar = actionBar(sheet, roomSystem().rules, roomSettings().dmgOptions);
+    const m = mountedOf(state);
+    const bar = actionBar(sheet, roomSystem().rules, roomSettings().dmgOptions, m ? { mount: m.note } : null);
     const shown = bar.items.filter((it) => inTab(it, tab));
     const sel = bar.items.find((it) => it.key === selected);
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab]
       : tab === "free" ? "No Action or Bonus Action needed: just movement, or nothing at all. Reactions are under ◆ Reaction." : "";
     nodes.push(
       head(sheet, state),
+      mountedLine(state),
       readiedLine(state),
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
@@ -270,7 +313,7 @@ function render() {
             ? [h("div", { className: "ab-group" }, "From your sheet"), ...shown.filter((it) => it.category !== "common").map(tile)] : []),
           ...OPTION_GROUPS.flatMap((g) => {
             const inGroup = shown.filter((it) => it.category === "common" && it.group === g);
-            return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g), ...inGroup.map(tile)] : [];
+            return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g === "Mounted" ? "🐎 Mounted" : g), ...inGroup.map(tile)] : [];
           })]
           : shown.map(tile))),
       sel ? detail(sel, bar, state) : h("div", { className: "small muted" }, "Click an option to see how it works."),

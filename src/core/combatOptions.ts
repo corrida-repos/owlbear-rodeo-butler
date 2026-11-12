@@ -5,11 +5,11 @@
  * numbers worked out from the unit's sheet (to-hit, DCs, skill bonuses, jump distances). Reference only.
  */
 import { fmtMod } from "./dice";
-import { abilityMod, type UnitSheet } from "./sheet";
+import { abilityMod, saveBonus, type UnitSheet } from "./sheet";
 
 export type OptionCost = "action" | "bonus" | "reaction" | "free" | "move" | "attack";
-export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Free (no action)" | "Other" | "DMG optional rules";
-export const OPTION_GROUPS: OptionGroup[] = ["Actions", "Attack options", "Movement", "Free (no action)", "Other", "DMG optional rules"];
+export type OptionGroup = "Mounted" | "Actions" | "Attack options" | "Movement" | "Free (no action)" | "Other" | "DMG optional rules";
+export const OPTION_GROUPS: OptionGroup[] = ["Mounted", "Actions", "Attack options", "Movement", "Free (no action)", "Other", "DMG optional rules"];
 
 /** The Dungeon Master's Guide optional action options, each switched on by the GM in Room settings (all off by default). */
 export const DMG_OPTIONS = [
@@ -44,8 +44,11 @@ export function skillBonus(sheet: Pick<UnitSheet, "skills" | "abilities">, skill
   return s ? s.bonus : abilityMod(sheet.abilities[ability]);
 }
 
-/** `dmg`: the DMG optional options the GM switched on (Room settings); the others are left out. */
-export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = []): CombatOption[] {
+/**
+ * `dmg`: the DMG optional options the GM switched on (Room settings); the others are left out.
+ * `mounted`: the unit is riding (its Mounted condition, optionally naming the mount): adds the mounted combat options.
+ */
+export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg: readonly string[] = [], mounted: { mount?: string } | null = null): CombatOption[] {
   const str = abilityMod(sheet.abilities.str);
   const pb = sheet.proficiencyBonus;
   const ath = skillBonus(sheet, "Athletics", "str");
@@ -139,5 +142,23 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { id: "tumble", name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
     { id: "climb-onto", name: "Climb onto a Bigger Creature", cost: "action", group: "DMG optional rules", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
-  return list.filter((o) => o.source !== "DMG" || (o.id && dmg.includes(o.id)));
+  return [...(mounted ? mountedOptions(sheet, rules, mounted.mount) : []), ...list.filter((o) => o.source !== "DMG" || (o.id && dmg.includes(o.id)))];
+}
+
+/** Mounted combat (PHB), shown while the unit is Mounted. */
+function mountedOptions(sheet: UnitSheet, rules: "2024" | "2014", mountName?: string): CombatOption[] {
+  const o2024 = rules === "2024";
+  const mount = mountName?.trim() || "your mount";
+  const dexSave = saveBonus(sheet, "dex");
+  const half = Math.floor(sheet.speed.walk / 2);
+  const g = "Mounted" as const;
+  return [
+    { name: "Ride (controlled mount)", cost: "free", group: g, source: "PHB", text: `A trained mount you control (a horse, a mule…) acts on your initiative and moves as you direct, at its own Speed, on your turn. Your own movement isn't used while it carries you. It can only take the Dash, Disengage or Dodge action. ${o2024 ? "" : "Its initiative changes to match yours when you mount it. "}` },
+    { name: "Mount's Action", cost: "free", costNote: "Uses the mount's action", group: g, source: "PHB", text: `On your turn, ${mount} can Dash (double its movement), Disengage (its movement doesn't provoke Opportunity Attacks) or Dodge (attacks against it have Disadvantage) with its own action. Your Action stays yours: attack, cast a spell, and so on.` },
+    { name: "Independent Mount", cost: "free", group: g, source: "PHB", text: `An intelligent mount (a griffon you befriended, a dragon) keeps its own place in the initiative and decides what to do: it can move, attack and take any action, and might not do what you want.` },
+    { name: "Attacks against your mount", cost: "free", group: g, source: "PHB", text: `If ${mount} provokes an Opportunity Attack while you ride it, the attacker can target either of you.` },
+    { name: "Stay in the Saddle", cost: "free", group: g, source: "PHB", summary: `DC 10 Dex · ${fmtMod(dexSave)}`, text: `If an effect moves ${mount} against its will while you're on it, or you're knocked Prone while mounted, make a DC 10 Dexterity saving throw (you: ${fmtMod(dexSave)}). On a failure you fall off and land Prone in a space within 5 ft. of it.` },
+    { name: "Mount Falls", cost: "reaction", group: g, source: "PHB", text: `If ${mount} is knocked Prone, you can use your Reaction to dismount as it falls and land on your feet. Otherwise you're dismounted and fall Prone in a space within 5 ft. of it.` },
+    { name: "Dismount", cost: "move", costNote: "Half your Speed", group: g, source: "PHB", summary: `${half} ft.`, text: `Getting off ${mount} costs half your Speed (${half} ft.). You land in a space within 5 ft. of it.` },
+  ];
 }
