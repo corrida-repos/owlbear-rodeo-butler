@@ -264,8 +264,10 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
       const usesText = uses ? ` (${uses}/${RESET[lu.resetType] ?? "rest"}${lu.numberUsed ? `, ${lu.numberUsed} used` : ""})` : "";
       let desc = tpl(a.snippet || htmlToText(a.description));
       if (a.dice?.diceString) desc += ` ${withChip(a.dice.diceString)}`;
-      const entry = { name: `${a.name}${usesText}`, text: desc };
+      const entry: ListEntry = { name: `${a.name}${usesText}`, text: desc };
       const kind = ACTIVATION[a.activation?.activationType] ?? "other";
+      // "No Action" features (Action Surge…): on the action bar's Free tab.
+      if (a.activation?.activationType === 2) { entry.cost = "free"; entry.costNote = "No action"; }
       (kind === "action" ? actions : kind === "bonus" ? bonusActions : kind === "reaction" ? reactions : abilities).push(entry);
     }
   }

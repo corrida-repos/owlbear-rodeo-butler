@@ -111,11 +111,12 @@ A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everyt
 
 Open it from the token's right-click menu (**Actions**), the **⚔ Actions** button on the unit card, or, for players, **⚔ Actions** under **My units** and **⚔ My actions** on their turn. It opens at the bottom of the screen. Players can tick **Open my action bar on my turn** to have it open by itself when their turn starts (each browser remembers its own choice).
 
-- **Tabs** sort the options by cost: **● Action**, **▲ Bonus**, **◆ Reaction**, **★ Legendary**, plus **✦ Spells** and **❖ Features** (features with a limit or a recharge). Spells also appear under their casting time, so a bonus-action spell shows under **Bonus**. **⚔ Combat** lists everything anyone can do in a fight by the rules, worked out for that unit and worded for the room's edition:
+- **Tabs** sort the options by cost: **● Action**, **▲ Bonus**, **◆ Reaction**, **★ Legendary**, plus **✦ Spells** and **❖ Features** (features with a limit or a recharge). **○ Free** gathers everything that costs no Action or Bonus Action: movement (stand up, crawl, jump…), things you just do (drop an item, end Concentration, release a grapple…), and features D&D Beyond marks as No Action, like Action Surge. Spells also appear under their casting time, so a bonus-action spell shows under **Bonus**. **⚔ Combat** lists everything anyone can do in a fight by the rules, worked out for that unit and worded for the room's edition:
   - **Actions:** Attack, Dash, Disengage, Dodge, Help, Hide, Influence, Magic, Search, Study, Utilize (5E: Cast a Spell, Use an Object), Escape a Grapple, Stabilize. Ready isn't listed as a tile: right-click any action to Ready it (see the combat HUD).
   - **Attack options:** Unarmed Strike (if the sheet doesn't list one), Grapple, Shove, Two-Weapon Fighting, Opportunity Attack, Improvised Weapon.
-  - **Movement:** Move, Drop Prone, Stand Up, Jump, Climb, Swim, Mount or Dismount.
-  - **Other:** Interact with an Object, Drink or Administer a Potion, Speak.
+  - **Movement:** Move, Drop Prone, Crawl, Stand Up, Jump, Climb, Swim, Fly (with a flying speed), Squeeze, Mount or Dismount.
+  - **Free (no action):** Interact with an Object, Drop an Item, End Concentration, Release a Grapple, Equip or Unequip a Weapon (2024, with each attack), Speak.
+  - **Other:** Drink or Administer a Potion.
   - **DMG optional rules** (marked *DMG*): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature. They're all off by default; the GM switches each one on separately in **Combat → Room settings → DMG optional combat rules in the action bar**, and only those appear for everyone in the room.
 
   The numbers come from the sheet: Unarmed Strike to-hit and damage, the Grapple / Shove DC (8 + Strength + proficiency; Athletics in 5E), Athletics, Acrobatics, Stealth and Medicine bonuses, Dash distance, half Speed to stand up, and jump distances from Strength. Hover a tab to see what that cost means.

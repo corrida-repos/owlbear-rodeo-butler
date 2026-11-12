@@ -220,8 +220,10 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg
 }
 
 /** Which tab an item shows under. Spells and features show under their cost too. */
-export function inTab(it: ActionItem, tab: Category | "all"): boolean {
+export function inTab(it: ActionItem, tab: Category | "all" | "free"): boolean {
   if (tab === "all") return it.category !== "common";
+  // Free: costs no Action or Bonus Action (movement or nothing), from the sheet or the rules.
+  if (tab === "free") return it.cost === "free" || it.cost === "move";
   if (tab === it.category) return true;
   if (tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary") return it.cost === tab && it.category !== "common";
   return false;
@@ -254,7 +256,7 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   } else if (it.cost !== "none") {
     out.push(COST_EXPLAINED[it.cost]);
     if (it.cost === "reaction" && it.costNote) out.push(`Trigger: ${it.costNote.replace(/^Reaction:\s*/i, "")}.`);
-    if (it.category === "common" && it.costNote && it.cost !== "attack") out.push(`${it.costNote}.`);
+    if (it.category === "common" && it.costNote && it.cost !== "attack" && it.cost !== "move") out.push(`${it.costNote}.`);
   }
   if (it.category === "common") {
     // The rule, with this unit's numbers, comes first; then what it costs.

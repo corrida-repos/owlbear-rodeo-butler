@@ -8,8 +8,8 @@ import { fmtMod } from "./dice";
 import { abilityMod, type UnitSheet } from "./sheet";
 
 export type OptionCost = "action" | "bonus" | "reaction" | "free" | "move" | "attack";
-export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Other" | "DMG optional rules";
-export const OPTION_GROUPS: OptionGroup[] = ["Actions", "Attack options", "Movement", "Other", "DMG optional rules"];
+export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Free (no action)" | "Other" | "DMG optional rules";
+export const OPTION_GROUPS: OptionGroup[] = ["Actions", "Attack options", "Movement", "Free (no action)", "Other", "DMG optional rules"];
 
 /** The Dungeon Master's Guide optional action options, each switched on by the GM in Room settings (all off by default). */
 export const DMG_OPTIONS = [
@@ -111,16 +111,25 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     // ---- movement
     { name: "Move", cost: "move", group: "Movement", source: "PHB", summary: `${speed} ft.`, text: `Move up to your Speed (${speed} ft.) on your turn, before, after or between your actions and attacks. Difficult terrain costs 1 extra foot per foot. You can move through an ally's space, but not end there; an enemy's space only if it's two sizes bigger or smaller than you.` },
     { name: "Drop Prone", cost: "free", group: "Movement", source: "PHB", text: "Drop to the ground without using movement. While Prone you crawl (1 extra foot per foot), have Disadvantage on attacks, attacks against you within 5 ft. have Advantage, and attacks from farther away have Disadvantage." },
+    { name: "Crawl", cost: "move", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `While Prone you can crawl instead of standing: each foot costs 1 extra foot (so ${Math.floor(speed / 2)} ft. with your whole Speed), 2 extra in difficult terrain.` },
     { name: "Stand Up", cost: "move", costNote: "Half your Speed", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting up from Prone costs half your Speed (${Math.floor(speed / 2)} ft.). You can't if your Speed is 0.` },
     { name: "Jump", cost: "move", group: "Movement", source: "PHB", summary: `${longJump} ft. / ${highJump} ft.`, text: `Long jump: up to ${longJump} ft. (your Strength score) after a 10 ft. run-up, half that from standing. High jump: ${highJump} ft. (3 + Strength modifier) after a run-up, half from standing. Jumped distance costs movement as usual.` },
     { name: "Climb", cost: "move", group: "Movement", source: "PHB", text: `${climb} A slippery or sheer surface may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
     { name: "Swim", cost: "move", group: "Movement", source: "PHB", text: `${swim} Rough water may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
+    ...(sheet.speed.fly ? [{ name: "Fly", cost: "move" as const, group: "Movement" as const, source: "PHB" as const, summary: `${sheet.speed.fly} ft.`, text: `Fly up to ${sheet.speed.fly} ft. instead of walking.${sheet.speed.hover ? " You can hover, so you stay up even when knocked Prone or your Speed drops to 0." : " If you're knocked Prone, your Speed drops to 0 or you can't move, you fall (1d6 Bludgeoning per 10 ft.)."}` }] : []),
+    { name: "Squeeze", cost: "move", group: "Movement", source: "PHB", text: o2024
+      ? "Move through a space big enough for a creature one size smaller than you: each foot costs 1 extra foot. Ask your GM about any other penalties while squeezed."
+      : "Move through a space big enough for a creature one size smaller than you: each foot costs 1 extra foot, and while squeezed you have disadvantage on attack rolls and Dexterity saving throws, and attacks against you have advantage." },
     { name: "Mount or Dismount", cost: "move", costNote: "Half your Speed", group: "Movement", source: "PHB", text: "Climbing onto or off a willing creature at least one size larger than you, within 5 ft., costs half your Speed. A controlled mount moves on your turn and can only Dash, Disengage or Dodge." },
 
     // ---- other
-    { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: "Once on your turn, with your move or action, interact with one object for free: draw or sheathe a weapon, open a door, pick something up, hand an item over. A second object needs an action." },
+    { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Free (no action)", source: "PHB", text: "Once on your turn, with your move or action, interact with one object for free: draw or sheathe a weapon, open a door, pick something up, hand an item over. A second object needs an action." },
     { name: o2024 ? "Drink or Administer a Potion" : "Drink a Potion", cost: o2024 ? "bonus" : "action", group: "Other", source: "PHB", text: o2024 ? "Drinking a potion, or giving one to another creature within 5 ft., takes a Bonus Action." : "Drinking a potion, or giving one to another creature, takes an action." },
-    { name: "Speak", cost: "free", group: "Other", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
+    { name: "Drop an Item", cost: "free", group: "Free (no action)", source: "PHB", text: "Let go of something you're holding (a weapon, a torch, a rope). It costs nothing and it lands at your feet. Picking it back up is your object interaction." },
+    { name: "End Concentration", cost: "free", group: "Free (no action)", source: "PHB", text: "End a spell you're concentrating on whenever you like, even on someone else's turn." },
+    { name: "Release a Grapple", cost: "free", group: "Free (no action)", source: "PHB", text: "Let go of a creature you're grappling whenever you like." },
+    ...(o2024 ? [{ name: "Equip or Unequip a Weapon", cost: "free" as const, costNote: "With each attack", group: "Free (no action)" as const, source: "PHB" as const, text: "When you make an attack as part of the Attack action, you can draw or stow one weapon before or after each attack, on top of your free object interaction." }] : []),
+    { name: "Speak", cost: "free", group: "Free (no action)", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
 
     // ---- DMG optional rules
     { id: "disarm", name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },

@@ -194,3 +194,28 @@ describe("DMG optional combat rules: switched on one by one in Room settings", (
     expect(readSettings({ [SETTINGS_KEY]: { dmgOptions: "disarm" } }).dmgOptions).toEqual([]);
   });
 });
+
+describe("Free tab: what costs no Action or Bonus Action", () => {
+  const bar = actionBar(brann.sheet);
+  const free = bar.items.filter((i) => inTab(i, "free")).map((i) => i.name);
+  it("lists movement and no-action options from the rules", () => {
+    for (const n of ["Move", "Stand Up", "Crawl", "Drop Prone", "Jump", "Climb", "Swim", "Squeeze", "Mount or Dismount",
+      "Interact with an Object", "Drop an Item", "End Concentration", "Release a Grapple", "Equip or Unequip a Weapon", "Speak"]) expect(free).toContain(n);
+    // Things that take an Action, Bonus Action or Reaction stay out.
+    for (const n of ["Dash", "Dodge", "Grapple", "Opportunity Attack", "Drink or Administer a Potion", "Second Wind"]) expect(free).not.toContain(n);
+    expect(combatOptions(brann.sheet, "2014").some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
+  });
+  it("adds Fly only for units with a flying speed", () => {
+    expect(free).not.toContain("Fly");
+    const flyer = { ...brann.sheet, speed: { walk: 30, fly: 60 } };
+    expect(combatOptions(flyer).find((o) => o.name === "Fly")).toMatchObject({ cost: "move", summary: "60 ft." });
+  });
+  it("D&D Beyond features marked No Action (Action Surge…) show there too", () => {
+    const c = structuredClone(fighter) as any;
+    c.actions.class.push({ name: "Action Surge", snippet: "Take one additional action.", activation: { activationType: 2 }, limitedUse: { maxUses: 1, resetType: 1, numberUsed: 0 } });
+    const surge = actionBar(convertDdbCharacter(c).sheet).items.find((i) => i.name === "Action Surge")!;
+    expect(surge).toMatchObject({ cost: "free", category: "feature", limit: { max: 1, reset: "short" } });
+    expect(inTab(surge, "free")).toBe(true);
+    expect(explain(surge)[0]).toBe("Doesn't take an action.");
+  });
+});

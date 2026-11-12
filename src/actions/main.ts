@@ -29,7 +29,7 @@ import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../e
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
 
-type Tab = Category | "all";
+type Tab = Category | "all" | "free";
 const TABS: { tab: Tab; label: string; title: string }[] = [
   { tab: "all", label: "All", title: "Everything on this sheet" },
   { tab: "action", label: "● Action", title: COST_EXPLAINED.action },
@@ -38,6 +38,7 @@ const TABS: { tab: Tab; label: string; title: string }[] = [
   { tab: "legendary", label: "★ Legendary", title: COST_EXPLAINED.legendary },
   { tab: "spell", label: "✦ Spells", title: "Spells and spell lists" },
   { tab: "feature", label: "❖ Features", title: "Features with a limit or a recharge" },
+  { tab: "free", label: "○ Free", title: "Costs no Action or Bonus Action: movement, and things you just do (stand up, drop an item, end Concentration…). Reactions are under ◆ Reaction." },
   { tab: "common", label: "⚔ Combat", title: "What anyone can do in combat by the rules: actions, Unarmed Strike, Grapple, Shove, movement, and the DMG's optional options" },
 ];
 const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
@@ -256,17 +257,21 @@ function render() {
     const bar = actionBar(sheet, roomSystem().rules, roomSettings().dmgOptions);
     const shown = bar.items.filter((it) => inTab(it, tab));
     const sel = bar.items.find((it) => it.key === selected);
-    const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
+    const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab]
+      : tab === "free" ? "No Action or Bonus Action needed: just movement, or nothing at all. Reactions are under ◆ Reaction." : "";
     nodes.push(
       head(sheet, state),
       readiedLine(state),
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
       h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
-        : tab === "common" ? OPTION_GROUPS.flatMap((g) => {
-          const inGroup = shown.filter((it) => it.group === g);
-          return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g), ...inGroup.map(tile)] : [];
-        })
+        : tab === "common" || tab === "free" ? [
+          ...(tab === "free" && shown.some((it) => it.category !== "common")
+            ? [h("div", { className: "ab-group" }, "From your sheet"), ...shown.filter((it) => it.category !== "common").map(tile)] : []),
+          ...OPTION_GROUPS.flatMap((g) => {
+            const inGroup = shown.filter((it) => it.category === "common" && it.group === g);
+            return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g), ...inGroup.map(tile)] : [];
+          })]
           : shown.map(tile))),
       sel ? detail(sel, bar, state) : h("div", { className: "small muted" }, "Click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
