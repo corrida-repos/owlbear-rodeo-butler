@@ -26,6 +26,7 @@ import { obrGateway } from "./obrGateway";
 import { sendRequest } from "./requests";
 import { renderRollLog } from "./rollLogView";
 import { roomSettings, roomSystem } from "./roomSettings";
+import { visionPanel } from "./visionPanel";
 
 let items: Item[] = [];
 let lite: SceneItemLite[] = [];
@@ -176,6 +177,7 @@ export function renderPlayerView(): Child[] {
     note ? h("div", { className: "panel small" }, note, " ", h("button", { className: "icon tiny", onclick: () => { note = ""; renderAgain(); } }, "OK")) : null,
     orderPanel(),
     myUnitsPanel(),
+    visionPanel("PLAYER", renderAgain),
     renderRollLog(),
   ];
 }

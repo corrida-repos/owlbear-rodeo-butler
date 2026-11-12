@@ -34,6 +34,9 @@ import { openActions } from "../extension/actionsPopover";
 import { h, store, type Child } from "../extension/dom";
 import { onRollLog, readRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
+import {
+  LIGHT_SOURCES, lightRadiiText, lightsOnSheet, readSceneLight, resolveLight, setUnitLight, visionSummary, type SceneLight, type UnitLight,
+} from "../core/vision";
 
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
@@ -186,6 +189,41 @@ function concentrationPanel(sheet: UnitSheet, state: UnitState): Child {
         } catch (e) { showErr(e); }
       } }, `Roll Con save ${fmtMod(con.bonus)}`),
       role === "GM" ? h("button", { className: "secondary", onclick: () => void resolveConcentration(obrGateway, itemId, null).catch(showErr) }, "Dismiss") : null));
+}
+
+/** Light & vision: the light this unit carries (GM, or its player), and what it sees in the scene's light. */
+let sceneLight: SceneLight = "bright";
+function visionCardPanel(sheet: UnitSheet, state: UnitState): Child {
+  const rules = roomSystem().rules;
+  const lines = visionSummary(sheet, state, sceneLight, rules);
+  const edit = canEdit();
+  if (!edit && !lines.length) return null;
+  const send = (light: UnitLight | null) => void (role === "GM" ? setUnitLight(obrGateway, itemId, light) : sendRequest({ type: "light", unitId: itemId, light })).catch(showErr);
+  const cur = state.light?.key ?? "";
+  const onSheet = lightsOnSheet(sheet);
+  const opt = (key: string) => {
+    const l = resolveLight({ key }, rules)!;
+    return h("option", { value: key, selected: key === cur }, `${l.label} (${lightRadiiText(l)})`);
+  };
+  const picker = edit ? h("select", { onchange: (e: Event) => {
+    const v = (e.target as HTMLSelectElement).value;
+    send(!v ? null : v === "custom" ? { key: "custom", bright: state.light?.bright ?? 20, dim: state.light?.dim ?? 20 } : { key: v });
+  } },
+  h("option", { value: "", selected: !cur }, "No light"),
+  onSheet.length ? h("optgroup", { label: "On this sheet" }, ...onSheet.map(opt)) : null,
+  h("optgroup", { label: onSheet.length ? "Other light sources" : "Light sources" }, ...LIGHT_SOURCES.filter((l) => !onSheet.includes(l.key)).map((l) => opt(l.key))),
+  h("option", { value: "custom", selected: cur === "custom" }, "Other light (set the radii)…")) : null;
+  const num = (k: "bright" | "dim") => {
+    const inp = h("input", { type: "text", inputmode: "numeric", className: "lvl", value: String(state.light?.[k] ?? 0), title: `${k === "bright" ? "Bright" : "Dim"} light radius in feet` }) as HTMLInputElement;
+    inp.onchange = () => send({ key: "custom", bright: state.light?.bright ?? 0, dim: state.light?.dim ?? 0, [k]: Math.max(0, Math.round(Number(inp.value) || 0)) });
+    return inp;
+  };
+  return h("div", { className: "panel stack tight" },
+    h("div", { className: "row between" },
+      h("strong", { className: "small" }, `Light & vision${sceneLight === "dark" ? " · darkness" : sceneLight === "dim" ? " · dim light" : ""}`),
+      picker),
+    edit && cur === "custom" ? h("div", { className: "row small" }, "Bright", num("bright"), "ft, then dim", num("dim"), "ft more") : null,
+    lines.length ? h("ul", { className: "small vision-lines" }, ...lines.map((l) => h("li", {}, l))) : null);
 }
 
 const showErr = (e: unknown) => { error = e instanceof Error ? e.message : String(e); render(); };
@@ -435,7 +473,7 @@ function render() {
       nodes.push(header(info, u.sheet, u.state, access));
       if (access === "full") {
         
-        nodes.push(statsBar(u.sheet, u.state), wildShapePanel(u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        nodes.push(statsBar(u.sheet, u.state), wildShapePanel(u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), visionCardPanel(u.sheet, u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
         if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
       } else {
         nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));
@@ -463,8 +501,9 @@ OBR.onReady(async () => {
     OBR.party.onChange((ps) => { players = ps; render(); });
   }
   await refreshSceneUnits();
+  sceneLight = readSceneLight(await OBR.scene.getMetadata());
   render();
   onRollLog((l) => { log = l; render(); });
   OBR.scene.items.onChange(async (items) => { item = items.find((i) => i.id === itemId) ?? null; await refreshSceneUnits(); render(); });
-  OBR.scene.onMetadataChange(async () => { await refreshSceneUnits(); render(); });
+  OBR.scene.onMetadataChange(async (m) => { sceneLight = readSceneLight(m); await refreshSceneUnits(); render(); });
 });

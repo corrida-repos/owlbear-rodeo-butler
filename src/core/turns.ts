@@ -8,6 +8,7 @@ import type { PartyMember } from "./ddb";
 import type { HpChange } from "./hp";
 import type { ResolvedImage } from "./importer";
 import type { UnitSheet } from "./sheet";
+import { isUnitLight, type UnitLight } from "./vision";
 import { isKnownShape, type KnownShape } from "./wildshape";
 
 export const REQUEST_CHANNEL = `${BUTLER_NS}/request`;
@@ -28,6 +29,8 @@ export interface HpRequest extends Base { type: "hp"; change: HpChange }
 export interface InitiativeRequest extends Base { type: "initiative"; value: number | null }
 export interface ConditionAddRequest extends Base { type: "condition-add"; key: string; label?: string; note?: string; level?: number; duration?: Duration }
 export interface ConditionRemoveRequest extends Base { type: "condition-remove"; conditionId: string }
+/** Light & vision: the light the player's unit carries (null puts it out). */
+export interface LightRequest extends Base { type: "light"; light: UnitLight | null }
 /** F15: the player's character re-synced from D&D Beyond (converted in the player's browser). */
 export interface SheetSyncRequest extends Base { type: "sheet-sync"; member: PartyMember; hp: "ddb" | "keep" }
 /** Wild Shape on the player's own druid: Known Shapes, transforming (the beast's stat block is loaded and converted
@@ -41,10 +44,10 @@ export type WildShapeOp =
   | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
 export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
-  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest;
+  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | LightRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
-export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn"];
+export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn", "light"];
 
 export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
@@ -58,6 +61,7 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   if (r.type === "initiative") return r.value === null || Number.isFinite(r.value);
   if (r.type === "condition-add") return typeof r.key === "string" && r.key.length < 40;
   if (r.type === "condition-remove") return typeof r.conditionId === "string";
+  if (r.type === "light") return r.light === null || isUnitLight(r.light);
   if (r.type === "wild-shape") {
     const w = r as WildShapeRequest;
     const ref = (x: any) => !!x && typeof x.name === "string" && typeof x.source === "string";

@@ -14,6 +14,7 @@ import { createRoster } from "./roster";
 import { refreshPartyPanel, resetPartyPanel } from "./partyPanel";
 import { refreshTracker, renderTrackerTab, resetTrackerTab } from "./trackerTab";
 import { initRoomSettings, onRoomSettings } from "./roomSettings";
+import { initVisionPanel } from "./visionPanel";
 
 type Tab = "tracker" | "creatures" | "party" | "combat";
 const TABS: [Tab, string][] = [["tracker", "Tracker"], ["creatures", "Add Creatures"], ["party", "Add Party"], ["combat", "Combat"]];
@@ -81,10 +82,12 @@ if (OBR.isAvailable) {
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
       else if (tab === "tracker") refreshTracker(true);
       else if (tab === "combat") refreshCombat(true);
+      if (r) void initVisionPanel(() => render()).then(render);
       render();
     });
     sceneReady = await OBR.scene.isReady();
     if (role === "PLAYER" && sceneReady) await initPlayerItems(() => render());
+    if (sceneReady) await initVisionPanel(() => render());
     render();
     // Combat tab follows the scene live (tokens added, removed, initiative changed…)
     OBR.scene.items.onChange(() => { if (role !== "GM") return; if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); if (tab === "party") void refreshPartyPanel(); });
