@@ -111,8 +111,8 @@ export interface UnitState {
 
 export interface Readied {
   name: string;
-  /** What the readied option normally costs. */
-  cost: "action" | "bonus";
+  /** What the readied option normally costs ("move": readied movement, up to the unit's Speed). */
+  cost: "action" | "bonus" | "move";
   trigger?: string;
   /** The round of the unit's turn it was readied in (see economy.ts ownTurnRound). */
   round: number;

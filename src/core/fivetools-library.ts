@@ -93,9 +93,21 @@ export class FivetoolsLibrary {
     }
     await this.ensureChain(raw);
     const r = resolveCopy(raw, { getMonster: this.rawLookup, templates: this.templates ?? [] });
+    // Lair actions live in 5etools' legendary groups (2014 books; the 2024 Monster Manual has none).
+    if (r.monster.legendaryGroup && !r.monster.lairActions) {
+      const lair = await this.lairActions(r.monster.legendaryGroup).catch(() => null);
+      if (lair?.length) r.monster = { ...r.monster, _lairActions: lair };
+    }
     const out: FivetoolsResolved = { monster: r.monster, catalogEntry: this.catalog[this.key(raw.source)], copyChain: r.chain, copyNotes: r.notes, notes };
     this.prepared.set(cacheKey, out);
     return out;
+  }
+
+  private groups: Promise<any[]> | null = null;
+  /** A legendary group's lair actions, following its `_copy` (with appended lair actions). */
+  async lairActions(ref: { name: string; source: string }): Promise<unknown[] | null> {
+    this.groups ??= this.fetchJson("bestiary/legendarygroups.json").then((d) => d.legendaryGroup ?? []);
+    return lairActionsOf(await this.groups, ref);
   }
 
   /** Synchronous accessor for BuildDeps.fivetools (after prepare). */
@@ -104,4 +116,18 @@ export class FivetoolsLibrary {
     if (!r) throw new Error(`internal: ${name} (${source ?? "any"}) was not prepared`);
     return r;
   };
+}
+
+/** A legendary group's lair actions; a `_copy` takes its base's, plus any appended with `_mod.lairActions` (appendArr). */
+export function lairActionsOf(groups: any[], ref: { name: string; source: string }, depth = 0): unknown[] | null {
+  const g = groups.find((x) => x.name?.toLowerCase() === ref.name?.toLowerCase() && x.source?.toLowerCase() === ref.source?.toLowerCase());
+  if (!g) return null;
+  if (Array.isArray(g.lairActions)) return g.lairActions;
+  if (g._copy && depth < 5) {
+    const base = lairActionsOf(groups, g._copy, depth + 1) ?? [];
+    const mod = g._copy._mod?.lairActions;
+    const extra = mod && mod.mode === "appendArr" ? (Array.isArray(mod.items) ? mod.items : [mod.items]) : [];
+    return base.length || extra.length ? [...base, ...extra] : null;
+  }
+  return null;
 }

@@ -49,7 +49,7 @@ export interface EconomyChange {
   action?: boolean;
   bonus?: boolean;
   reaction?: boolean;
-  ready?: { name: string; cost: "action" | "bonus"; trigger?: string };
+  ready?: { name: string; cost: "action" | "bonus" | "move"; trigger?: string };
   fireReady?: true;
   dropReady?: true;
 }
@@ -64,7 +64,7 @@ export function isEconomyChange(x: unknown): x is EconomyChange {
   if (c.dropReady !== undefined && c.dropReady !== true) return false;
   if (c.ready !== undefined) {
     const r = c.ready as Record<string, unknown> | null;
-    if (!r || typeof r.name !== "string" || !r.name.trim() || r.name.length > 80 || (r.cost !== "action" && r.cost !== "bonus")) return false;
+    if (!r || typeof r.name !== "string" || !r.name.trim() || r.name.length > 80 || !["action", "bonus", "move"].includes(r.cost as string)) return false;
     if (r.trigger !== undefined && (typeof r.trigger !== "string" || r.trigger.length > 160)) return false;
   }
   return true;

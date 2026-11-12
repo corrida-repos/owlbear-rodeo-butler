@@ -35,6 +35,8 @@ import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../e
 import { openWildShape } from "../extension/wildShapePopover";
 import { openActions } from "../extension/actionsPopover";
 import { closeHud, HUD_CHANNEL, openHud } from "../extension/hudPopover";
+import { canFlank, FLANKED, flankedUnits, type Footprint } from "../core/flanking";
+import { hasLairActions, passesCount20 } from "../core/lair";
 import { currentReadied, ownTurnRound, setEconomy } from "../core/economy";
 import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
@@ -204,6 +206,7 @@ async function onSceneChange() {
       await updateRing(v, items, role);
       const primary = await isPrimaryGm();
       if (primary) await setupDruids(lite);
+      if (primary) await updateFlanking(items);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
       // Movement: the primary GM client records; every client shows the active unit's label.
       const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
@@ -225,6 +228,11 @@ async function onSceneChange() {
         const pos = (id: string) => v.order.findIndex((u) => u.id === id);
         const forward = lastTurn.round > prevTurn.round || (lastTurn.round === prevTurn.round && pos(lastTurn.turnId) > pos(prevTurn.turnId));
         if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
+        // Initiative count 20: remind the GM of lair actions.
+        if (forward && passesCount20(prevTurn, lastTurn, v.order)) {
+          const lair = v.order.filter((u) => !u.dead && hasLairActions(u.sheet)).map((u) => u.name);
+          if (lair.length) await notify(`Initiative count 20: lair action for ${lair.join(", ")} (if in the lair).`, "WARNING");
+        }
       }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
@@ -245,6 +253,41 @@ async function onSceneChange() {
     console.error("[Butler] turn watch failed", e);
   } finally {
     busy = false;
+  }
+}
+
+// ------------------------------------------------------------------ flanking (DMG optional rule)
+
+/**
+ * Primary GM client, while Flanking is on in Room settings: works out who's flanked from token positions and stores
+ * the automatic Flanked condition (only where it changed). Switched off, it clears any Flanked conditions left.
+ */
+async function updateFlanking(items: Item[]) {
+  const on = roomSettings().dmgOptions.includes("flanking");
+  const units = items.flatMap((it) => {
+    if (it.layer !== "CHARACTER" || it.type !== "IMAGE") return [];
+    const u = readUnit(it.metadata);
+    return u ? [{ it, ...u }] : [];
+  });
+  let flanked = new Set<string>();
+  if (on) {
+    const dpi = await OBR.scene.grid.getDpi();
+    const prints: Footprint[] = units.map(({ it, state }) => {
+      const img = (it as any).image as { width: number; height: number } | undefined;
+      const g = (it as any).grid as { dpi: number; offset: { x: number; y: number } } | undefined;
+      const k = img && g ? dpi / g.dpi : 1;
+      const w = img ? img.width * k * Math.abs(it.scale.x) : dpi;
+      const h = img ? img.height * k * Math.abs(it.scale.y) : dpi;
+      const cx = img && g ? it.position.x + (img.width / 2 - g.offset.x) * k * it.scale.x : it.position.x;
+      const cy = img && g ? it.position.y + (img.height / 2 - g.offset.y) * k * it.scale.y : it.position.y;
+      return { id: it.id, cx, cy, half: Math.max(w, h) / 2, side: state.party ? "party" : "foe", able: canFlank(state) };
+    });
+    flanked = flankedUnits(prints, dpi);
+  }
+  for (const { it, state } of units) {
+    const has = state.conditions.find((c) => c.key === FLANKED);
+    if (flanked.has(it.id) && !has) await addConditionTo(obrGateway, [it.id], FLANKED).catch((e) => console.error("[Butler] flanking failed", e));
+    else if (!flanked.has(it.id) && has) await removeConditionFrom(obrGateway, it.id, has.id).catch((e) => console.error("[Butler] flanking failed", e));
   }
 }
 

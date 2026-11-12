@@ -19,6 +19,7 @@ export const DMG_OPTIONS = [
   { id: "shove-aside", name: "Shove Aside", hint: "shove a creature 5 ft. sideways" },
   { id: "tumble", name: "Tumble", hint: "duck and weave through a hostile creature's space" },
   { id: "climb-onto", name: "Climb onto a Bigger Creature", hint: "cling to a much larger creature" },
+  { id: "flanking", name: "Flanking", hint: "a creature with enemies on opposite sides gets the Flanked condition automatically; melee attacks by those enemies have Advantage" },
 ] as const;
 export type DmgOptionId = (typeof DMG_OPTIONS)[number]["id"];
 export const isDmgOptionId = (x: unknown): x is DmgOptionId => DMG_OPTIONS.some((o) => o.id === x);
@@ -103,6 +104,10 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Escape a Grapple", cost: "action", group: "Actions", source: "PHB", summary: best, text: o2024
       ? `While Grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) against the grapple's escape DC. On a success you're no longer Grappled.`
       : `While grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by the grappler's Strength (Athletics). On a success you escape.` },
+    { name: "Escape Restraints", cost: "action", group: "Actions", source: "PHB", summary: `DC 10 · Athletics ${fmtMod(ath)}`, text: o2024
+      ? `Free yourself or a creature within reach from a Net or similar restraints: a DC 10 Strength (Athletics) check (you: ${fmtMod(ath)}). Dealing 5 Slashing damage to the net (AC 10) also frees the creature. Spells and creatures that restrain (Web, a constrictor's coils) set their own DC and check.`
+      : `Free yourself or a creature within reach from a net or similar restraints: a DC 10 Strength check (you: ${fmtMod(str)}). Dealing 5 slashing damage to the net (AC 10) also frees the creature. Spells and creatures that restrain (web, a constrictor's coils) set their own DC and check.` },
+    { name: "Wake a Creature", cost: "action", group: "Actions", source: "PHB", text: "Shake or slap a sleeping or magically slept creature within reach awake (Sleep and similar effects end this way). Loud noise doesn't always do it. An Unconscious creature at 0 Hit Points can't be woken: it needs healing." },
     { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${fmtMod(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${fmtMod(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
 
     // ---- attack options
@@ -137,6 +142,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     // ---- other
     { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Free (no action)", source: "PHB", text: "Once on your turn, with your move or action, interact with one object for free: draw or sheathe a weapon, open a door, pick something up, hand an item over. A second object needs an action." },
     { name: o2024 ? "Drink or Administer a Potion" : "Drink a Potion", cost: o2024 ? "bonus" : "action", group: "Other", source: "PHB", text: o2024 ? "Drinking a potion, or giving one to another creature within 5 ft., takes a Bonus Action." : "Drinking a potion, or giving one to another creature, takes an action." },
+    { name: "Don or Doff a Shield", cost: "action", costNote: o2024 ? "Utilize action" : undefined, group: "Other", source: "PHB", text: `Strapping a Shield on or taking it off takes an action${o2024 ? " (the Utilize action)" : ""}. You only get its AC bonus while you wield it, and you need proficiency with Shields to use it without penalty.` },
     { name: "Drop an Item", cost: "free", group: "Free (no action)", source: "PHB", text: "Let go of something you're holding (a weapon, a torch, a rope). It costs nothing and it lands at your feet. Picking it back up is your object interaction." },
     { name: "End Concentration", cost: "free", group: "Free (no action)", source: "PHB", text: "End a spell you're concentrating on whenever you like, even on someone else's turn." },
     { name: "Release a Grapple", cost: "free", group: "Free (no action)", source: "PHB", text: "Let go of a creature you're grappling whenever you like." },
@@ -149,6 +155,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { id: "overrun", name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
     { id: "shove-aside", name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
     { id: "tumble", name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
+    { id: "flanking", name: "Flanking", cost: "free", group: "DMG optional rules", source: "DMG", text: "When you and an ally are both next to an enemy, on opposite sides or corners of its space (a line between your centres crosses opposite sides or corners of it), you flank it: you both have Advantage on melee attack rolls against it. Butler gives a flanked creature the Flanked condition automatically. You can't flank while you're Incapacitated or at 0 HP." },
     { id: "climb-onto", name: "Climb onto a Bigger Creature", cost: "action", group: "DMG optional rules", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
   return [...(mounted ? mountedOptions(sheet, rules, mounted.mount) : []), ...list.filter((o) => o.source !== "DMG" || (o.id && dmg.includes(o.id)))];

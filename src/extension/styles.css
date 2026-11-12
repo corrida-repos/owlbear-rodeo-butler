@@ -231,3 +231,4 @@ button.econ-action { background: var(--act); } button.econ-bonus { background: v
 .ab-ready { margin-top: 6px; padding: 6px; border: 1px dashed var(--react); border-radius: 8px; }
 .ab-tabs button.tab-free:not(.on) { color: var(--text); }
 .mountline { display: flex; gap: 6px; align-items: center; padding: 3px 8px; border: 1px solid var(--bonus); border-radius: 8px; }
+button.tile.cost-lair { border-bottom-color: var(--leg); } .tile.cost-lair .tcost, .cost-text.cost-lair { color: var(--leg); }

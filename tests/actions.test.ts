@@ -191,7 +191,7 @@ describe("DMG optional combat rules: switched on one by one in Room settings", (
     expect(dmgNames([])).toEqual([]);
     expect(dmgNames(["tumble"])).toEqual(["Tumble"]);
     expect(dmgNames(["mark", "overrun"])).toEqual(["Mark", "Overrun"]);
-    expect(dmgNames(DMG_OPTIONS.map((o) => o.id))).toHaveLength(6);
+    expect(dmgNames(DMG_OPTIONS.map((o) => o.id))).toHaveLength(7);
     expect(actionBar(brann.sheet).items.some((i) => i.source === "DMG")).toBe(false);
   });
   it("are stored in the room settings, ignoring unknown or repeated ids", () => {

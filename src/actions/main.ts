@@ -42,8 +42,8 @@ const TABS: { tab: Tab; label: string; title: string }[] = [
   { tab: "free", label: "○ Free", title: "Costs no Action or Bonus Action: movement, and things you just do (stand up, drop an item, end Concentration…). Reactions are under ◆ Reaction." },
   { tab: "common", label: "⚔ Combat", title: "What anyone can do in combat by the rules: actions, Unarmed Strike, Grapple, Shove, movement, and the DMG's optional options" },
 ];
-const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
-const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
+const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", lair: "⌂", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
+const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", lair: "Lair Action (count 20)", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
 
 let item: Item | null = null;
 let role: "GM" | "PLAYER" = "PLAYER";
@@ -117,9 +117,11 @@ document.addEventListener("click", (e) => { if (menu && !(e.target as HTMLElemen
 const sendEconomy = (change: EconomyChange) => role === "GM" ? setEconomy(obrGateway, itemId, change) : sendRequest({ type: "economy", unitId: itemId, change });
 
 /** Can this option be readied now? Ready takes the Action on your own turn; the option fires later with the Reaction. */
-function readyCheck(it: ActionItem, state: UnitState): { ok: boolean; why?: string; cost?: "action" | "bonus" } {
-  const cost = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : null;
-  if (!cost) return { ok: false, why: "Only an Action (or, with your GM's OK, a Bonus Action) can be readied." };
+function readyCheck(it: ActionItem, state: UnitState): { ok: boolean; why?: string; cost?: "action" | "bonus" | "move" } {
+  // Ready holds an action, or movement (Move, Fly, Climb… but not standing up or (dis)mounting).
+  const movement = it.cost === "move" && !/^(Stand Up|Mount or Dismount|Dismount)$/.test(it.name);
+  const cost = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : movement ? "move" : null;
+  if (!cost) return { ok: false, why: "Only an Action or movement (or, with your GM's OK, a Bonus Action) can be readied." };
   if (!item || (role !== "GM" && !controls({ id: meId, role }, itemInfo(item), state))) return { ok: false, why: "Not your unit." };
   const v = trackerView(lite, sceneMeta);
   if (!v.encounter.started || !v.order.some((u) => u.id === itemId)) return { ok: false, why: "Ready is for combat." };
@@ -160,7 +162,9 @@ function readyForm(it: ActionItem, state: UnitState): Child {
     h("strong", { className: "small" }, `⏳ Ready ${it.name}`),
     trigger,
     h("div", { className: "small muted" },
-      "Uses your ● Action now. When the trigger happens, you take it with your ◆ Reaction (or let it go). It's lost if you don't use it before your next turn.",
+      chk.cost === "move"
+        ? "Uses your ● Action now. When the trigger happens, you move up to your Speed with your ◆ Reaction (or let it go). It's lost if you don't use it before your next turn."
+        : "Uses your ● Action now. When the trigger happens, you take it with your ◆ Reaction (or let it go). It's lost if you don't use it before your next turn.",
       it.category === "spell" ? " A readied spell is cast now and held with Concentration until you release it." : "",
       chk.cost === "bonus" ? " By the rules only an Action can be readied: ask your GM." : ""),
     h("div", { className: "row" },

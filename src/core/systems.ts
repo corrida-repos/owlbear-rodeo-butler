@@ -14,6 +14,8 @@ export interface ConditionDef {
   label: string;
   /** Set and cleared by the rules (e.g. Bloodied from HP), never by hand. */
   automatic?: boolean;
+  /** Automatic but stored on the token by the GM's client (Flanked, from positions), so every page shows it. */
+  stored?: boolean;
   /** Has levels (Exhaustion). */
   maxLevel?: number;
 }
@@ -63,6 +65,8 @@ const BUTLER: ConditionDef[] = [
 const DEATH_SAVES: ConditionDef = { key: "death-saves", label: "Death Saves", automatic: true };
 const BUTLER_AUTO = [DEATH_SAVES];
 const BLOODIED: ConditionDef = { key: "bloodied", label: "Bloodied", automatic: true };
+/** DMG optional Flanking (when switched on): set from token positions by the GM's client. */
+const FLANKED: ConditionDef = { key: "flanked", label: "Flanked", automatic: true, stored: true };
 
 const halfDown = (n: number) => Math.floor(Math.max(0, n) / 2);
 
@@ -72,7 +76,7 @@ export const DND5E_2024: GameSystem = {
   short: "5.5E",
   rules: "2024",
   hiddenSources: ["PHB", "MM", "DMG"],
-  conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO, BLOODIED],
+  conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO, FLANKED, BLOODIED],
   hasBloodied: true,
   // PHB 2024: "10 or half the damage taken (round down), whichever number is higher, up to a maximum DC of 30."
   concentrationDc: (damage) => Math.min(30, Math.max(10, halfDown(damage))),
@@ -84,7 +88,7 @@ export const DND5E_2014: GameSystem = {
   short: "5E",
   rules: "2014",
   hiddenSources: ["XPHB", "XMM", "XDMG"],
-  conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO],
+  conditions: [...STANDARD, ...BUTLER, ...BUTLER_AUTO, FLANKED],
   hasBloodied: false,
   // PHB 2014: "DC equals 10 or half the damage you take, whichever number is higher."
   concentrationDc: (damage) => Math.max(10, halfDown(damage)),
@@ -118,8 +122,9 @@ export interface ShownCondition { key: string; label: string; level?: number; au
 export function displayConditions(system: GameSystem, sheet: Pick<UnitSheet, "hp">, state: UnitState): ShownCondition[] {
   const defs = new Map(system.conditions.map((c) => [c.key, c]));
   const out: ShownCondition[] = state.conditions
-    .filter((c) => !defs.get(c.key)?.automatic)
-    .map((c) => ({ key: c.key, label: c.label ?? defs.get(c.key)?.label ?? c.key, level: c.level }));
+    .filter((c) => !defs.get(c.key)?.automatic || defs.get(c.key)?.stored)
+    .map((c) => ({ key: c.key, label: c.label ?? defs.get(c.key)?.label ?? c.key, level: c.level, ...(defs.get(c.key)?.automatic ? { automatic: true } : {}),
+      ...(c.key === "flanked" ? { detail: "melee attacks by the flankers have Advantage" } : {}) }));
   if (needsDeathSaves(state)) {
     const ds = state.deathSaves ?? { successes: 0, failures: 0 };
     out.push({ key: "death-saves", label: "Death Saves", automatic: true, detail: `${ds.successes} ✓ / ${ds.failures} ✗` });

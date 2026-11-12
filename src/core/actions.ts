@@ -9,7 +9,7 @@ import { combatOptions, type OptionGroup } from "./combatOptions";
 import type { SheetEntry, UnitSheet } from "./sheet";
 
 /** What using an entry costs. "longer": a casting time of a minute or more; "none": passive or unknown. */
-export type Cost = "action" | "bonus" | "reaction" | "legendary" | "free" | "longer" | "move" | "attack" | "none";
+export type Cost = "action" | "bonus" | "reaction" | "legendary" | "lair" | "free" | "longer" | "move" | "attack" | "none";
 export type Category = "common" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature";
 export type Reset = "short" | "long" | "turn" | "other";
 
@@ -147,7 +147,7 @@ const SECTION_COST: Record<string, Cost> = { actions: "action", bonusActions: "b
 const SECTION_CATEGORY: Record<string, Category> = { actions: "action", bonusActions: "bonus", reactions: "reaction", legendary: "legendary", spells: "spell", traits: "feature" };
 
 const isHeader = (section: string, name: string) =>
-  (section === "legendary" && /^(Legendary|Mythic) Actions$/i.test(name)) || /^Spellcasting\b/i.test(name) || (section === "spells" && /other known spells$/i.test(name));
+  (section === "legendary" && /^(Legendary|Mythic|Lair) Actions$/i.test(name)) || /^Spellcasting\b/i.test(name) || (section === "spells" && /other known spells$/i.test(name));
 
 type SheetSection = Exclude<ActionItem["section"], "common">;
 
@@ -156,7 +156,7 @@ function itemOf(entry: SheetEntry, section: SheetSection): ActionItem | null {
   const parsed = parseEntryName(entry.name);
   const tags = tagOf(entry.text);
   const fromTags = costFromTags(tags);
-  const cost: Cost = entry.cost ?? SECTION_COST[section] ?? fromTags.cost ?? "none";
+  const cost: Cost = section === "legendary" && /^Lair Action\b/.test(entry.name) ? "lair" : entry.cost ?? SECTION_COST[section] ?? fromTags.cost ?? "none";
   const spellLevel = section === "spells" ? spellLevelOf(entry.name) : undefined;
   const name = section === "spells" && spellLevel !== undefined ? parsed.name.replace(/\s*\((Cantrip|Level \d)[^)]*\)$/, "") : parsed.name;
   const costNote = parsed.legendaryCost ? `Costs ${parsed.legendaryCost} Actions` : entry.costNote ?? fromTags.note;
@@ -225,7 +225,7 @@ export function inTab(it: ActionItem, tab: Category | "all" | "free"): boolean {
   // Free: costs no Action or Bonus Action (movement or nothing), from the sheet or the rules.
   if (tab === "free") return it.cost === "free" || it.cost === "move";
   if (tab === it.category) return true;
-  if (tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary") return it.cost === tab && it.category !== "common";
+  if (tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary") return (it.cost === tab || (tab === "legendary" && it.cost === "lair")) && it.category !== "common";
   return false;
 }
 
@@ -237,6 +237,7 @@ export const COST_EXPLAINED: Record<Cost, string> = {
   bonus: "Uses your Bonus Action. You get one per turn, but only something that says \"Bonus Action\" can use it.",
   reaction: "Uses your Reaction: an instant response to a trigger, even on someone else's turn. You get one, and it comes back at the start of your turn.",
   legendary: "A Legendary Action: taken right after another creature's turn ends. The creature has a few per round and gets them back at the start of its own turn.",
+  lair: "A Lair Action: on initiative count 20 (losing initiative ties), the creature can take one while it's in its lair. It can't use the same one two rounds in a row.",
   free: "Doesn't take an action.",
   longer: "Takes longer than a turn to do, so it's usually not something for the middle of a fight.",
   move: "Uses movement, not an action: spend it before, after or between your actions.",

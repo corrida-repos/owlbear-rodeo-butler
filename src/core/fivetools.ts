@@ -176,6 +176,28 @@ function damageList(v: unknown, key: string): string {
     .join(", ");
 }
 
+/**
+ * Lair actions from 5etools entries: the intro becomes a "Lair Actions" header entry, each listed effect a
+ * "Lair Action N" entry (named items keep their name). Stored with the legendary actions.
+ */
+export function lairEntries(raw: unknown): ListEntry[] {
+  if (!Array.isArray(raw) || !raw.length) return [];
+  const intro: string[] = [];
+  const effects: ListEntry[] = [];
+  const add = (it: any) => {
+    const named = it && typeof it === "object" && it.name;
+    effects.push({ name: named ? `Lair Action: ${renderTags(String(it.name))}` : `Lair Action ${effects.length + 1}`, text: named ? renderEntries(it.entries ?? it.entry) : renderEntries(it) });
+  };
+  for (const e of raw as any[]) {
+    if (e && typeof e === "object" && e.type === "list" && Array.isArray(e.items)) e.items.forEach(add);
+    else if (e && typeof e === "object" && e.type === "entries" && e.name) add(e);
+    else intro.push(renderEntries(e));
+  }
+  if (!effects.length) return [];
+  const head = intro.filter(Boolean).join(" ");
+  return [{ name: "Lair Actions", text: head || "On initiative count 20 (losing initiative ties), the creature takes one lair action while in its lair." }, ...effects];
+}
+
 function entryList(arr: unknown): ListEntry[] {
   if (!Array.isArray(arr)) return [];
   return arr.map((a: any) => ({ name: renderTags(String(a.name ?? "")), text: renderEntries(a.entries) }));
@@ -335,7 +357,10 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
   const traits = entryList(m.trait);
   const spells: ListEntry[] = [];
   for (const sc of m.spellcasting ?? []) spells.push(...spellcastingEntries(sc));
-  if (m.lairActions || m.legendaryGroup) flags.push("Lair actions/regional effects are not included.");
+  const lair = lairEntries(m._lairActions ?? m.lairActions);
+  legendary.push(...lair);
+  if (lair.length) flags.push("Lair actions included (initiative count 20); regional effects are not.");
+  else if (m.legendaryGroup) flags.push("No lair actions found for this creature (2024 creatures have none); regional effects are not included.");
 
   const initiative = deriveInitiative(m, scores.dex!, pb);
   const typeStr = typeText(m.type);
