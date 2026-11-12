@@ -56,6 +56,14 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const stealth = skillBonus(sheet, "Stealth", "dex");
   const medicine = skillBonus(sheet, "Medicine", "wis");
   const best = `Athletics ${fmtMod(ath)} or Acrobatics ${fmtMod(acro)}`;
+  const deception = skillBonus(sheet, "Deception", "cha");
+  const intimidation = skillBonus(sheet, "Intimidation", "cha");
+  const performance = skillBonus(sheet, "Performance", "cha");
+  const persuasion = skillBonus(sheet, "Persuasion", "cha");
+  const animal = skillBonus(sheet, "Animal Handling", "wis");
+  const influenceBest = ([["Deception", deception], ["Intimidation", intimidation], ["Performance", performance], ["Persuasion", persuasion], ["Animal Handling", animal]] as const)
+    .reduce((a, b) => (b[1] > a[1] ? b : a));
+  const influenceBestText = `${influenceBest[0]} ${fmtMod(influenceBest[1])}`;
   const unarmedHit = str + pb;
   const unarmedDmg = Math.max(1, 1 + str);
   const dc = 8 + str + pb;
@@ -83,7 +91,8 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
       ? `While Heavily Obscured or behind Three-Quarters or Total Cover, out of any enemy's line of sight, make a DC 15 Dexterity (Stealth) check (you: ${fmtMod(stealth)}). On a success you have the Invisible condition until you make noise louder than a whisper, attack, cast a spell with a Verbal component, or an enemy finds you.`
       : `Make a Dexterity (Stealth) check (you: ${fmtMod(stealth)}) while creatures can't clearly see you. Creatures searching for you compare it with their Wisdom (Perception). You're found if you attack or make noise.` },
     ...(o2024 ? [
-      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher." },
+      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: influenceBestText,
+        text: `Urge a creature to do something: say or act out what you want. The GM decides whether it's willing (it just does it), unwilling (it won't), or hesitant: then you make an ability check against DC 15 or the creature's Intelligence score, whichever is higher. Deception to deceive it (you: ${fmtMod(deception)}), Intimidation to scare it (${fmtMod(intimidation)}), Performance to amuse it (${fmtMod(performance)}), Persuasion to win it over (${fmtMod(persuasion)}), or Animal Handling to coax a Beast or Monstrosity (${fmtMod(animal)}). On a success it does what you asked; on a failure you can't urge it to do the same thing again for 24 hours.` },
       { name: "Magic", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Cast a spell with a casting time of an action, or use a magic item or magical feature that takes an action. If you cast a spell with a Bonus Action, you can't cast another spell with a spell slot that turn." },
     ] : []),
     { name: "Search", cost: "action", group: "Actions", source: "PHB", text: o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check." },

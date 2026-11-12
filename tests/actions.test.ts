@@ -149,6 +149,12 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(by("Stand Up").summary).toBe("15 ft.");
     expect(by("Dash").summary).toBe("+30 ft.");
     expect(skillBonus(sheet, "Stealth", "dex")).toBe(2);
+    // Influence (2024): the full rule with this character's social skills; the best one on the tile.
+    const social = combatOptions({ ...sheet, abilities: { ...sheet.abilities, cha: 14, wis: 10 }, skills: [{ name: "Persuasion", bonus: 4 }] }, "2024").find((o) => o.name === "Influence")!;
+    expect(social).toMatchObject({ cost: "action", summary: "Persuasion +4" });
+    expect(social.text).toContain("DC 15 or the creature's Intelligence score");
+    expect(social.text).toContain("Intimidation to scare it (+2)");
+    expect(social.text).toContain("Animal Handling to coax a Beast or Monstrosity (+0)");
   });
   it("covers the PHB actions, attack options, movement and the DMG's optional ones", () => {
     const names = opts.map((o) => o.name);
