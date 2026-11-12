@@ -221,3 +221,11 @@ button.hudpip.hud-bonus:not(.spent) { box-shadow: 0 0 8px color-mix(in srgb, var
 button.hudpip.hud-reaction:not(.spent) { box-shadow: 0 0 8px color-mix(in srgb, var(--react) 55%, transparent); }
 button.hudpip.spent { opacity: .35; border-color: var(--border); box-shadow: none; filter: grayscale(1); }
 button.econ-action { background: var(--act); } button.econ-bonus { background: var(--bonus); } button.econ-reaction { background: var(--react); }
+.hudready { display: flex; gap: 4px; align-items: center; margin-top: 4px; font-size: 11px; padding: 2px 4px; border: 1px dashed var(--react); border-radius: 8px; }
+.hudready { flex-wrap: wrap; }
+.hudready .grow { flex: 1 1 100%; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud .hudready button.small { margin-left: auto; } .hud .hudready button.small ~ button { margin-left: 0; }
+.hudready button.small { padding: 2px 6px; font-size: 11px; }
+.ab-menu { position: fixed; z-index: 20; display: flex; flex-direction: column; gap: 4px; min-width: 190px; max-width: 220px; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.ab-menu button { text-align: left; }
+.ab-ready { margin-top: 6px; padding: 6px; border: 1px dashed var(--react); border-radius: 8px; }

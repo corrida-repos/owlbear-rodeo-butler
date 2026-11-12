@@ -105,6 +105,17 @@ export interface UnitState {
   alias?: string;
   /** Combat HUD: Action / Bonus Action / Reaction spent in the unit's current turn (`round` = its turn's round; see economy.ts). */
   turn?: { round: number; action?: boolean; bonus?: boolean; reaction?: boolean };
+  /** Combat HUD: an option held with the Ready action until its trigger (valid until the unit's next turn starts). */
+  readied?: Readied;
+}
+
+export interface Readied {
+  name: string;
+  /** What the readied option normally costs. */
+  cost: "action" | "bonus";
+  trigger?: string;
+  /** The round of the unit's turn it was readied in (see economy.ts ownTurnRound). */
+  round: number;
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

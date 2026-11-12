@@ -1,11 +1,13 @@
 /**
  * Action economy markers for the combat HUD: has the unit spent its Action, Bonus Action and Reaction?
  * Stored on the token (`UnitState.turn`) against the round of the unit's own latest turn, so all three come back when
- * its next turn starts (the Reaction too, as in the rules). Nothing else is counted: no uses, slots or rests.
+ * its next turn starts (the Reaction too, as in the rules). Also the option held with Ready (`UnitState.readied`): it
+ * spends the Action when readied and the Reaction when triggered, and lapses when the next turn starts.
+ * Nothing else is counted: no uses, slots or rests.
  */
 import type { EncounterState, OrderUnit } from "./encounter";
 import type { SceneGateway } from "./importer";
-import { STATE_KEY, type UnitState } from "./sheet";
+import { STATE_KEY, type Readied, type UnitState } from "./sheet";
 import { trackerView } from "./tracker";
 
 export type Economy = "action" | "bonus" | "reaction";
@@ -34,19 +36,58 @@ export function currentEconomy(state: Pick<UnitState, "turn">, turnRound: number
   return t && t.round === turnRound ? { ...t } : { round: turnRound };
 }
 
-export type EconomyChange = Partial<Record<Economy, boolean>>;
+/** The option held with Ready, while it's still good (until the unit's next turn starts). */
+export function currentReadied(state: Pick<UnitState, "readied">, turnRound: number): Readied | null {
+  return state.readied && state.readied.round === turnRound ? state.readied : null;
+}
+
+/**
+ * Marks spent (true) or available (false); `ready` holds an option with the Ready action (spends the Action now);
+ * `fireReady` takes the readied option when its trigger happens (spends the Reaction); `dropReady` lets it go.
+ */
+export interface EconomyChange {
+  action?: boolean;
+  bonus?: boolean;
+  reaction?: boolean;
+  ready?: { name: string; cost: "action" | "bonus"; trigger?: string };
+  fireReady?: true;
+  dropReady?: true;
+}
 
 export function isEconomyChange(x: unknown): x is EconomyChange {
   if (!x || typeof x !== "object" || Array.isArray(x)) return false;
-  const e = Object.entries(x);
-  return e.length > 0 && e.every(([k, v]) => (ECONOMY as string[]).includes(k) && typeof v === "boolean");
+  const c = x as Record<string, unknown>;
+  const keys = Object.keys(c);
+  if (!keys.length || !keys.every((k) => ["action", "bonus", "reaction", "ready", "fireReady", "dropReady"].includes(k))) return false;
+  if (!ECONOMY.every((k) => c[k] === undefined || typeof c[k] === "boolean")) return false;
+  if (c.fireReady !== undefined && c.fireReady !== true) return false;
+  if (c.dropReady !== undefined && c.dropReady !== true) return false;
+  if (c.ready !== undefined) {
+    const r = c.ready as Record<string, unknown> | null;
+    if (!r || typeof r.name !== "string" || !r.name.trim() || r.name.length > 80 || (r.cost !== "action" && r.cost !== "bonus")) return false;
+    if (r.trigger !== undefined && (typeof r.trigger !== "string" || r.trigger.length > 160)) return false;
+  }
+  return true;
 }
 
-/** The state patch marking `change` spent (true) or available again (false) in the unit's current turn. */
-export function applyEconomy(state: Pick<UnitState, "turn">, change: EconomyChange, turnRound: number): Pick<UnitState, "turn"> {
+/** The state patch for `change` in the unit's current turn. Firing needs a readied option and an unspent Reaction. */
+export function applyEconomy(state: Pick<UnitState, "turn" | "readied">, change: EconomyChange, turnRound: number): Pick<UnitState, "turn" | "readied"> {
   const t = currentEconomy(state, turnRound);
-  for (const [k, v] of Object.entries(change)) { if (v) t[k as Economy] = true; else delete t[k as Economy]; }
-  return { turn: t };
+  for (const k of ECONOMY) { if (change[k] === true) t[k] = true; else if (change[k] === false) delete t[k]; }
+  const patch: Pick<UnitState, "turn" | "readied"> = { turn: t };
+  if (change.ready) {
+    t.action = true; // Ready itself takes the Action
+    const trigger = change.ready.trigger?.trim();
+    patch.readied = { name: change.ready.name.trim(), cost: change.ready.cost, ...(trigger ? { trigger } : {}), round: turnRound };
+  }
+  if (change.fireReady) {
+    if (!currentReadied(state, turnRound)) throw new Error("Nothing is readied (it ends when your next turn starts).");
+    if (t.reaction) throw new Error("Your Reaction is already used this round.");
+    t.reaction = true;
+    patch.readied = undefined;
+  }
+  if (change.dropReady) patch.readied = undefined;
+  return patch;
 }
 
 /** Applies a change on the scene (the GM's client, directly or for a player's request). */

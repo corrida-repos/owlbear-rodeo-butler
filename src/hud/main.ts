@@ -8,7 +8,7 @@
 import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { controls, portraitUrl, unitName } from "../core/card";
-import { currentEconomy, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy, type TurnEconomy } from "../core/economy";
+import { currentEconomy, currentReadied, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy, type EconomyChange, type TurnEconomy } from "../core/economy";
 import type { SceneItemLite } from "../core/importer";
 import { trackerView } from "../core/tracker";
 import { openActions } from "../extension/actionsPopover";
@@ -25,14 +25,14 @@ let role: "GM" | "PLAYER" = "PLAYER";
 let error = "";
 /** Shown right away after a click, until the token's update arrives. */
 const optimistic = new Map<string, TurnEconomy>();
+/** Readied options just triggered or dropped, hidden until the token's update arrives. */
+const hiddenReady = new Set<string>();
 
-async function toggle(unitId: string, k: Economy, eco: TurnEconomy) {
-  const spent = !eco[k];
-  optimistic.set(unitId, { ...eco, [k]: spent || undefined });
-  render();
+async function send(unitId: string, change: EconomyChange, shown?: TurnEconomy) {
+  if (shown) { optimistic.set(unitId, shown); render(); }
   try {
-    if (role === "GM") await setEconomy(obrGateway, unitId, { [k]: spent });
-    else await sendRequest({ type: "economy", unitId, change: { [k]: spent } });
+    if (role === "GM") await setEconomy(obrGateway, unitId, change);
+    else await sendRequest({ type: "economy", unitId, change });
     error = "";
   } catch (e) {
     optimistic.delete(unitId);
@@ -40,6 +40,8 @@ async function toggle(unitId: string, k: Economy, eco: TurnEconomy) {
     render();
   }
 }
+
+const toggle = (unitId: string, k: Economy, eco: TurnEconomy) => send(unitId, { [k]: !eco[k] }, { ...eco, [k]: !eco[k] || undefined });
 
 function marker(unitId: string, k: Economy, eco: TurnEconomy): HTMLElement {
   const spent = !!eco[k];
@@ -57,6 +59,8 @@ function render() {
   const rows: Child[] = mine.map((u) => {
     const it = items.find((i) => i.id === u.id)!;
     const eco = optimistic.get(u.id) ?? currentEconomy(u.state, ownTurnRound(v.encounter, v.order, u.id));
+    const turnRound = ownTurnRound(v.encounter, v.order, u.id);
+    const readied = hiddenReady.has(u.id) ? null : currentReadied(u.state, turnRound);
     const myTurn = v.active === u.id;
     const img = portraitUrl({ imageUrl: (it as any).image?.url }, u.state);
     return h("div", { className: `hudrow${myTurn ? " myturn" : ""}` },
@@ -67,7 +71,12 @@ function render() {
         h("div", { className: "hudpips" },
           myTurn ? marker(u.id, "action", eco) : null,
           myTurn ? marker(u.id, "bonus", eco) : null,
-          marker(u.id, "reaction", eco))),
+          marker(u.id, "reaction", eco)),
+        readied ? h("div", { className: "hudready", title: readied.trigger ? `Trigger: ${readied.trigger}` : "No trigger written" },
+          h("span", { className: "grow" }, "⏳ ", h("strong", {}, readied.name), readied.trigger ? h("span", { className: "muted" }, ` · ${readied.trigger}`) : null),
+          h("button", { className: "small econ-reaction", disabled: !!eco.reaction, title: eco.reaction ? "Your Reaction is already used this round" : "The trigger happened: take it now with your Reaction",
+            onclick: () => { hiddenReady.add(u.id); void send(u.id, { fireReady: true }, { ...eco, reaction: true }); } }, "Trigger ◆"),
+          h("button", { className: "icon tiny", title: "Let it go (the Action stays used)", onclick: () => { hiddenReady.add(u.id); void send(u.id, { dropReady: true }); } }, "✕")) : null),
       h("button", { className: "icon tiny", title: "Your actions, explained", onclick: () => void openActions(u.id) }, "⚔"));
   });
   app.replaceChildren(h("div", { className: "hud" },
@@ -80,6 +89,6 @@ OBR.onReady(async () => {
   role = await OBR.player.getRole();
   [items, lite, sceneMeta] = await Promise.all([OBR.scene.items.getItems(), obrGateway.getItems(), OBR.scene.getMetadata()]);
   render();
-  OBR.scene.items.onChange(async (i) => { items = i; lite = await obrGateway.getItems(); optimistic.clear(); render(); });
+  OBR.scene.items.onChange(async (i) => { items = i; lite = await obrGateway.getItems(); optimistic.clear(); hiddenReady.clear(); render(); });
   OBR.scene.onMetadataChange((m) => { sceneMeta = m; optimistic.clear(); render(); });
 });

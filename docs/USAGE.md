@@ -132,6 +132,7 @@ When combat starts, every player with a unit in the initiative order gets a smal
 - **● Action** and **▲ Bonus Action** appear on that unit's turn.
 - **Click a marker when you use it:** it dims. Click again to get it back if you didn't use it. All three light up again when the unit's next turn starts (that's when a Reaction comes back too).
 - In the **action bar**, an option that costs an Action, Bonus Action or Reaction has **Use it · mark … used**, which dims the same marker.
+- **Ready:** in the action bar, right-click an option that costs an Action (or a Bonus Action, if your GM allows it: by the rules only an Action can be readied) and choose **⏳ Ready this…**, or use **⏳ Ready…** in its details. Type the trigger if you like ("when the orc comes around the corner") and press **Ready it**: this uses your ● Action now. The HUD then shows **⏳ Readied: …** with **Trigger ◆**, which uses your Reaction when the trigger happens, and **✕** to let it go. A readied option you haven't used is lost when your next turn starts. A readied spell is cast now and held with Concentration.
 - **✕** hides the HUD for this combat; **Show my combat HUD** in the Encounter Butler panel brings it back. **⚔** opens the action bar.
 
 Only these three markers are tracked: no uses, spell slots or rests. The markers work even when **Players may change their own units…** is off. As with other player changes, your Encounter Butler (the GM's) must be open in the room.

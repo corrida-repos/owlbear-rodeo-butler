@@ -101,7 +101,8 @@ numbers from the sheet, per edition. It stores nothing; rolls stay on the card.
 
 **Combat HUD:** [hud.html](../hud.html) ([src/hud/main.ts](../src/hud/main.ts)), opened per player by the background page
 while combat runs (`disableClickAway`, `hidePaper`). [economy.ts](../src/core/economy.ts): `UnitState.turn` holds the
-spent markers for the round of the unit's own latest turn (`ownTurnRound`), so they reset when its turn starts. Players
+spent markers for the round of the unit's own latest turn (`ownTurnRound`), so they reset when its turn starts;
+`UnitState.readied` holds a Ready option the same way (`ready` spends the Action, `fireReady` the Reaction). Players
 change them with the `economy` request (not gated by player edits). The HUD's ✕ / "Show my combat HUD" talk to the
 background over a LOCAL broadcast (`HUD_CHANNEL`).
 

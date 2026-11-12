@@ -16,7 +16,7 @@ import { BUTLER_ITEM_KEY } from "../core/constants";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import type { UnitSheet, UnitState } from "../core/sheet";
 import { readUnit } from "../core/unit";
-import { currentEconomy, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy } from "../core/economy";
+import { currentEconomy, currentReadied, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy, type EconomyChange } from "../core/economy";
 import type { SceneItemLite } from "../core/importer";
 import { trackerView } from "../core/tracker";
 import { obrGateway } from "../extension/obrGateway";
@@ -82,7 +82,8 @@ function tile(it: ActionItem): HTMLElement {
   return h("button", {
     className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}`,
     title: `${it.name}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}`,
-    onclick: () => { selected = selected === it.key ? null : it.key; render(); },
+    onclick: () => { selected = selected === it.key ? null : it.key; menu = null; render(); },
+    oncontextmenu: (e: MouseEvent) => { e.preventDefault(); menu = { key: it.key, x: e.clientX, y: e.clientY }; render(); },
   },
   h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
   badge ? h("span", { className: "tbadge" }, badge) : null,
@@ -103,6 +104,79 @@ function sheetText(text: string): Child[] {
 }
 
 /** In combat, on an option that costs an Action / Bonus Action / Reaction: mark it spent on the combat HUD. */
+// ------------------------------------------------------------------ Ready (hold an option until a trigger)
+
+/** Right-click menu on a tile. */
+let menu: { key: string; x: number; y: number } | null = null;
+/** The tile whose Ready form is open. */
+let readyFor: string | null = null;
+document.addEventListener("click", (e) => { if (menu && !(e.target as HTMLElement).closest(".ab-menu")) { menu = null; render(); } });
+
+const sendEconomy = (change: EconomyChange) => role === "GM" ? setEconomy(obrGateway, itemId, change) : sendRequest({ type: "economy", unitId: itemId, change });
+
+/** Can this option be readied now? Ready takes the Action on your own turn; the option fires later with the Reaction. */
+function readyCheck(it: ActionItem, state: UnitState): { ok: boolean; why?: string; cost?: "action" | "bonus" } {
+  const cost = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : null;
+  if (!cost || it.key === "common:Ready") return { ok: false, why: "Only an Action (or, with your GM's OK, a Bonus Action) can be readied." };
+  if (!item || (role !== "GM" && !controls({ id: meId, role }, itemInfo(item), state))) return { ok: false, why: "Not your unit." };
+  const v = trackerView(lite, sceneMeta);
+  if (!v.encounter.started || !v.order.some((u) => u.id === itemId)) return { ok: false, why: "Ready is for combat." };
+  if (v.active !== itemId) return { ok: false, why: "You ready on your own turn.", cost };
+  if (currentEconomy(state, ownTurnRound(v.encounter, v.order, itemId)).action) return { ok: false, why: "Your Action is already used: readying takes it.", cost };
+  return { ok: true, cost };
+}
+
+function contextMenu(bar: ActionBar, state: UnitState): Child {
+  const it = menu && bar.items.find((x) => x.key === menu!.key);
+  if (!menu || !it) return null;
+  const chk = readyCheck(it, state);
+  const left = Math.min(menu.x, window.innerWidth - 230), top = Math.min(menu.y, window.innerHeight - 90);
+  return h("div", { className: "ab-menu", style: `left:${left}px;top:${top}px` },
+    h("div", { className: "small muted" }, it.name),
+    h("button", { disabled: !chk.ok, title: chk.why ?? "Hold it until a trigger: uses your Action now and your Reaction when it happens",
+      onclick: () => { selected = it.key; readyFor = it.key; menu = null; render(); setTimeout(() => (document.querySelector(".ab-ready input") as HTMLInputElement | null)?.focus(), 0); } },
+      "⏳ Ready this…"),
+    !chk.ok && chk.why ? h("div", { className: "small muted" }, chk.why) : null,
+    h("button", { className: "secondary", onclick: () => { selected = it.key; menu = null; render(); } }, "How it works"));
+}
+
+function readyForm(it: ActionItem, state: UnitState): Child {
+  const chk = readyCheck(it, state);
+  if (readyFor !== it.key) {
+    return chk.cost ? h("button", { className: "secondary small", disabled: !chk.ok, title: chk.why ?? "Hold it until a trigger (uses your Action now, your Reaction when it triggers)",
+      onclick: () => { readyFor = it.key; render(); } }, "⏳ Ready…") : null;
+  }
+  const trigger = h("input", { type: "text", maxLength: 160, placeholder: "Trigger, e.g. \"when the orc comes around the corner\"" }) as HTMLInputElement;
+  const go = () => {
+    const t = trigger.value.trim();
+    trigger.blur();
+    readyFor = null;
+    void sendEconomy({ ready: { name: it.name, cost: chk.cost!, ...(t ? { trigger: t } : {}) } })
+      .then(() => { note = `${it.name} readied: ● Action used. When the trigger happens, take it with your ◆ Reaction from the HUD.`; render(); })
+      .catch((e) => { note = String(e); render(); });
+  };
+  trigger.onkeydown = (e: KeyboardEvent) => { if (e.key === "Enter") go(); if (e.key === "Escape") { readyFor = null; trigger.blur(); render(); } };
+  return h("div", { className: "ab-ready stack tight" },
+    h("strong", { className: "small" }, `⏳ Ready ${it.name}`),
+    trigger,
+    h("div", { className: "small muted" },
+      "Uses your ● Action now. When the trigger happens, you take it with your ◆ Reaction (or let it go). It's lost if you don't use it before your next turn.",
+      it.category === "spell" ? " A readied spell is cast now and held with Concentration until you release it." : "",
+      chk.cost === "bonus" ? " By the rules only an Action can be readied: ask your GM." : ""),
+    h("div", { className: "row" },
+      h("button", { className: "small econ-action", disabled: !chk.ok, title: chk.why ?? "", onclick: go }, "Ready it"),
+      h("button", { className: "secondary small", onclick: () => { readyFor = null; render(); } }, "Cancel")));
+}
+
+/** What's readied right now, shown at the top of the bar. */
+function readiedLine(state: UnitState): Child {
+  const v = trackerView(lite, sceneMeta);
+  const r = currentReadied(state, ownTurnRound(v.encounter, v.order, itemId));
+  if (!r) return null;
+  return h("div", { className: "hudready small" }, h("span", { className: "grow" }, "⏳ Readied: ", h("strong", {}, r.name), r.trigger ? h("span", { className: "muted" }, ` · ${r.trigger}`) : null),
+    h("span", { className: "muted" }, "Trigger it from the HUD"));
+}
+
 function economyButton(it: ActionItem, state: UnitState): Child {
   const k: Economy | null = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : it.cost === "reaction" ? "reaction" : null;
   if (!k || !item) return null;
@@ -131,7 +205,7 @@ function detail(it: ActionItem, bar: ActionBar, state: UnitState): Child {
       h("ul", { className: "small" }, ...how.map((line) => h("li", {}, line)))) : null,
     it.category !== "common" ? h("details", { className: "small", open: !how.length },
       h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null,
-    economyButton(it, state));
+    h("div", { className: "row" }, economyButton(it, state), readyForm(it, state)));
 }
 
 function footer(sheet: UnitSheet, state: UnitState): Child {
@@ -168,7 +242,12 @@ onDdbExport(async (bundle) => {
 
 // ------------------------------------------------------------------ page
 
+let renderPending = false;
+document.addEventListener("focusout", () => { if (renderPending) { renderPending = false; setTimeout(render, 0); } });
+
 function render() {
+  const focused = document.activeElement as HTMLElement | null;
+  if (focused && focused.tagName === "INPUT" && (focused as HTMLInputElement).type === "text") { renderPending = true; return; }
   const scroll = document.querySelector(".ab-grid")?.scrollTop ?? 0;
   const nodes: Child[] = [];
   const u = item ? readUnit(item.metadata) : null;
@@ -182,6 +261,7 @@ function render() {
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
     nodes.push(
       head(sheet, state),
+      readiedLine(state),
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
       h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
@@ -192,7 +272,8 @@ function render() {
           : shown.map(tile))),
       sel ? detail(sel, bar, state) : h("div", { className: "small muted" }, "Click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
-      footer(sheet, state));
+      footer(sheet, state),
+      contextMenu(bar, state));
   }
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   const grid = document.querySelector(".ab-grid");

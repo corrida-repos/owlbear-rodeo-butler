@@ -35,7 +35,7 @@ import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../e
 import { openWildShape } from "../extension/wildShapePopover";
 import { openActions } from "../extension/actionsPopover";
 import { closeHud, HUD_CHANNEL, openHud } from "../extension/hudPopover";
-import { setEconomy } from "../core/economy";
+import { currentReadied, ownTurnRound, setEconomy } from "../core/economy";
 import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
@@ -259,10 +259,11 @@ async function updateHud(v: TrackerView, items: Item[], role: "GM" | "PLAYER") {
   const me = { id: OBR.player.id, role };
   const mine = v.encounter.started ? v.order.filter((u) => { const it = items.find((i) => i.id === u.id); return it && controls(me, it, u.state); }) : [];
   if (!v.encounter.started) hudDismissed = false;
-  const key = mine.length && !hudDismissed ? String(mine.length) : null;
+  const readied = mine.filter((u) => currentReadied(u.state, ownTurnRound(v.encounter, v.order, u.id))).length;
+  const key = mine.length && !hudDismissed ? `${mine.length}:${readied}` : null;
   if (key === hudFor) return;
   hudFor = key;
-  if (key) await openHud(mine.length).catch((e) => console.error("[Butler] HUD failed", e));
+  if (key) await openHud(mine.length, readied).catch((e) => console.error("[Butler] HUD failed", e));
   else await closeHud();
 }
 
