@@ -99,6 +99,12 @@ broadcast messages and visibility).
 plain-language "How it works". [combatOptions.ts](../src/core/combatOptions.ts) holds the PHB / DMG combat options with
 numbers from the sheet, per edition. It stores nothing; rolls stay on the card.
 
+**Combat HUD:** [hud.html](../hud.html) ([src/hud/main.ts](../src/hud/main.ts)), opened per player by the background page
+while combat runs (`disableClickAway`, `hidePaper`). [economy.ts](../src/core/economy.ts): `UnitState.turn` holds the
+spent markers for the round of the unit's own latest turn (`ownTurnRound`), so they reset when its turn starts. Players
+change them with the `economy` request (not gated by player edits). The HUD's ✕ / "Show my combat HUD" talk to the
+background over a LOCAL broadcast (`HUD_CHANNEL`).
+
 **Limits (Owlbear docs, checked 2026-11-08):** broadcast messages ≤ 16 kB; room metadata ≤ 16 kB in total for all
 extensions. No documented limit for item metadata (256 kB on one token tested fine, see below).
 

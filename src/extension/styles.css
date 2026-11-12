@@ -200,3 +200,24 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 .ab-group { grid-column: 1 / -1; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
 button.tile.cost-move { border-bottom-color: var(--accent); } button.tile.cost-attack { border-bottom-color: var(--act); }
 .tile.cost-attack .tcost, .cost-text.cost-attack { color: var(--act); } .tile.cost-move .tcost, .cost-text.cost-move { color: var(--accent); }
+
+/* ---------------------------------------------------------------- combat HUD (hud.html) */
+html:has(body.hud-page), body.hud-page { background: transparent; }
+.hud-page #app { padding: 0; }
+.hud { position: relative; display: flex; flex-direction: column; gap: 4px; background: color-mix(in srgb, var(--bg) 88%, transparent); border: 1px solid var(--border); border-radius: 12px; padding: 6px 8px; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+.hudclose { position: absolute; top: 2px; right: 2px; }
+.hudrow { display: flex; gap: 8px; align-items: center; min-height: 52px; }
+.hudrow.myturn .hudname { color: var(--ok); }
+.hudmain { flex: 1; min-width: 0; }
+.hudname { font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
+.hudpips { display: flex; gap: 5px; margin-top: 3px; }
+button.hudpip { display: inline-flex; flex-direction: column; align-items: center; gap: 0; min-width: 48px; padding: 2px 6px; background: var(--panel); color: var(--text); border: 2px solid var(--border); border-radius: 10px; font-size: 10px; line-height: 1.1; }
+button.hudpip .glyph { font-size: 17px; line-height: 1.1; }
+button.hudpip.hud-action { border-color: var(--act); } button.hudpip.hud-action .glyph { color: var(--act); }
+button.hudpip.hud-bonus { border-color: var(--bonus); } button.hudpip.hud-bonus .glyph { color: var(--bonus); }
+button.hudpip.hud-reaction { border-color: var(--react); } button.hudpip.hud-reaction .glyph { color: var(--react); }
+button.hudpip.hud-action:not(.spent) { box-shadow: 0 0 8px color-mix(in srgb, var(--act) 55%, transparent); }
+button.hudpip.hud-bonus:not(.spent) { box-shadow: 0 0 8px color-mix(in srgb, var(--bonus) 55%, transparent); }
+button.hudpip.hud-reaction:not(.spent) { box-shadow: 0 0 8px color-mix(in srgb, var(--react) 55%, transparent); }
+button.hudpip.spent { opacity: .35; border-color: var(--border); box-shadow: none; filter: grayscale(1); }
+button.econ-action { background: var(--act); } button.econ-bonus { background: var(--bonus); } button.econ-reaction { background: var(--react); }

@@ -107,7 +107,7 @@ Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Sh
 
 ## Action bar (what can I do?)
 
-A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. It's only for reading. Nothing is spent or counted (Butler only tracks HP), and rolls stay on the unit card.
+A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. It's for reading: nothing is counted besides the [combat HUD](#combat-hud-action-bonus-action-reaction) markers, and rolls stay on the unit card.
 
 Open it from the token's right-click menu (**Actions**), the **⚔ Actions** button on the unit card, or, for players, **⚔ Actions** under **My units** and **⚔ My actions** on their turn. It opens at the bottom of the screen. Players can tick **Open my action bar on my turn** to have it open by itself when their turn starts (each browser remembers its own choice).
 
@@ -123,6 +123,18 @@ Open it from the token's right-click menu (**Actions**), the **⚔ Actions** but
 - **Click a tile** for **How it works**, in plain words: what it costs, what to roll and against what (attack roll vs AC, or the target's saving throw and DC), the damage, spell slot level, Concentration, Ritual, limits and recharge. **From the sheet** has the full text.
 
 **From D&D Beyond.** For a party member, the list comes from their D&D Beyond sync: actions and bonus actions as D&D Beyond sorts them, and each spell's casting time. Re-sync (the player's **⟳ D&D Beyond**, the **⟳** on the bar, or the GM's party sync) and the list follows the sheet. Characters synced before this version need one re-sync to sort their spells by casting time.
+
+## Combat HUD (Action, Bonus Action, Reaction)
+
+When combat starts, every player with a unit in the initiative order gets a small HUD at the bottom left of their screen. It stays there while they play and closes when combat ends.
+
+- **◆ Reaction** shows for each of their units the whole combat.
+- **● Action** and **▲ Bonus Action** appear on that unit's turn.
+- **Click a marker when you use it:** it dims. Click again to get it back if you didn't use it. All three light up again when the unit's next turn starts (that's when a Reaction comes back too).
+- In the **action bar**, an option that costs an Action, Bonus Action or Reaction has **Use it · mark … used**, which dims the same marker.
+- **✕** hides the HUD for this combat; **Show my combat HUD** in the Encounter Butler panel brings it back. **⚔** opens the action bar.
+
+Only these three markers are tracked: no uses, spell slots or rests. The markers work even when **Players may change their own units…** is off. As with other player changes, your Encounter Butler (the GM's) must be open in the room.
 
 ## Give players their cards
 

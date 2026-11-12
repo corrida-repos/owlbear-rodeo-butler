@@ -17,6 +17,7 @@ import { trackerView, type TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
 import { openActions } from "./actionsPopover";
+import { setHudShown } from "./hudPopover";
 import { openCard } from "./cardPopover";
 import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
 import { h, store, type Child } from "./dom";
@@ -64,6 +65,7 @@ function turnPanel(): Child {
         : null),
     myTurn ? movementInfo(sceneMeta, active!, "PLAYER") : null,
     myTurn ? h("button", { className: "small", style: "margin-top:4px", title: "Actions, bonus actions, reactions, spells and uses", onclick: () => void openActions(active!.id) }, "⚔ My actions") : null,
+    v.order.some(mine) ? h("button", { className: "secondary small", style: "margin-top:4px;margin-left:4px", title: "Your Action, Bonus Action and Reaction markers at the bottom left", onclick: () => void setHudShown(true) }, "Show my combat HUD") : null,
     nameOf(v.next) ? h("div", { className: "small muted" }, `Next: ${nameOf(v.next)}`) : null,
     followToggle(), autoActionsToggle());
 }

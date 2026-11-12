@@ -34,6 +34,8 @@ import { pushRollLog } from "../extension/rollLog";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 import { openWildShape } from "../extension/wildShapePopover";
 import { openActions } from "../extension/actionsPopover";
+import { closeHud, HUD_CHANNEL, openHud } from "../extension/hudPopover";
+import { setEconomy } from "../core/economy";
 import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
@@ -210,6 +212,7 @@ async function onSceneChange() {
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
+      await updateHud(v, items, role);
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;
@@ -243,6 +246,24 @@ async function onSceneChange() {
   } finally {
     busy = false;
   }
+}
+
+// ------------------------------------------------------------------ combat HUD (players)
+
+let hudFor: string | null = null;
+let hudDismissed = false;
+
+/** Players: the HUD opens when combat starts with one of their units in the order, and closes when it ends. */
+async function updateHud(v: TrackerView, items: Item[], role: "GM" | "PLAYER") {
+  if (role !== "PLAYER") return;
+  const me = { id: OBR.player.id, role };
+  const mine = v.encounter.started ? v.order.filter((u) => { const it = items.find((i) => i.id === u.id); return it && controls(me, it, u.state); }) : [];
+  if (!v.encounter.started) hudDismissed = false;
+  const key = mine.length && !hudDismissed ? String(mine.length) : null;
+  if (key === hudFor) return;
+  hudFor = key;
+  if (key) await openHud(mine.length).catch((e) => console.error("[Butler] HUD failed", e));
+  else await closeHud();
 }
 
 /**
@@ -319,6 +340,7 @@ async function handleRequest(req: unknown) {
         }
         break;
       }
+      case "economy": await setEconomy(obrGateway, req.unitId, req.change); break;
       case "sheet-sync": {
         const who = await applySelfSync(obrGateway, req.unitId, req.member, req.hp);
         await notify(`${req.playerName} synced ${who} from D&D Beyond.`, "SUCCESS");
@@ -353,6 +375,14 @@ OBR.onReady(async () => {
   });
 
   OBR.broadcast.onMessage(REQUEST_CHANNEL, (event) => void handleRequest(event.data));
+  // The HUD's ✕ hides it for this combat; the player panel's "Show my combat HUD" brings it back.
+  OBR.broadcast.onMessage(HUD_CHANNEL, (event) => {
+    const show = (event.data as { show?: unknown } | undefined)?.show;
+    if (typeof show !== "boolean") return;
+    hudDismissed = !show;
+    hudFor = show ? null : hudFor;
+    void onSceneChange();
+  });
   const assembler = new Assembler();
   OBR.broadcast.onMessage(REQUEST_CHUNK_CHANNEL, (event) => {
     if (!isChunk(event.data)) return;

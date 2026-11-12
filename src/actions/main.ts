@@ -16,6 +16,10 @@ import { BUTLER_ITEM_KEY } from "../core/constants";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import type { UnitSheet, UnitState } from "../core/sheet";
 import { readUnit } from "../core/unit";
+import { currentEconomy, ECONOMY_GLYPH, ECONOMY_LABEL, ownTurnRound, setEconomy, type Economy } from "../core/economy";
+import type { SceneItemLite } from "../core/importer";
+import { trackerView } from "../core/tracker";
+import { obrGateway } from "../extension/obrGateway";
 import { openCard } from "../extension/cardPopover";
 import { DDB_ORIGIN, onDdbExport } from "../extension/ddbLink";
 import { h, store, type Child } from "../extension/dom";
@@ -45,6 +49,8 @@ let meId = "";
 let tab: Tab = (store.get("butler.actionsTab") as Tab | null) ?? "all";
 let selected: string | null = null;
 let note = "";
+let lite: SceneItemLite[] = [];
+let sceneMeta: Record<string, unknown> = {};
 
 const itemInfo = (i: Item) => ({ visible: i.visible, createdUserId: i.createdUserId, name: i.name, label: (i as any).text?.plainText || undefined, imageUrl: (i as any).image?.url });
 
@@ -96,7 +102,25 @@ function sheetText(text: string): Child[] {
   return out;
 }
 
-function detail(it: ActionItem, bar: ActionBar): Child {
+/** In combat, on an option that costs an Action / Bonus Action / Reaction: mark it spent on the combat HUD. */
+function economyButton(it: ActionItem, state: UnitState): Child {
+  const k: Economy | null = it.cost === "action" || it.cost === "attack" ? "action" : it.cost === "bonus" ? "bonus" : it.cost === "reaction" ? "reaction" : null;
+  if (!k || !item) return null;
+  const v = trackerView(lite, sceneMeta);
+  if (!v.encounter.started || !v.order.some((u) => u.id === itemId)) return null;
+  if (role !== "GM" && !controls({ id: meId, role }, itemInfo(item), state)) return null;
+  // Action and Bonus Action belong to the unit's own turn; a Reaction can be used any time.
+  if (k !== "reaction" && v.active !== itemId) return h("div", { className: "small muted" }, `${ECONOMY_GLYPH[k]} ${ECONOMY_LABEL[k]}: on your turn.`);
+  const spent = !!currentEconomy(state, ownTurnRound(v.encounter, v.order, itemId))[k];
+  const set = (on: boolean) => void (role === "GM" ? setEconomy(obrGateway, itemId, { [k]: on }) : sendRequest({ type: "economy", unitId: itemId, change: { [k]: on } }))
+    .then(() => { note = on ? `${it.name}: ${ECONOMY_LABEL[k]} marked as used.` : `${ECONOMY_LABEL[k]} available again.`; render(); })
+    .catch((e) => { note = String(e); render(); });
+  return spent
+    ? h("div", { className: "row" }, h("span", { className: "small muted" }, `${ECONOMY_GLYPH[k]} ${ECONOMY_LABEL[k]} already used`), h("button", { className: "secondary small", onclick: () => set(false) }, "Get it back"))
+    : h("div", { className: "row" }, h("button", { className: `small econ-${k}`, title: "Marks it on your combat HUD", onclick: () => set(true) }, `Use it · mark ${ECONOMY_GLYPH[k]} ${ECONOMY_LABEL[k]} used`));
+}
+
+function detail(it: ActionItem, bar: ActionBar, state: UnitState): Child {
   const how = explain(it, bar.legendary);
   return h("div", { className: "panel ab-detail" },
     h("div", { className: "row between" },
@@ -106,7 +130,8 @@ function detail(it: ActionItem, bar: ActionBar): Child {
     how.length ? h("div", { className: "ab-how" }, h("div", { className: "small muted" }, "How it works"),
       h("ul", { className: "small" }, ...how.map((line) => h("li", {}, line)))) : null,
     it.category !== "common" ? h("details", { className: "small", open: !how.length },
-      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null);
+      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null,
+    economyButton(it, state));
 }
 
 function footer(sheet: UnitSheet, state: UnitState): Child {
@@ -165,7 +190,7 @@ function render() {
           return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g), ...inGroup.map(tile)] : [];
         })
           : shown.map(tile))),
-      sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Click an option to see how it works."),
+      sel ? detail(sel, bar, state) : h("div", { className: "small muted" }, "Click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
       footer(sheet, state));
   }
@@ -179,7 +204,8 @@ OBR.onReady(async () => {
   meId = OBR.player.id;
   await initRoomSettings();
   onRoomSettings(() => render());
-  [item = null] = await OBR.scene.items.getItems([itemId]);
+  [[item = null], lite, sceneMeta] = await Promise.all([OBR.scene.items.getItems([itemId]), obrGateway.getItems(), OBR.scene.getMetadata()]);
   render();
-  OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });
+  OBR.scene.items.onChange(async (items) => { item = items.find((i) => i.id === itemId) ?? null; lite = await obrGateway.getItems(); render(); });
+  OBR.scene.onMetadataChange((m) => { sceneMeta = m; render(); });
 });

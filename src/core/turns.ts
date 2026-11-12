@@ -3,6 +3,7 @@
  * encounter record, and Owlbear only lets them change tokens they own, so these go through the GM.
  */
 import { BUTLER_NS } from "./constants";
+import { isEconomyChange, type EconomyChange } from "./economy";
 import type { Duration } from "./conditions";
 import type { PartyMember } from "./ddb";
 import type { HpChange } from "./hp";
@@ -40,8 +41,10 @@ export type WildShapeOp =
   /** A rest: a Short Rest gives one use back (5.5E), a Long Rest all. */
   | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
+/** Combat HUD: the player marks their unit's Action / Bonus Action / Reaction spent or available. */
+export interface EconomyRequest extends Base { type: "economy"; change: EconomyChange }
 export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
-  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest;
+  | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | EconomyRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
 export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn"];
@@ -68,6 +71,7 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
     if (w.op === "rest") return w.rest === undefined || w.rest === "short" || w.rest === "long";
     return w.op === "revert";
   }
+  if (r.type === "economy") return isEconomyChange(r.change);
   if (r.type === "sheet-sync") return !!r.member && typeof r.member === "object" && (r.hp === "ddb" || r.hp === "keep");
   return false;
 }

@@ -103,6 +103,8 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
+  /** Combat HUD: Action / Bonus Action / Reaction spent in the unit's current turn (`round` = its turn's round; see economy.ts). */
+  turn?: { round: number; action?: boolean; bonus?: boolean; reaction?: boolean };
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

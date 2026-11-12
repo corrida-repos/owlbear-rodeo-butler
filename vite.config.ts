@@ -58,6 +58,6 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    rollupOptions: { input: { main: "index.html", background: "background.html", card: "card.html", hp: "hp.html", wildshape: "wildshape.html", actions: "actions.html" } },
+    rollupOptions: { input: { main: "index.html", background: "background.html", card: "card.html", hp: "hp.html", wildshape: "wildshape.html", actions: "actions.html", hud: "hud.html" } },
   },
 });
