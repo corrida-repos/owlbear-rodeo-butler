@@ -53,6 +53,8 @@ const STANDARD: ConditionDef[] = [
 /** Butler's own statuses, in both systems. */
 const BUTLER: ConditionDef[] = [
   { key: "concentration", label: "Concentration" },
+  /** Holding a creature in a grapple: half speed, the grappled creature stays adjacent, +2 AC through it (grapple.ts). */
+  { key: "grappling", label: "Grappling" },
   { key: "dead", label: "Dead" },
   /** Party member at 0 HP who no longer makes death saves (set by hand or by 3 successes); supersedes Death Saves. */
   { key: "stable", label: "Stable" },

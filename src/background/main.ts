@@ -18,9 +18,11 @@ import {
   addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
   rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, type TrackerView,
 } from "../core/tracker";
-import { movedFeet, readMovement, speedLimit } from "../core/movement";
-import { speedPenalty, type TurnPoint } from "../core/conditions";
+import { movedFeet, readMovement, unitSpeedLimit } from "../core/movement";
+import type { TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
+import { grappleCoverBadges, keepGrappledAdjacent } from "./grapple";
+import { createTerrainMenu } from "./terrain";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
@@ -154,6 +156,8 @@ async function createMenus() {
       await setParty(obrGateway, ids(ctx.items), anyOut);
     },
   });
+  // Difficult terrain: on the GM's drawings.
+  await createTerrainMenu(icon, notify);
 }
 
 // ------------------------------------------------------------------ turns
@@ -207,9 +211,14 @@ async function onSceneChange() {
       const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
       const au = v.order.find((u) => u.id === mv?.unitId);
       const movement = mv && au && active?.id === au.id
-        ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
+        ? (() => { const lim = unitSpeedLimit(roomSystem(), au.sheet, au.state, mv.dash); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
-      await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
+      const all = [...v.order, ...v.waiting, ...v.outside];
+      // Grappling: the grappled token stays next to its grappler. Moving it changes the scene, so the next pass
+      // (with fresh positions) draws the overlays.
+      if (primary && (await keepGrappledAdjacent(all)) > 0) { again = true; continue; }
+      const cover = await grappleCoverBadges(all, active?.id ?? null);
+      await updateOverlays(all, items, role, roomSystem(), movement, cover);
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;

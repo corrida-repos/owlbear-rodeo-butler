@@ -1,5 +1,6 @@
 /**
- * Local (per-client) overlays on the map: condition badges under each unit, and the active unit's movement label.
+ * Local (per-client) overlays on the map: condition badges under each unit (plus situational notes such as a
+ * grappler's "+2 AC"), and the active unit's movement label.
  * Local items are only drawn for this client, so players get badges for visible tokens only.
  */
 import OBR, { buildLabel, type Item } from "@owlbear-rodeo/sdk";
@@ -15,12 +16,12 @@ interface Want { id: string; attach: string; text: string; color: string; below:
 const shown = new Map<string, string>(); // local item id → "text|color"
 
 export async function updateOverlays(units: TrackerUnit[], items: Item[], role: "GM" | "PLAYER", system: GameSystem,
-  movement: { unitId: string; text: string; over: boolean } | null) {
+  movement: { unitId: string; text: string; over: boolean } | null, extra: Map<string, string[]> = new Map()) {
   const visible = new Set(items.filter((i) => role === "GM" || i.visible).map((i) => i.id));
   const want: Want[] = [];
   for (const u of units) {
     if (!visible.has(u.id)) continue;
-    const labels = displayConditions(system, u.sheet, u.state).map((c) => `${c.label}${c.level ? ` ${c.level}` : ""}`);
+    const labels = [...displayConditions(system, u.sheet, u.state).map((c) => `${c.label}${c.level ? ` ${c.level}` : ""}`), ...(extra.get(u.id) ?? [])];
     const text = badgeText(labels);
     if (text) want.push({ id: BADGE + u.id, attach: u.id, text, color: labels.includes("Dead") ? "#555555" : "#3a2f6b", below: true });
   }

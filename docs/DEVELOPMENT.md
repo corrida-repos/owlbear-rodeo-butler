@@ -167,6 +167,15 @@ broadcast message.
   one at a time, so a Rewind's own token move is never counted as movement.
 - Badges and the movement label are local `Label` items ([overlays.ts](../src/background/overlays.ts)); labels are
   drawn at a fixed screen size, so their font and padding are in screen pixels.
+- Difficult terrain ([terrain.ts](../src/core/terrain.ts), [background/terrain.ts](../src/background/terrain.ts)):
+  zones are drawings with `dev.owlbear-butler/terrain` metadata. Their outlines come from the item's shape and
+  transform, re-centred on `getItemBounds` (so a guessed shape origin can't misplace them). A recorded segment's cost is
+  the grid distance plus its share inside zones: one sample per square, checked over the token's footprint.
+- Grappling ([grapple.ts](../src/core/grapple.ts), [background/grapple.ts](../src/background/grapple.ts)): `grappling` /
+  `grappled` conditions carry `with` (the other unit). `addConditionTo`, `removeConditionFrom` and `expireConditions`
+  keep the two halves in step. The primary GM client moves a grappled token that isn't adjacent to the nearest free
+  adjacent square (square grids), and every client adds a "+2 AC" badge when the active unit's centre-to-centre line to
+  the grappler crosses the grappled token.
 
 ## Players and party (phase 5)
 - Player edits (D5) are requests on `dev.owlbear-butler/request` ([turns.ts](../src/core/turns.ts)): the primary GM

@@ -26,7 +26,7 @@ export interface DashRequest extends Base { type: "dash"; on: boolean }
 /** Player edits on their own units (D5), applied when the GM allows player edits. */
 export interface HpRequest extends Base { type: "hp"; change: HpChange }
 export interface InitiativeRequest extends Base { type: "initiative"; value: number | null }
-export interface ConditionAddRequest extends Base { type: "condition-add"; key: string; label?: string; note?: string; level?: number; duration?: Duration }
+export interface ConditionAddRequest extends Base { type: "condition-add"; key: string; label?: string; note?: string; level?: number; duration?: Duration; with?: string }
 export interface ConditionRemoveRequest extends Base { type: "condition-remove"; conditionId: string }
 /** F15: the player's character re-synced from D&D Beyond (converted in the player's browser). */
 export interface SheetSyncRequest extends Base { type: "sheet-sync"; member: PartyMember; hp: "ddb" | "keep" }
@@ -56,7 +56,7 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   if (r.type === "dash") return typeof r.on === "boolean";
   if (r.type === "hp") return !!r.change && ["damage", "heal", "set", "temp"].includes(r.change.kind) && Number.isFinite(r.change.amount);
   if (r.type === "initiative") return r.value === null || Number.isFinite(r.value);
-  if (r.type === "condition-add") return typeof r.key === "string" && r.key.length < 40;
+  if (r.type === "condition-add") return typeof r.key === "string" && r.key.length < 40 && (r.with === undefined || typeof r.with === "string");
   if (r.type === "condition-remove") return typeof r.conditionId === "string";
   if (r.type === "wild-shape") {
     const w = r as WildShapeRequest;

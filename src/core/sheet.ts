@@ -78,6 +78,8 @@ export interface ConditionInstance {
   until?: { rounds?: number; turnOf?: string; at?: "start" | "end" };
   /** When it was applied (round and active unit), for expiry. */
   from?: { round: number; turnId: string };
+  /** The other unit of a linked pair: Grappling → the grappled unit; Grappled → the grappler. */
+  with?: string;
 }
 
 export interface UnitState {

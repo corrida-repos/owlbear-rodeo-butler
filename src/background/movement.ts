@@ -1,11 +1,14 @@
 /**
  * Movement tracker (F14), run by the primary GM client: records the active unit's moves since its turn started
- * (each segment measured with the scene grid's own distance rules) and applies Rewind / Dash.
+ * (each segment measured with the scene grid's own distance rules, plus the extra cost of difficult terrain) and
+ * applies Rewind / Dash.
  * The record is kept in memory here and only mirrored to scene metadata, so a Rewind (record first, then the token
  * move) can't race with the change events it causes. All Rewind / Dash requests, the GM's included, come here.
  */
 import OBR from "@owlbear-rodeo/sdk";
 import { addStep, MOVEMENT_KEY, readMovement, rewind, startMovement, type MovementState } from "../core/movement";
+import { difficultExtra } from "../core/terrain";
+import { difficultZones } from "./terrain";
 
 let mem: MovementState | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -20,6 +23,16 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
 async function feet(a: { x: number; y: number }, b: { x: number; y: number }): Promise<number> {
   const [cells, scale] = await Promise.all([OBR.scene.grid.getDistance(a, b), OBR.scene.grid.getScale()]);
   return cells * (scale.parsed?.multiplier ?? 5);
+}
+
+/** What a move costs: its length, plus 1 ft per foot inside difficult terrain (checked over the token's whole space). */
+async function moveCost(tokenId: string, a: { x: number; y: number }, b: { x: number; y: number }): Promise<number> {
+  const base = await feet(a, b);
+  const zones = await difficultZones();
+  if (!zones.length) return base;
+  const [dpi, bounds] = await Promise.all([OBR.scene.grid.getDpi(), OBR.scene.items.getItemBounds([tokenId]).catch(() => null)]);
+  const size = bounds ? Math.max(bounds.width, bounds.height) / dpi : 1;
+  return base + difficultExtra(a, b, base, zones, dpi, size);
 }
 
 async function save(m: MovementState | null) {
@@ -46,7 +59,7 @@ async function trackNow(meta: Record<string, unknown>, active: { id: string; rou
   if (!m) { m = startMovement(active.id, active.round, token.position); await save(m); return m; }
   const last = m.path[m.path.length - 1]!;
   if (last.x === token.position.x && last.y === token.position.y) { mem = m; return m; }
-  m = addStep(m, token.position, await feet(last, token.position));
+  m = addStep(m, token.position, await moveCost(token.id, last, token.position));
   await save(m);
   return m;
 }

@@ -10,6 +10,7 @@
 import type { ConditionInstance, UnitState } from "./sheet";
 import type { GameSystem } from "./systems";
 import { condition } from "./hp";
+import { isGrappleKey } from "./grapple";
 
 export interface TurnPoint { round: number; turnId: string }
 
@@ -22,9 +23,12 @@ export type Duration =
 export function addCondition(
   state: Pick<UnitState, "conditions">,
   key: string,
-  opts: { label?: string; note?: string; level?: number; duration?: Duration; now?: TurnPoint | null } = {},
+  opts: { label?: string; note?: string; level?: number; duration?: Duration; now?: TurnPoint | null; with?: string } = {},
 ): Partial<UnitState> {
-  const same = (c: ConditionInstance) => c.key === key && (key !== "custom" || (c.label ?? "").toLowerCase() === (opts.label ?? "").toLowerCase());
+  // Custom effects are one per label; Grappling / Grappled one per partner (a creature can hold or be held by two).
+  const same = (c: ConditionInstance) => c.key === key
+    && (key !== "custom" || (c.label ?? "").toLowerCase() === (opts.label ?? "").toLowerCase())
+    && (!isGrappleKey(key) || (c.with ?? "") === (opts.with ?? ""));
   const rest = state.conditions.filter((c) => !same(c));
   const d = opts.duration ?? { kind: "none" };
   const until: ConditionInstance["until"] | undefined =
@@ -36,6 +40,7 @@ export function addCondition(
     ...(opts.note ? { note: opts.note.trim() } : {}),
     ...(key === "exhaustion" ? { level: Math.min(6, Math.max(1, Math.round(opts.level ?? 1))) } : {}),
     ...(until ? { until, from: opts.now! } : {}),
+    ...(opts.with && isGrappleKey(key) ? { with: opts.with } : {}),
   } as Partial<ConditionInstance>);
   return { conditions: [...rest, inst] };
 }

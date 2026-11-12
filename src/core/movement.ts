@@ -3,8 +3,11 @@
  * each segment's length comes from the scene's grid measurement (Owlbear's getDistance × the grid scale), so the
  * math here takes segment lengths in feet and stays pure.
  */
+import { speedPenalty } from "./conditions";
 import { BUTLER_NS } from "./constants";
-import type { UnitSheet } from "./sheet";
+import { isGrappling } from "./grapple";
+import type { UnitSheet, UnitState } from "./sheet";
+import type { GameSystem } from "./systems";
 
 export const MOVEMENT_KEY = `${BUTLER_NS}/movement`;
 
@@ -32,13 +35,21 @@ export const startMovement = (unitId: string, round: number, at: Vec2): Movement
 export const movedFeet = (m: Pick<MovementState, "segments">) => round1(m.segments.reduce((s, d) => s + d, 0));
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** The movement limit: the unit's fastest speed (walk, fly, swim, climb, burrow), doubled by Dash, minus penalties. */
-export function speedLimit(sheet: Pick<UnitSheet, "speed">, opts: { dash?: boolean; penalty?: number } = {}): number {
+/**
+ * The movement limit: the unit's fastest speed (walk, fly, swim, climb, burrow) minus penalties, halved while
+ * grappling (dragging a creature), then doubled by Dash.
+ */
+export function speedLimit(sheet: Pick<UnitSheet, "speed">, opts: { dash?: boolean; penalty?: number; halve?: boolean } = {}): number {
   const s = sheet.speed;
   const base = Math.max(s.walk ?? 0, s.fly ?? 0, s.swim ?? 0, s.climb ?? 0, s.burrow ?? 0);
-  const v = Math.max(0, base - (opts.penalty ?? 0));
+  let v = Math.max(0, base - (opts.penalty ?? 0));
+  if (opts.halve) v = Math.floor(v / 2);
   return opts.dash ? v * 2 : v;
 }
+
+/** A unit's limit this turn, from its conditions: exhaustion (5.5E) and Grappling. */
+export const unitSpeedLimit = (system: Pick<GameSystem, "rules">, sheet: Pick<UnitSheet, "speed">, state: Pick<UnitState, "conditions">, dash: boolean) =>
+  speedLimit(sheet, { dash, penalty: speedPenalty(system, state), halve: isGrappling(state) });
 
 /** Records a move to `to` that measured `feet`; ignores non-moves. */
 export function addStep(m: MovementState, to: Vec2, feet: number): MovementState {

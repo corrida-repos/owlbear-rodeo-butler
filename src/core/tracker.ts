@@ -13,6 +13,7 @@ import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
 import { isDead, type GameSystem } from "./systems";
+import { isGrappleKey, isPartnerOf, partnerKey } from "./grapple";
 import { isUnitItem, readUnit } from "./unit";
 import { unitName } from "./card";
 import { finishRevert, readWildShape, revertIfIncapacitated, wildShapeHp } from "./wildshape";
@@ -255,21 +256,42 @@ async function currentTurn(gw: SceneGateway): Promise<TurnPoint | null> {
 }
 
 /** Adds a condition to one or more units (e.g. Prone on five goblins). Durations count from the current turn. */
-export async function addConditionTo(gw: SceneGateway, ids: string[], key: string, opts: { label?: string; note?: string; level?: number; duration?: Duration } = {}) {
+export async function addConditionTo(gw: SceneGateway, ids: string[], key: string, opts: { label?: string; note?: string; level?: number; duration?: Duration; with?: string } = {}) {
   const now = await currentTurn(gw);
   if (opts.duration && opts.duration.kind !== "none" && !now) throw new Error("Durations count turns: start combat first, or add it without a duration.");
-  const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
-  await gw.patchMetadata(units.map((u) => ({ id: u.id, key: STATE_KEY, patch: addCondition(u.state, key, { ...opts, now }) })));
+  const all = trackerUnits(await gw.getItems());
+  const linked = isGrappleKey(key) && !!opts.with;
+  if (key === "grappling" && !opts.with) throw new Error("Choose the creature being grappled.");
+  const partner = linked ? all.find((u) => u.id === opts.with) : undefined;
+  if (linked && !partner) throw new Error("The other creature is no longer in the scene.");
+  // A unit can't grapple itself.
+  const units = all.filter((u) => ids.includes(u.id) && !(linked && u.id === opts.with));
+  const patches = units.map((u) => ({ id: u.id, key: STATE_KEY, patch: addCondition(u.state, key, { ...opts, now }) as Record<string, unknown> }));
+  // Grappling ↔ Grappled: the other unit gets the linked condition (same duration), one per unit added here.
+  if (partner && units.length) {
+    let ps: Pick<UnitState, "conditions"> = partner.state;
+    for (const u of units) ps = { ...ps, ...addCondition(ps, partnerKey(key)!, { with: u.id, duration: opts.duration, now }) };
+    patches.push({ id: partner.id, key: STATE_KEY, patch: { conditions: ps.conditions } });
+  }
+  await gw.patchMetadata(patches);
   // 5.5E: Incapacitated (or Paralyzed, Petrified, Stunned, Unconscious) ends Wild Shape.
   return revertIfIncapacitated(gw, ids);
 }
 
 export async function removeConditionFrom(gw: SceneGateway, id: string, conditionId: string) {
-  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  const all = trackerUnits(await gw.getItems());
+  const u = all.find((x) => x.id === id);
   if (!u) throw new Error("That token is no longer in the scene.");
+  const removed = u.state.conditions.find((c) => c.id === conditionId);
   const patch: Partial<UnitState> = removeCondition(u.state, conditionId);
-  if (u.state.conditions.find((c) => c.id === conditionId)?.key === "concentration") patch.concentrationCheck = undefined;
-  await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+  if (removed?.key === "concentration") patch.concentrationCheck = undefined;
+  const updates = [{ id, key: STATE_KEY, patch: patch as Record<string, unknown> }];
+  // Ending a grapple from either side ends it on both.
+  const partner = removed?.with && isGrappleKey(removed.key) ? all.find((x) => x.id === removed.with) : undefined;
+  if (partner && removed && partner.state.conditions.some((c) => isPartnerOf(c, removed, id))) {
+    updates.push({ id: partner.id, key: STATE_KEY, patch: { conditions: partner.state.conditions.filter((c) => !isPartnerOf(c, removed, id)) } });
+  }
+  await gw.patchMetadata(updates);
 }
 
 /** Result of a Concentration save (the roll's total): below the DC ends Concentration. Clears the pending check. */
@@ -290,7 +312,13 @@ export async function expireConditions(gw: SceneGateway, prev: TurnPoint | null,
   const expired = expiredOnTurnChange(all, prev, next, pos);
   if (!expired.length) return [];
   const byUnit = new Map<string, string[]>();
-  for (const e of expired) byUnit.set(e.unitId, [...(byUnit.get(e.unitId) ?? []), e.condition.id]);
+  const drop = (unitId: string, condId: string) => { const cur = byUnit.get(unitId) ?? []; if (!cur.includes(condId)) byUnit.set(unitId, [...cur, condId]); };
+  for (const e of expired) {
+    drop(e.unitId, e.condition.id);
+    // A grapple that ends on one side ends on the other.
+    const p = e.condition.with && isGrappleKey(e.condition.key) ? all.find((x) => x.id === e.condition.with) : undefined;
+    for (const c of p?.state.conditions ?? []) if (isPartnerOf(c, e.condition, e.unitId)) drop(p!.id, c.id);
+  }
   await gw.patchMetadata([...byUnit].map(([id, condIds]) => {
     const u = all.find((x) => x.id === id)!;
     return { id, key: STATE_KEY, patch: { conditions: u.state.conditions.filter((c) => !condIds.includes(c.id)) } };

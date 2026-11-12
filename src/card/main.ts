@@ -24,6 +24,7 @@ import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty 
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
 import { conditionEditor } from "../extension/conditionEditor";
+import { GRAPPLE_AC_BONUS, grappledBy, isGrappling } from "../core/grapple";
 import { saveToCollection } from "../extension/collectionPanel";
 import { obrGateway } from "../extension/obrGateway";
 import { sendRequest } from "../extension/requests";
@@ -159,6 +160,7 @@ function conditionsPanel(state: UnitState): Child {
     h("strong", { className: "small" }, "Conditions"),
     own.length ? h("div", { className: "stack tight" }, ...own.map((c) => h("div", { className: "row between small" },
       h("span", {}, h("strong", {}, conditionText(c, sys)), c.until ? h("span", { className: "muted" }, ` · ${durationText(c, nameOf)}`) : null, c.note ? h("span", { className: "muted" }, ` · ${c.note}`) : null,
+        c.with ? h("span", { className: "muted" }, ` · ${nameOf(c.with)}`) : null,
         // 2014 exhaustion works by levels of effects (5.5E applies its flat penalties to rolls and speed instead).
         c.key === "exhaustion" && sys.rules === "2014" && c.level ? h("div", { className: "muted" }, EXHAUSTION_2014.slice(0, c.level).join("; ")) : null),
       edit ? h("button", { className: "icon tiny", title: "Remove", onclick: () => void (role === "GM" ? removeConditionFrom(obrGateway, itemId, c.id) : sendRequest({ type: "condition-remove", unitId: itemId, conditionId: c.id })).catch(showErr) }, "✕") : null)))
@@ -259,7 +261,9 @@ function statsBar(sheet: UnitSheet, state: UnitState): Child {
   const init = initiativeRoll(sheet, roomSystem().rules);
   const max = maxHp(sheet, state);
   return h("div", { className: "statbar" },
-    h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),
+    h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null,
+      ...grappledBy(state).map((id) => h("span", { className: "small ok", title: "The grappled creature is in the way: +2 AC against attacks that pass through it" },
+        `${sheet.ac + GRAPPLE_AC_BONUS} vs attacks through ${sceneUnits.find((u) => u.id === id)?.name ?? "the grappled creature"}`))),
     h("div", { className: "stat" }, h("span", { className: "k" }, "HP"),
       h("span", { className: `v${state.hp * 2 <= max ? " low" : ""}` }, `${state.hp}/${max}`),
       state.tempHp ? h("span", { className: "small ok" }, `+${state.tempHp} temp`) : sheet.hp.formula ? h("span", { className: "small muted" }, sheet.hp.formula) : null,
@@ -269,7 +273,8 @@ function statsBar(sheet: UnitSheet, state: UnitState): Child {
         fmtMod(init.bonus), init.mode === "advantage" ? " adv" : init.mode === "disadvantage" ? " dis" : ""),
       state.initiative !== null ? h("span", { className: "small muted" }, `rolled ${state.initiative}`) : null),
     h("div", { className: "stat wide" }, h("span", { className: "k" }, "Speed"), h("span", { className: "small" }, speedLine(sheet)),
-      speedPenalty(roomSystem(), state) ? h("span", { className: "small warn" }, `−${speedPenalty(roomSystem(), state)} ft (exhaustion)`) : null));
+      speedPenalty(roomSystem(), state) ? h("span", { className: "small warn" }, `−${speedPenalty(roomSystem(), state)} ft (exhaustion)`) : null,
+      isGrappling(state) ? h("span", { className: "small warn" }, "halved (grappling)") : null));
 }
 
 function rollControls(): Child {
