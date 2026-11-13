@@ -29,7 +29,6 @@ import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL 
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
 import { openCard } from "../extension/cardPopover";
-import { saveToCollection } from "../extension/collectionPanel";
 import { readUnit } from "../core/unit";
 import { store } from "../extension/dom";
 import { obrGateway } from "../extension/obrGateway";
@@ -45,6 +44,7 @@ import { migrateSheet } from "../core/sheet";
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
 const HP_POPOVER = `${BUTLER_NS}/hp`;
+const INIT_POPOVER = `${BUTLER_NS}/initiative`;
 
 const UNIT_FILTER: KeyFilter[] = [
   { key: "layer", value: "CHARACTER" },
@@ -87,23 +87,15 @@ async function createMenus() {
       logClick("wild-shape", ctx.items); if (ctx.items[0]) await openWildShape(ctx.items[0].id, elementId); },
   });
   const gm = { roles: ["GM" as const] };
+  // Manage initiative: add / remove, roll, or type initiative for the selected units, in one screen.
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/initiative`,
-    icons: [
-      { icon, label: "Add to initiative", filter: { ...gm, every: [...UNIT_FILTER], some: [{ key: ["metadata", STATE_KEY, "inEncounter"], value: true, operator: "!=" }] } },
-      { icon, label: "Remove from initiative", filter: { ...gm, every: [...UNIT_FILTER] } },
-    ],
-    onClick: async (ctx) => {
+    icons: [{ icon, label: "Manage initiative", filter: { ...gm, every: [...UNIT_FILTER] } }],
+    onClick: async (ctx, elementId) => {
       logClick("initiative", ctx.items);
-      const anyOut = ctx.items.some((i) => (i.metadata[STATE_KEY] as { inEncounter?: boolean } | undefined)?.inEncounter !== true);
-      await setInEncounter(obrGateway, ids(ctx.items), anyOut);
+      await OBR.popover.close(INIT_POPOVER).catch(() => {});
+      await OBR.popover.open({ id: INIT_POPOVER, url: new URL(`initiative.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 360, height: 460, anchorElementId: elementId });
     },
-  });
-  await OBR.contextMenu.create({
-    id: `${BUTLER_NS}/roll-initiative`,
-    icons: [{ icon, label: "Roll initiative", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx) => {
-      logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items), { rules: roomSystem().rules }); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
   });
   // Change status: HP (damage, heal, temp, set) and every condition, Dead, Stable and Death Saves included, in one screen.
   await OBR.contextMenu.create({
@@ -113,22 +105,6 @@ async function createMenus() {
       logClick("status", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
       await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 340, height: 520, anchorElementId: elementId });
-    },
-  });
-  await OBR.contextMenu.create({
-    id: `${BUTLER_NS}/collect`,
-    icons: [{ icon, label: "Save to collection", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx) => {
-      logClick("collect", ctx.items);
-      let n = 0;
-      for (const it of ctx.items) {
-        const u = readUnit(it.metadata);
-        if (!u) continue;
-        const img = (it as { image?: { url: string; width: number; height: number; mime: string } }).image;
-        await saveToCollection([u.sheet], img ? { url: img.url, width: img.width, height: img.height, mime: img.mime } : null, `token ${(it as { text?: { plainText?: string } }).text?.plainText || it.name}`);
-        n++;
-      }
-      await notify(`Saved ${n} unit${n === 1 ? "" : "s"} to your collection (Add Creatures tab).`, "SUCCESS");
     },
   });
   await OBR.contextMenu.create({

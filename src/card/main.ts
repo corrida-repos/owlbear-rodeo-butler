@@ -288,7 +288,9 @@ function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, 
         access === "full" && sheet ? h("div", { className: "small muted" }, typeLine(sheet)) : null,
         role === "GM" && state.alias?.trim() ? h("div", { className: "small warn" }, `Players see: ${state.alias.trim()}`) : null,
         role === "GM" && !info.visible ? h("div", { className: "small warn" }, "Hidden from players") : null),
-      access === "full" && sheet ? h("button", { className: "small", title: "What this unit can do: actions, bonus actions, reactions and spells, explained", onclick: () => void openActions(itemId).catch(showErr) }, "⚔ Actions") : null),
+      h("div", { className: "stack tight", style: "align-items:stretch" },
+        access === "full" && sheet ? h("button", { className: "small", title: "What this unit can do: actions, bonus actions, reactions and spells, explained", onclick: () => void openActions(itemId).catch(showErr) }, "⚔ Actions") : null,
+        role === "GM" && sheet ? h("button", { className: "small secondary", title: "Keep a copy of this unit's stat block and picture in your collection (this browser), to add it again later from Add Creatures", onclick: () => void saveTokenToCollection() }, "☆ Save to collection") : null)),
     conds.length ? h("div", { className: "conds" }, ...conds.map((c) =>
       h("span", { className: `cond${c.automatic ? " auto" : ""}`, title: c.detail ?? "" }, c.label, c.level ? ` ${c.level}` : "", c.detail ? ` (${c.detail})` : ""))) : null);
 }
@@ -415,8 +417,7 @@ function editPanel(info: ItemInfo, state: UnitState): Child {
       h("label", { className: "span2" }, "Controlled by", ctrl)),
     h("div", { className: "row", style: "margin-top:8px" },
       h("button", { onclick: () => void saveEdits(name.value, alias.value, portrait.value, ctrl.value) }, "Save"),
-      state.alias ? h("button", { className: "secondary", onclick: () => void saveEdits(name.value, "", portrait.value, ctrl.value) }, "Reveal (clear alias)") : null,
-      h("button", { className: "secondary", title: "Keep a copy of this unit's stat block and picture in your collection (this browser)", onclick: () => void saveTokenToCollection() }, "Save to collection")));
+      state.alias ? h("button", { className: "secondary", onclick: () => void saveEdits(name.value, "", portrait.value, ctrl.value) }, "Reveal (clear alias)") : null));
 }
 
 async function saveTokenToCollection() {

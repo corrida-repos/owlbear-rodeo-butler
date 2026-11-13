@@ -232,3 +232,8 @@ button.status-chip.life-dead.on { background: var(--bad); border-color: var(--ba
 button.status-chip.life-stable.on { background: var(--ok); border-color: var(--ok); }
 button.status-chip.life-dying.on { background: var(--warn); border-color: var(--warn); }
 button.status-chip:disabled { cursor: default; }
+/* Manage initiative popover (initiative.html) */
+.init-row { display: flex; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.init-row:last-child { border-bottom: none; }
+.init-row .init-in { flex: none; }
+.init-row input.init-val { width: 44px; text-align: center; }
