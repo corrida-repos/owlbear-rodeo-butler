@@ -43,6 +43,8 @@ export interface ActionItem {
   /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule, Homebrew = the GM's). */
   group?: OptionGroup;
   source?: "PHB" | "DMG" | "Homebrew";
+  /** Done along with an attack of the Attack action (shown under Attack though it costs nothing). */
+  withAttack?: boolean;
   /** Homebrew entries: their id in the room's list. */
   homebrewId?: string;
 }
@@ -208,6 +210,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
   const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg }).map((c) => ({
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
+    ...(c.withAttack ? { withAttack: true } : {}),
   }));
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
     key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
@@ -252,9 +255,10 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opt
 export const ATTACK_KEY = "common:Attack";
 
 /** Revealed under the Attack action: the sheet's attacks (weapons, a creature's Multiattack and natural weapons),
- *  and every option that replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…). */
+ *  every option that replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…), and what goes with an
+ *  attack (2024: equip or unequip a weapon). */
 export function isAttackOption(it: ActionItem): boolean {
-  if (it.category === "common") return it.cost === "attack";
+  if (it.category === "common") return it.cost === "attack" || !!it.withAttack;
   return it.section === "actions" && it.cost === "action" && (/\[1d20[+-]\d+\]/.test(it.text) || /^Multiattack\b/i.test(it.name));
 }
 

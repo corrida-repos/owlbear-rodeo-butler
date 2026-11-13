@@ -22,6 +22,8 @@ export interface CombatOption {
   text: string;
   /** The key number for the tile ("DC 13 Str/Dex", "+5 · 3 Bludgeoning"). */
   summary?: string;
+  /** Done along with an attack of the Attack action without replacing it (2024 Equip or Unequip a Weapon). */
+  withAttack?: boolean;
 }
 
 /** A skill's bonus from the sheet ("Athletics" or "Athletics (expertise)"), else the plain ability modifier. */
@@ -51,7 +53,9 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
 
   const list: CombatOption[] = [
     // ---- actions (PHB)
-    { name: "Attack", cost: "action", group: "Actions", source: "PHB", text: "Make one attack with a weapon or an Unarmed Strike. With Extra Attack you make more than one attack with this same action, and you can move between them. Each attack can be swapped for a Grapple or a Shove." },
+    { name: "Attack", cost: "action", group: "Actions", source: "PHB", text: o2024
+      ? "Make one attack with a weapon or an Unarmed Strike. With Extra Attack you make more than one attack with this same action, and you can move between them. Each attack can be swapped for a Grapple or a Shove. Each time you attack, you can also equip or unequip one weapon, before or after that attack (see Equip or Unequip a Weapon)."
+      : "Make one attack with a weapon or an Unarmed Strike. With Extra Attack you make more than one attack with this same action, and you can move between them. Each attack can be swapped for a Grapple or a Shove. Drawing or sheathing a weapon uses your free object interaction (see Interact with an Object)." },
     ...(o2024 ? [] : [{ name: "Cast a Spell", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Cast a spell with a casting time of 1 action. If you cast a spell with a Bonus Action, the only other spell you can cast that turn is a cantrip with a casting time of 1 action." }]),
     { name: "Dash", cost: "action", group: "Actions", source: "PHB", summary: `+${speed} ft.`, text: `Gain extra movement equal to your Speed for this turn: +${speed} ft., for ${speed * 2} ft. in total.` },
     { name: "Disengage", cost: "action", group: "Actions", source: "PHB", text: `Your movement doesn't provoke ${o2024 ? "Opportunity Attacks" : "opportunity attacks"} for the rest of this turn.` },
@@ -92,6 +96,8 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
       ? "After you attack with a Light weapon as part of the Attack action, you can make one extra attack as a Bonus Action with a different Light weapon. Don't add your ability modifier to that attack's damage unless it's negative."
       : "When you attack with a light melee weapon in one hand, you can use your bonus action to attack with a different light melee weapon in the other. Don't add your ability modifier to that attack's damage unless it's negative." },
     { name: "Opportunity Attack", cost: "reaction", group: "Attack options", source: "PHB", text: "When a creature you can see leaves your reach (by its own movement), you can make one melee attack against it just before it leaves. Disengage, teleporting, or being moved by someone else don't provoke it." },
+    ...(o2024 ? [{ name: "Equip or Unequip a Weapon", cost: "free" as const, costNote: "With an attack of the Attack action", withAttack: true, group: "Attack options" as const, source: "PHB" as const,
+      text: "When you make an attack as part of the Attack action, you can equip or unequip one weapon, before or after that attack. Equipping means drawing it from a sheath, picking it up or taking it from someone; unequipping means sheathing, stowing or dropping it. If you equip a weapon before an attack, you don't have to attack with it. This doesn't use your free object interaction." }] : []),
     { name: "Improvised Weapon", cost: "attack", costNote: "One attack of the Attack action", group: "Attack options", source: "PHB", summary: "1d4", text: "Swing or throw something that isn't a weapon (a chair, a bottle, a torch): 1d4 damage, and you don't add proficiency unless it's like a weapon you're proficient with (a table leg as a club). Thrown: range 20/60 ft." },
 
     // ---- movement
@@ -104,7 +110,9 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Mount or Dismount", cost: "move", costNote: "Half your Speed", group: "Movement", source: "PHB", text: "Climbing onto or off a willing creature at least one size larger than you, within 5 ft., costs half your Speed. A controlled mount moves on your turn and can only Dash, Disengage or Dodge." },
 
     // ---- other
-    { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: "Once on your turn, with your move or action, interact with one object for free: draw or sheathe a weapon, open a door, pick something up, hand an item over. A second object needs an action." },
+    { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: o2024
+      ? "Once on your turn, during your move or an action, interact with one object or feature of the environment for free: open a door, pull a lever, pick up a dropped item, hand an item over. A second object needs the Utilize action. Drawing or stowing a weapon doesn't need this: it's part of an attack (see Equip or Unequip a Weapon)."
+      : "Once on your turn, with your move or action, interact with one object for free: draw or sheathe a weapon, open a door, pick something up, hand an item over. A second object needs an action." },
     { name: o2024 ? "Drink or Administer a Potion" : "Drink a Potion", cost: o2024 ? "bonus" : "action", group: "Other", source: "PHB", text: o2024 ? "Drinking a potion, or giving one to another creature within 5 ft., takes a Bonus Action." : "Drinking a potion, or giving one to another creature, takes an action." },
     { name: "Speak", cost: "free", group: "Other", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
 

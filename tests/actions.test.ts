@@ -161,6 +161,17 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(combatOptions(sheet, "2024", { dmg: false }).some((o) => o.source === "DMG")).toBe(false);
     expect(by("Drink or Administer a Potion").cost).toBe("bonus");
   });
+  it("2024: equipping or unequipping a weapon goes with an attack, not the free object interaction", () => {
+    expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", withAttack: true });
+    expect(by("Interact with an Object").text).not.toMatch(/draw or sheathe a weapon/);
+    expect(by("Attack").text).toMatch(/equip or unequip one weapon/);
+    const layout = barLayout(actionBar(sheet));
+    expect(layout.attackOptions.map((o) => o.name)).toContain("Equip or Unequip a Weapon");
+    expect(layout.sections.flatMap((s) => s.items).some((i) => i.name === "Equip or Unequip a Weapon")).toBe(false);
+    const old = combatOptions(sheet, "2014");
+    expect(old.some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
+    expect(old.find((o) => o.name === "Interact with an Object")!.text).toMatch(/draw or sheathe a weapon/);
+  });
   it("uses the 2014 wording and rules in a 5E room", () => {
     const old = combatOptions(sheet, "2014");
     const names = old.map((o) => o.name);
