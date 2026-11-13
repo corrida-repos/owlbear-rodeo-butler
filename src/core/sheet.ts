@@ -103,6 +103,8 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
+  /** The light the unit carries or sheds (a torch, the Light cantrip…), see vision.ts. */
+  light?: { key: string; bright?: number; dim?: number };
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

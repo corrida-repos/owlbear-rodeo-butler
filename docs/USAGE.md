@@ -84,6 +84,21 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 - **Concentration:** when a unit with the Concentration condition takes damage, its card shows a **Concentration check** with the DC. **Roll Con save** rolls it and keeps or ends Concentration; the GM can also **Dismiss** it. A player rolls it from their own card. Dropping to 0 HP ends Concentration.
 - **Movement:** during a unit's turn, its token shows how far it has moved since the turn started against its speed, e.g. **25/40 ft**. It turns red past the limit. **Dash** doubles the limit for the turn. **Rewind** moves the token back to the last 5 ft point of its path (from 13 ft back to 10; pressing again goes back another 5 ft). The GM has these on the active row in **Tracker**, and the unit's player has them under the turn in their Encounter Butler panel.
 
+## Light and vision (dim and dark scenes)
+
+Scenes are in **bright light** by default. For a night ambush or an unlit cave, open **Tracker → Light & vision** (at the bottom) and set the scene to **◐ Dim** or **● Dark**. Each scene keeps its own setting.
+
+- **Vision HUD:** nothing is drawn on the map until you click **👁 Show Vision HUD** in that panel. It's a per-browser switch: each player turns their own on and off, in their Encounter Butler panel. Click it again to hide everything. While it's on you get:
+  - **Darkness fog:** the map is covered with what your units can't see. It goes **black** where a square is heavily obscured, **hazy** where it's lightly obscured, and **clear** where they see normally. Their darkvision, blindsight, truesight and Devil's Sight cut through it, and so does every light carried by a unit you can see. A player who controls no units sees what the party sees, and a unit's own square always stays clear. The fog sits above tokens and their labels, so a goblin in the dark stays hidden, and below rulers. It follows the grid square by square, judged at each square's centre. The GM's fog is see-through and shows what the party sees.
+  - **Vision circles** around units. Choose whose senses to draw: **Selected tokens** (click a creature to see what it sees), **Party** or **All units**.
+    - **Yellow circles** are carried light: solid for bright light, dashed and paler for dim light. Lights are drawn for every unit you can see, because a torch lights the room for everyone. In a dim scene only the bright part is drawn (the rest of the room is already dim).
+    - **Dashed outlines** are senses, labelled with their range: **green** darkvision, **pink** Devil's Sight, **purple** truesight, **blue** blindsight, **brown** tremorsense. Ranges count from the edge of the creature's space.
+    - Reading it: in **darkness**, anything outside every light is **heavily obscured** (a creature looking there is effectively Blinded) unless one of its senses reaches; inside a creature's darkvision, darkness is only **lightly obscured** and dim light is clear. In **dim light**, everything outside bright light is **lightly obscured** (disadvantage on Wisdom (Perception) checks that rely on sight); inside darkvision it's clear. The panel has the same legend.
+- **Hiding monsters from players:** a player's fog only shows while their HUD is on. To keep creatures in the dark hidden whatever the players choose, tick **Force the darkness fog on players in this scene**. It's off by default.
+- **Light a torch:** on a unit's card, **Light & vision** has a light picker. Lights found on the sheet (a torch or lantern in the inventory, the *Light* or *Produce Flame* spell…) are listed first; any light from the Player's Handbook is available, or **Other light** with your own bright and dim radii. Pick **No light** to put it out. Players can light their own units' lights when player edits are allowed.
+- **On the card:** in a dim or dark scene, the same panel says in words what the unit can see (its darkvision, blindsight and so on) and what light it carries.
+- Players only see the senses of their own units and party members; a monster's darkvision stays the GM's business. Walls and magical darkness aren't drawn: judge those at the table. Senses come from the stat block's Senses line (and a Devil's Sight trait), so a creature without one has none.
+
 ## Wild Shape (druids)
 
 Wild Shape follows the **5.5E (2024)** rules, the room's default. (A room set to 5E (2014) in **Combat → Game system** uses the 2014 version instead, described at the end.)
@@ -161,5 +176,6 @@ Found a bug or have an idea? [Open an issue](https://github.com/corrida-repos/ow
 ## Known limits
 
 - Square grids only.
+- Light and vision auras and the darkness fog don't stop at walls (use Owlbear's own fog for walls), a Bullseye Lantern's cone counts as a full circle, and magical darkness isn't modelled. The fog only knows Encounter Butler units and the lights set on their cards.
 - Active spell effects (Mage Armor, Shield) aren't applied to party AC, and multiclass spell slots aren't combined.
 - Lair actions are noted on the card but not listed as actions. Mythic actions are listed with the legendary actions.

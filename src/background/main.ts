@@ -22,6 +22,9 @@ import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { resetOverlays, updateOverlays } from "./overlays";
+import { resetVision, updateVision } from "./vision";
+import { resetDarkness, updateDarkness } from "./darkness";
+import { AURA_CHANNEL, AURA_SCOPE_KEY, HUD_KEY, setUnitLight } from "../core/vision";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
@@ -163,6 +166,8 @@ let lastTurn: TurnPoint | null = null;
 let ringFor: string | null = null;
 let busy = false;
 let again = false;
+/** This browser's selected items (vision auras can follow the selection). */
+let selection: string[] = [];
 
 async function updateRing(v: TrackerView, items: Item[], role: "GM" | "PLAYER") {
   const target = v.active ? items.find((i) => i.id === v.active) : undefined;
@@ -195,7 +200,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetMovementMemory(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetDarkness(); resetMovementMemory(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -210,6 +215,10 @@ async function onSceneChange() {
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
+      await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
+        .catch((e) => console.error("[Butler] vision auras failed", e));
+      await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, roomSystem().rules)
+        .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;
@@ -301,6 +310,7 @@ async function handleRequest(req: unknown) {
         break;
       }
       case "initiative": await setInitiative(obrGateway, req.unitId, req.value); break;
+      case "light": await setUnitLight(obrGateway, req.unitId, req.light); break;
       case "condition-add": {
         const reverted = await addConditionTo(obrGateway, [req.unitId], req.key, req);
         if (reverted.length) await notify(`${name}'s Wild Shape ended (Incapacitated).`, "WARNING");
@@ -359,6 +369,18 @@ OBR.onReady(async () => {
     const whole = assembler.add(event.data);
     if (whole !== undefined) void handleRequest(whole);
   });
+
+  // Vision auras: redraw for this browser's selection, its aura choice (set in another Butler page) and grid changes.
+  selection = (await OBR.player.getSelection()) ?? [];
+  OBR.player.onChange((p) => {
+    const next = p.selection ?? [];
+    if (next.join() === selection.join()) return;
+    selection = next;
+    void onSceneChange();
+  });
+  window.addEventListener("storage", (e) => { if (e.key === HUD_KEY || e.key === AURA_SCOPE_KEY) void onSceneChange(); });
+  OBR.broadcast.onMessage(AURA_CHANNEL, () => void onSceneChange());
+  OBR.scene.grid.onChange(() => void onSceneChange());
 
   void onSceneChange();
   OBR.scene.onReadyChange(() => void onSceneChange());

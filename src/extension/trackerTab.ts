@@ -17,6 +17,7 @@ import { movementInfo } from "./movementView";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
+import { visionPanel } from "./visionPanel";
 
 let view: TrackerView | null = null;
 let sceneMeta: Record<string, unknown> = {};
@@ -152,5 +153,6 @@ export function renderTrackerTab(): Child[] {
         h("span", {}, "☠ ", h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name)),
         h("button", { className: "secondary small", onclick: action(() => reviveUnits(obrGateway, [u.id])) }, "Revive")))));
   }
+  out.push(visionPanel("GM", rerender));
   return out;
 }
