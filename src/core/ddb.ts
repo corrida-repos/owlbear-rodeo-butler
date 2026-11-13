@@ -9,6 +9,7 @@ import { MAX_DICE, MAX_DIE_SIDES } from "./constants";
 import { fmtMod } from "./dice";
 import { evalMath } from "./fivetools-copy";
 import type { ListEntry } from "./schema";
+import { ddbItemInfo } from "./items";
 import { SHEET_SCHEMA, type UnitSheet } from "./sheet";
 
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -298,6 +299,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     .map((i) => ({
       name: `${i.definition.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}${i.equipped ? " (equipped)" : ""}${i.isAttuned ? " (attuned)" : ""}`,
       text: htmlToText(i.definition.snippet || i.definition.description).slice(0, 300),
+      item: ddbItemInfo(i),
     }));
 
   // ---- flags for things we can't compute

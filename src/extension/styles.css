@@ -201,14 +201,16 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 button.tile.cost-move { border-bottom-color: var(--accent); } button.tile.cost-attack { border-bottom-color: var(--act); }
 .tile.cost-attack .tcost, .cost-text.cost-attack { color: var(--act); } .tile.cost-move .tcost, .cost-text.cost-move { color: var(--accent); }
 .ab-group:first-child { margin-top: 0; }
-/* Attack and Magic: hovering (or clicking) them reveals their options, as a row right under the tile. */
-button.tile.is-reveal-attack.open { border-color: var(--act); box-shadow: 0 0 0 2px var(--act); }
-button.tile.is-reveal-magic.open, button.tile.is-reveal-help.open { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.ab-reveal { display: none; grid-column: 1 / -1; background: var(--bg); border: 1px solid var(--act); border-radius: 8px; padding: 5px; }
-.ab-reveal.reveal-magic, .ab-reveal.reveal-help { border-color: var(--accent); }
+/* Tiles with options (Attack, Magic, Help, Utilize, potions, Two-Weapon Fighting): hovering (or clicking) them
+   reveals the options, as a row right under the tile. */
+button.tile.is-reveal.open { --rc: var(--accent); border-color: var(--rc); box-shadow: 0 0 0 2px var(--rc); }
+button.tile.is-reveal.reveal-color-act.open, .ab-reveal.reveal-color-act { --rc: var(--act); }
+button.tile.is-reveal.reveal-color-bonus.open, .ab-reveal.reveal-color-bonus { --rc: var(--bonus); }
+.ab-reveal { --rc: var(--accent); display: none; grid-column: 1 / -1; background: var(--bg); border: 1px solid var(--rc); border-radius: 8px; padding: 5px; }
+.ab-reveal.reveal-color-act { --rc: var(--act); } .ab-reveal.reveal-color-bonus { --rc: var(--bonus); }
 .ab-reveal.open { display: block; }
+.ab-reveal-head strong { color: var(--rc); }
 .ab-reveal-head { display: flex; gap: 4px; align-items: center; margin-bottom: 4px; color: var(--muted); }
-.reveal-attack .ab-reveal-head strong { color: var(--act); } .reveal-magic .ab-reveal-head strong, .reveal-help .ab-reveal-head strong { color: var(--accent); }
 .ab-reveal-head button { margin-left: auto; }
 .ab-reveal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 5px; max-height: 170px; overflow-y: auto; }
 .ab-reveal-sep { grid-column: 1 / -1; height: 0; border-top: 1px dashed var(--border); }

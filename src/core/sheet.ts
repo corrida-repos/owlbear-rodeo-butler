@@ -5,6 +5,7 @@
  * Kept under two keys so frequent state writes stay small and don't collide with sheet edits.
  * Rollable text uses the chip syntax `[1d20+4]` (see fivetools.ts diceChip).
  */
+import type { ItemInfo } from "./items";
 import { BUTLER_NS, SIZE_CELLS } from "./constants";
 import type { InitiativeRoll, Provenance, StatblockInitiative } from "./schema";
 
@@ -27,6 +28,8 @@ export interface SheetEntry {
   cost?: "action" | "bonus" | "reaction" | "free" | "longer";
   /** Casting time or condition worth showing ("1 minute", "1 reaction, which you take when you are hit"). */
   costNote?: string;
+  /** Inventory entries: what the item is (see items.ts). */
+  item?: ItemInfo;
 }
 
 export interface UnitSheet {

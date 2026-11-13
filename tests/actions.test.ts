@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
 import { actionBar, attacksPerAction, barLayout, explain, filterCount, isAttackOption, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf, type ActionBar, type BarFilter } from "../src/core/actions";
+import { ddbItemInfo, itemInfo, lightWeaponCount } from "../src/core/items";
 import { HOMEBREW_KEY, readHomebrew, removeHomebrew, upsertHomebrew } from "../src/core/homebrew";
 import { combatOptions, skillBonus } from "../src/core/combatOptions";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
@@ -8,7 +9,7 @@ import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
 
 /** Names an item shows under (attack options count under Action), like the old tabs. */
-const under = (bar: ActionBar, f: BarFilter) => { const l = barLayout(bar, f); return [...l.sections.flatMap((s) => s.items), ...(f === "action" ? [...l.attackOptions, ...l.magicOptions, ...l.helpOptions] : [])]; };
+const under = (bar: ActionBar, f: BarFilter) => { const l = barLayout(bar, f); return [...l.sections.flatMap((s) => s.items), ...Object.values(l.reveals).flat()]; };
 const inTab = (it: { key: string }, bar: ActionBar, f: BarFilter) => under(bar, f).some((x) => x.key === it.key);
 
 const brann = convertDdbCharacter(fighter);
@@ -66,7 +67,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(bar.items.find((i) => i.name === "Second Wind")).toMatchObject({ cost: "bonus", category: "bonus", limit: { max: 2, reset: "long" } });
     expect(bar.items.find((i) => i.name === "Unarmed Strike")).toMatchObject({ cost: "action" });
     expect(bar.items.filter((i) => i.category === "common").map((i) => i.name)).toContain("Dash");
-    expect(under(bar, "bonus").filter((i) => i.category !== "common").map((i) => i.name)).toEqual(["Second Wind"]);
+    expect(under(bar, "bonus").filter((i) => i.category !== "common").map((i) => i.name)).toEqual(["Second Wind", "Potion of Healing ×2"]);
     expect(bar.items.some((i) => i.name === "Improved Critical")).toBe(false);
     expect(actionBar(brann.sheet, "2014").items.some((i) => i.name === "Use an Object")).toBe(true);
   });
@@ -215,7 +216,8 @@ describe("one list: the sheet and the rules together, Attack gathering every way
   });
   it("no separate tab for the sheet or for the DMG: they're sorted by cost with the rest", () => {
     const bonus = layout.sections.find((s) => s.id === "bonus")!.items.map((i) => i.name);
-    expect(bonus).toEqual(expect.arrayContaining(["Second Wind", "Two-Weapon Fighting"]));
+    expect(bonus).toEqual(expect.arrayContaining(["Second Wind", "Drink or Administer a Potion"]));
+    expect(bonus).not.toContain("Two-Weapon Fighting"); // one Longsword, no Light weapons
     expect(layout.sections.find((s) => s.id === "reaction")!.items.map((i) => i.name)).toContain("Opportunity Attack");
     expect(layout.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toEqual(expect.arrayContaining(["Dash", "Overrun", "Tumble"]));
     expect(layout.sections.some((s) => /DMG/.test(s.title))).toBe(false);
@@ -265,7 +267,7 @@ describe("Magic reveals the sheet's spells cast with an action and its Magic act
   it("the Spells filter still lists every spell, and the Action filter counts what Attack and Magic gather", () => {
     expect(barLayout(bar, "spell").sections[0]!.items.map((i) => i.name)).toEqual(["Fire Bolt", "Misty Step", "Shield", "Alarm", "At Will", "1/Day Each"]);
     const a = barLayout(bar, "action");
-    expect(filterCount(bar, "action")).toBe(a.sections[0]!.items.length + a.attackOptions.length + a.magicOptions.length + a.helpOptions.length);
+    expect(filterCount(bar, "action")).toBe(under(bar, "action").length);
     expect(barLayout(bar, "bonus").magicOptions).toEqual([]);
   });
 });
@@ -278,6 +280,60 @@ describe("Help reveals first aid (5.5E)", () => {
     const old = barLayout(actionBar(brann.sheet, "2014"));
     expect(old.helpOptions).toEqual([]);
     expect(old.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toContain("Stabilize");
+  });
+});
+
+describe("the inventory, and actions the sheet rules out", () => {
+  const inv = (name: string, text = "", item?: any) => ({ name, text, ...(item ? { item } : {}) });
+  const kit = { ...brann.sheet, inventory: [
+    inv("Potion of Healing ×2"), inv("Wand of Magic Missiles", "This wand has 7 charges. While holding it, you can take a Magic action to expend 1 or more of its charges."),
+    inv("Caltrops (bag of 20)", "As a Utilize action, spread them."), inv("Acid", "Throw a vial."), inv("Ring of Protection (equipped)", "+1 AC and saves."),
+    inv("Boots of Speed", "While wearing them, you can take a Bonus Action to click the heels together."), inv("Chain Mail (equipped)", ""),
+  ] };
+  it("reads what each item is, from D&D Beyond or its name", () => {
+    expect(ddbItemInfo({ quantity: 2, definition: { filterType: "Weapon", magic: false, properties: [{ name: "Light" }, { name: "Finesse" }] } }))
+      .toEqual({ kind: "weapon", properties: ["Light", "Finesse"], quantity: 2 });
+    expect(itemInfo(inv("Potion of Healing ×2"))).toEqual({ kind: "potion", magic: true, quantity: 2 });
+    expect(itemInfo(inv("Dagger ×2 (equipped)"))).toMatchObject({ kind: "weapon", properties: ["Light"], quantity: 2 });
+    expect(convertDdbCharacter(fighter).sheet.inventory.find((e) => e.name.startsWith("Longsword"))!.item).toMatchObject({ kind: "weapon", properties: ["Versatile", "Sap"] });
+  });
+  it("puts each usable item under the action that uses it (5.5E)", () => {
+    const l = barLayout(actionBar(kit));
+    expect(l.reveals["common:Drink or Administer a Potion"]!.map((o) => o.name)).toEqual(["Potion of Healing ×2"]);
+    expect(l.magicOptions.map((o) => o.name)).toEqual(["Wand of Magic Missiles"]);
+    expect(l.reveals["common:Utilize"]!.map((o) => o.name)).toEqual(["Caltrops (bag of 20)"]);
+    expect(l.attackOptions.map((o) => o.name)).toContain("Acid");
+    expect(l.sections.find((s) => s.id === "bonus")!.items.map((i) => i.name)).toContain("Boots of Speed");
+    const everywhere = [...l.sections.flatMap((s) => s.items), ...Object.values(l.reveals).flat()].map((i) => i.name);
+    expect(everywhere).not.toContain("Ring of Protection");
+    expect(everywhere).not.toContain("Chain Mail");
+  });
+  it("5E: magic items and flasks are used with Use an Object", () => {
+    const l = barLayout(actionBar(kit, "2014"));
+    expect(l.reveals["common:Use an Object"]!.map((o) => o.name)).toEqual(["Wand of Magic Missiles", "Caltrops (bag of 20)", "Acid"]);
+    expect(l.reveals["common:Drink a Potion"]!.map((o) => o.name)).toEqual(["Potion of Healing ×2"]);
+  });
+  it("hides Magic, potions and Two-Weapon Fighting when the sheet has nothing for them (a wolf)", () => {
+    const wolf: UnitSheet = { ...dragon, name: "Wolf", traits: [], legendary: [], spells: [], inventory: [], reactions: [],
+      actions: [{ name: "Bite", text: "Melee Attack Roll: +4 [1d20+4], reach 5 ft. Hit: 2d4+2 [2d4+2] Piercing damage." }] };
+    const names = actionBar(wolf).items.map((i) => i.name);
+    expect(names).not.toContain("Magic");
+    expect(names).not.toContain("Drink or Administer a Potion");
+    expect(names).not.toContain("Two-Weapon Fighting");
+    expect(actionBar(wolf, "2014").items.map((i) => i.name)).not.toContain("Cast a Spell");
+    expect(names).toContain("Attack");
+    // Spells bring Magic back.
+    expect(actionBar(dragon).items.map((i) => i.name)).toContain("Magic");
+  });
+  it("Two-Weapon Fighting needs two Light weapons, and reveals them", () => {
+    const duelist = { ...brann.sheet, inventory: [inv("Dagger ×2")],
+      actions: [...brann.sheet.actions, { name: "Dagger", text: "Melee Attack Roll: +5 [1d20+5], reach 5 ft. Hit: 1d4+3 [1d4+3] Piercing damage." }] };
+    expect(lightWeaponCount(duelist)).toBe(2);
+    const l = barLayout(actionBar(duelist));
+    expect(l.reveals["common:Two-Weapon Fighting"]!.map((o) => o.name)).toEqual(["Dagger"]);
+    expect(l.attackOptions.map((o) => o.name)).toContain("Dagger");
+    const goblin: UnitSheet = { ...dragon, inventory: [], actions: [{ name: "Scimitar", text: "+4 [1d20+4]" }, { name: "Shortsword", text: "+4 [1d20+4]" }] };
+    expect(lightWeaponCount(goblin)).toBe(2);
   });
 });
 

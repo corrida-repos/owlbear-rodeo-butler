@@ -10,11 +10,12 @@
 import { parseChips, rollSegments } from "./chips";
 import { combatOptions, type OptionGroup } from "./combatOptions";
 import type { HomebrewAction } from "./homebrew";
+import { baseName, itemInfo, LIGHT_WEAPONS, lightWeaponCount, weaponIn } from "./items";
 import type { SheetEntry, UnitSheet } from "./sheet";
 
 /** What using an entry costs. "longer": a casting time of a minute or more; "none": passive or unknown. */
 export type Cost = "action" | "bonus" | "reaction" | "legendary" | "free" | "longer" | "move" | "attack" | "none";
-export type Category = "common" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature";
+export type Category = "common" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature" | "item";
 export type Reset = "short" | "long" | "turn" | "other";
 
 /** A rule limit as written on the sheet ("2/Long Rest"). Shown as information only, never counted. */
@@ -25,7 +26,7 @@ export interface ActionItem {
   /** Name without the uses / recharge note. */
   name: string;
   text: string;
-  section: "traits" | "actions" | "bonusActions" | "reactions" | "legendary" | "spells" | "common" | "homebrew";
+  section: "traits" | "actions" | "bonusActions" | "reactions" | "legendary" | "spells" | "common" | "homebrew" | "inventory";
   category: Category;
   cost: Cost;
   /** Casting time or cost note ("1 minute", "Reaction: when you are hit…", "Costs 2 Actions"). */
@@ -45,8 +46,9 @@ export interface ActionItem {
   source?: "PHB" | "DMG" | "Homebrew";
   /** Done along with an attack of the Attack action (shown under Attack though it costs nothing). */
   withAttack?: boolean;
-  /** Done with another action (2024 Stabilize: the Help action), so revealed under that action's tile. */
-  under?: "Help";
+  /** Done with another action, so revealed under that action's tile (its key): 2024 Stabilize under Help, a potion
+   *  under Drink a Potion, a wand under Magic, caltrops under Utilize… */
+  under?: string;
   /** Homebrew entries: their id in the room's list. */
   homebrewId?: string;
 }
@@ -159,7 +161,7 @@ const SECTION_CATEGORY: Record<string, Category> = { actions: "action", bonusAct
 const isHeader = (section: string, name: string) =>
   (section === "legendary" && /^(Legendary|Mythic) Actions$/i.test(name)) || /^Spellcasting\b/i.test(name) || (section === "spells" && /other known spells$/i.test(name));
 
-type SheetSection = Exclude<ActionItem["section"], "common" | "homebrew">;
+type SheetSection = Exclude<ActionItem["section"], "common" | "homebrew" | "inventory">;
 
 function itemOf(entry: SheetEntry, section: SheetSection): ActionItem | null {
   if (isHeader(section, entry.name)) return null;
@@ -213,7 +215,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
     ...(c.withAttack ? { withAttack: true } : {}),
-    ...(c.under ? { under: c.under } : {}),
+    ...(c.under ? { under: `common:${c.under}` } : {}),
   }));
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
     key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
@@ -223,9 +225,55 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
   return [...rulesOptions, ...homebrew];
 }
 
+// ------------------------------------------------------------------ inventory
+
+/** The rules' tiles items are used through, by edition. */
+export function itemKeys(rules: "2024" | "2014") {
+  return rules === "2024"
+    ? { magic: "common:Magic", potion: "common:Drink or Administer a Potion", utilize: "common:Utilize" }
+    : { magic: "common:Use an Object", potion: "common:Drink a Potion", utilize: "common:Use an Object" };
+}
+
+const THROWN_FLASKS = /^(Acid|Alchemist's Fire|Holy Water)\b/i;
+const UTILIZE_GEAR = /^(Ball Bearings|Caltrops|Healer's Kit|Hunting Trap|Manacles|Oil|Rope|Grappling Hook|Chain(?! Mail| Shirt)|Lock|Spikes|Tinderbox)\b/i;
+/** Wording that marks an item as magic when the sync didn't say (older syncs, other sources). */
+const MAGIC_HINT = /\b(Magic action|Bonus Action|charges?|command word|attun)/i;
+const ACTIVATED = /\b(Magic action|as an action|an action to|use an action|take an action|Bonus Action|Reaction|expend (?:\d+|one|1)(?: of its)? charges?|command word)\b/i;
+
+/** The inventory items you use in combat, as tiles under the action that uses them. Armor, rings that just sit
+ *  there and weapons (their attacks are on the sheet already) don't appear. */
+export function itemActions(sheet: Pick<UnitSheet, "inventory">, rules: "2024" | "2014"): ActionItem[] {
+  const keys = itemKeys(rules);
+  const o2024 = rules === "2024";
+  const out: ActionItem[] = [];
+  const seen = new Set<string>();
+  for (const e of sheet.inventory) {
+    const info = itemInfo(e);
+    const base = baseName(e.name);
+    const name = info.quantity && info.quantity > 1 ? `${base} ×${info.quantity}` : base;
+    const make = (cost: Cost, under?: string, costNote?: string): ActionItem => ({
+      key: `inventory:${base}`, name, text: e.text, section: "inventory", category: "item", cost,
+      ...(under ? { under } : {}), ...(costNote ? { costNote } : {}), summary: summaryOf(e.text),
+    });
+    let it: ActionItem | null = null;
+    if (info.kind === "potion") it = make(o2024 ? "bonus" : "action", keys.potion);
+    else if (/^Antitoxin\b/i.test(base)) it = o2024 ? make("bonus") : make("action", keys.utilize);
+    else if (THROWN_FLASKS.test(base)) it = o2024 ? make("attack", undefined, "Replaces one attack of the Attack action") : make("action", keys.utilize);
+    else if (info.kind === "gear" && !info.magic && UTILIZE_GEAR.test(base)) it = make("action", keys.utilize);
+    else if ((info.magic || (!e.item && MAGIC_HINT.test(e.text))) && info.kind !== "weapon" && info.kind !== "armor"
+      && (info.kind === "scroll" || info.kind === "wand" || info.kind === "staff" || info.kind === "rod" || ACTIVATED.test(e.text))) {
+      if (/\bas a Bonus Action\b|\bBonus Action to\b|\bBonus Action,? you\b/i.test(e.text)) it = make("bonus");
+      else if (/\b(as a|your|use a|take a) Reaction\b/i.test(e.text)) it = make("reaction");
+      else it = make("action", keys.magic);
+    }
+    if (it && !seen.has(it.key)) { seen.add(it.key); out.push(it); }
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------ the bar
 
-export interface ActionBar { items: ActionItem[]; legendary: number; attacks: number }
+export interface ActionBar { items: ActionItem[]; legendary: number; attacks: number; dualWielder?: boolean }
 
 /** Attacks per Attack action, from Extra Attack and its upgrades on the sheet. */
 export function attacksPerAction(sheet: Pick<UnitSheet, "traits" | "actions">): number {
@@ -235,6 +283,9 @@ export function attacksPerAction(sheet: Pick<UnitSheet, "traits" | "actions">): 
   if (names.some((n) => /^Extra Attack\b/i.test(n))) return 2;
   return 1;
 }
+
+export const TWF_KEY = "common:Two-Weapon Fighting";
+const POTION_KEYS = ["common:Drink or Administer a Potion", "common:Drink a Potion"];
 
 export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opts: BarOptions = {}): ActionBar {
   const items: ActionItem[] = [];
@@ -250,32 +301,50 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opt
     }
   }
   const attacks = attacksPerAction(sheet);
+  const dualWielder = [...sheet.traits, ...sheet.bonusActions].some((e) => /^Dual Wielder\b/i.test(e.name));
   const common = commonActions(sheet, rules, opts).map((it) =>
-    it.key === "common:Attack" && attacks > 1 ? { ...it, summary: `${attacks} attacks` } : it);
-  return { items: [...items, ...common], legendary: legendaryPerRound(sheet), attacks };
+    it.key === ATTACK_KEY && attacks > 1 ? { ...it, summary: `${attacks} attacks` } : it);
+  const all = [...items, ...itemActions(sheet, rules), ...common];
+  // What the sheet rules out: Magic with no spells, magic items or magical actions (a wolf); Cast a Spell with no
+  // spells; drinking a potion with none; Two-Weapon Fighting without two Light weapons (unless Dual Wielder).
+  const usesOf = (key: string) => all.some((it) => it.key !== key && parentKey(it, all) === key);
+  const hidden = new Set<string>([
+    ...MAGIC_KEYS.filter((k) => !usesOf(k)),
+    ...POTION_KEYS.filter((k) => !usesOf(k)),
+    ...(lightWeaponCount(sheet) < 2 && !dualWielder ? [TWF_KEY] : []),
+  ]);
+  return { items: all.filter((it) => !hidden.has(it.key)), legendary: legendaryPerRound(sheet), attacks, ...(dualWielder ? { dualWielder } : {}) };
 }
 
 export const ATTACK_KEY = "common:Attack";
 /** The Magic action (2024) or Cast a Spell (2014): hovering it reveals the sheet's Magic options. */
 export const MAGIC_KEYS = ["common:Magic", "common:Cast a Spell"];
 export const HELP_KEY = "common:Help";
-/** Revealed under Help: what's done with the Help action (2024: Stabilize). */
-export const isHelpOption = (it: Pick<ActionItem, "under">) => it.under === "Help";
 export const isMultiattack = (it: Pick<ActionItem, "section" | "name">) => it.section === "actions" && /^Multiattack\b/i.test(it.name);
 
 /** Revealed under the Attack action: the sheet's attacks (weapons, a creature's natural weapons), every option that
- *  replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…), and what goes with an attack (2024: equip
- *  or unequip a weapon). Multiattack is an Action of its own, shown first. */
+ *  replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, a thrown flask of Acid, homebrew…), and what goes with
+ *  an attack (2024: equip or unequip a weapon). Multiattack is an Action of its own, shown first. */
 export function isAttackOption(it: ActionItem): boolean {
-  if (it.category === "common") return it.cost === "attack" || !!it.withAttack;
+  if (it.category === "common" || it.category === "item") return it.cost === "attack" || !!it.withAttack;
   return it.section === "actions" && it.cost === "action" && !isMultiattack(it) && /\[1d20[+-]\d+\]/.test(it.text);
 }
 
-/** Revealed under Magic: the sheet's spells cast with an action (and spells or spell lists whose casting time isn't
- *  known, almost always an action), and the sheet's actions that say they're a Magic action. */
+/** Revealed under Magic (Cast a Spell in 5E): the sheet's spells cast with an action (and spells or spell lists whose
+ *  casting time isn't known, almost always an action), and the sheet's actions that say they're a Magic action.
+ *  Magic items join them in 5.5E (see itemActions). */
 export function isMagicOption(it: ActionItem): boolean {
   if (it.category === "spell") return it.cost === "action" || it.cost === "none";
-  return it.category !== "common" && it.cost === "action" && !isAttackOption(it) && !isMultiattack(it) && /\bMagic action\b/i.test(it.text);
+  return (it.category === "action" || it.category === "feature") && it.cost === "action" && !isAttackOption(it) && !isMultiattack(it) && /\bMagic action\b/i.test(it.text);
+}
+
+/** The tile an item is revealed under (its key), or null if it stands on its own. */
+export function parentKey(it: ActionItem, items: Pick<ActionItem, "key">[]): string | null {
+  const has = (k: string) => items.some((x) => x.key === k);
+  if (isAttackOption(it)) return has(ATTACK_KEY) ? ATTACK_KEY : null;
+  if (it.under) return has(it.under) ? it.under : null;
+  if (isMagicOption(it)) return MAGIC_KEYS.find(has) ?? null;
+  return null;
 }
 
 export type BarFilter = "all" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature" | "move";
@@ -288,10 +357,9 @@ export const SECTION_TITLES: Record<SectionId, string> = {
 };
 const SECTION_ORDER: SectionId[] = ["action", "bonus", "reaction", "legendary", "spell", "feature", "move", "free"];
 
-/** Which section an item lives in when everything is shown. Attack and Magic options aren't in any: they're under
- *  Attack and Magic. Spells go by their casting time like everything else; the ones that take longer get their own. */
-export function sectionOf(it: ActionItem): SectionId | null {
-  if (isAttackOption(it) || isMagicOption(it) || isHelpOption(it)) return null;
+/** Which section an item stands in by its cost (items revealed under another tile aren't placed: see parentKey).
+ *  Spells go by their casting time like everything else; the ones that take longer get their own. */
+export function sectionOf(it: ActionItem): SectionId {
   const byCost = it.cost === "action" || it.cost === "bonus" || it.cost === "reaction" || it.cost === "legendary" ? it.cost : null;
   if (byCost) return byCost;
   if (it.category === "spell") return it.cost === "free" ? "free" : "spell";
@@ -303,18 +371,36 @@ export function sectionOf(it: ActionItem): SectionId | null {
 /** Sheet entries first, then the rules' options. */
 const sheetFirst = (items: ActionItem[]) => [...items.filter((it) => it.category !== "common"), ...items.filter((it) => it.category === "common")];
 
-export interface BarLayout { sections: BarSection[]; attackOptions: ActionItem[]; magicOptions: ActionItem[]; helpOptions: ActionItem[] }
+export interface BarLayout {
+  sections: BarSection[];
+  /** What each tile reveals, by the tile's key (only tiles shown in `sections`). */
+  reveals: Record<string, ActionItem[]>;
+  attackOptions: ActionItem[];
+  magicOptions: ActionItem[];
+  helpOptions: ActionItem[];
+}
 
-/** The bar as shown: sections in order, and what Attack and Magic reveal. Filtering by Spells lists every spell. */
+/** The bar as shown: sections in order, and what Attack, Magic, Help, Utilize, a potion action or Two-Weapon
+ *  Fighting reveal. Filtering by Spells lists every spell. */
 export function barLayout(bar: ActionBar, filter: BarFilter = "all"): BarLayout {
-  const attackOptions = sheetFirst(bar.items.filter(isAttackOption));
-  const magicOptions = bar.items.filter(isMagicOption);
+  const empty = { reveals: {}, attackOptions: [], magicOptions: [], helpOptions: [] };
   if (filter === "spell") {
     const spells = bar.items.filter((it) => it.category === "spell");
-    return { sections: spells.length ? [{ id: "spell", title: "Spells", items: spells }] : [], attackOptions: [], magicOptions: [], helpOptions: [] };
+    return { sections: spells.length ? [{ id: "spell", title: "Spells", items: spells }] : [], ...empty };
   }
+  const reveals: Record<string, ActionItem[]> = {};
   const by = new Map<SectionId, ActionItem[]>(SECTION_ORDER.map((id) => [id, []]));
-  for (const it of bar.items) { const s = sectionOf(it); if (s) by.get(s)!.push(it); }
+  for (const it of bar.items) {
+    const p = parentKey(it, bar.items);
+    if (p) (reveals[p] ??= []).push(it);
+    else by.get(sectionOf(it))!.push(it);
+  }
+  if (reveals[ATTACK_KEY]) reveals[ATTACK_KEY] = sheetFirst(reveals[ATTACK_KEY]);
+  // Two-Weapon Fighting: the sheet's Light weapon attacks (any weapon attack with Dual Wielder). They stay under Attack too.
+  if (bar.items.some((it) => it.key === TWF_KEY)) {
+    const weapons = bar.items.filter((it) => it.section === "actions" && isAttackOption(it) && (() => { const w = weaponIn(it.name); return !!w && (bar.dualWielder || LIGHT_WEAPONS.includes(w)); })());
+    if (weapons.length) reveals[TWF_KEY] = weapons;
+  }
   // Multiattack leads the Actions, then Attack, then the sheet's own, then everyone's (Magic among them).
   const actions = by.get("action")!;
   const lead = [...actions.filter(isMultiattack), ...actions.filter((it) => it.key === ATTACK_KEY)];
@@ -322,14 +408,20 @@ export function barLayout(bar: ActionBar, filter: BarFilter = "all"): BarLayout 
   for (const id of ["bonus", "reaction", "legendary"] as const) by.set(id, sheetFirst(by.get(id)!));
   const ids: SectionId[] = filter === "all" ? SECTION_ORDER : filter === "move" ? ["move", "free"] : [filter];
   const sections = ids.map((id) => ({ id, title: SECTION_TITLES[id], items: by.get(id)! })).filter((sec) => sec.items.length);
-  const withReveals = filter === "all" || filter === "action";
-  return { sections, attackOptions: withReveals ? attackOptions : [], magicOptions: withReveals ? magicOptions : [], helpOptions: withReveals ? bar.items.filter(isHelpOption) : [] };
+  const shown = new Set(sections.flatMap((sec) => sec.items.map((it) => it.key)));
+  const visible = Object.fromEntries(Object.entries(reveals).filter(([k, v]) => shown.has(k) && v.length));
+  return {
+    sections, reveals: visible,
+    attackOptions: visible[ATTACK_KEY] ?? [],
+    magicOptions: MAGIC_KEYS.flatMap((k) => visible[k] ?? []),
+    helpOptions: visible[HELP_KEY] ?? [],
+  };
 }
 
-/** How many entries a filter shows (attack options included under Action). */
+/** How many entries a filter shows, what its tiles reveal included. */
 export function filterCount(bar: ActionBar, filter: BarFilter): number {
-  const { sections, attackOptions, magicOptions, helpOptions } = barLayout(bar, filter);
-  return sections.reduce((n, s) => n + s.items.length, 0) + (filter === "action" ? attackOptions.length + magicOptions.length + helpOptions.length : 0);
+  const { sections, reveals } = barLayout(bar, filter);
+  return sections.reduce((n, s) => n + s.items.length, 0) + Object.values(reveals).reduce((n, r) => n + r.length, 0);
 }
 
 // ------------------------------------------------------------------ explanations
