@@ -1,27 +1,30 @@
 /**
  * "Light & vision" panel: the GM sets the scene's light (bright, dim, dark); everyone can turn on the auras the
- * background page draws (background/vision.ts) and read the legend of what each circle means.
+ * background page draws (background/vision.ts) and read the legend of what each circle means. In a dim or dark scene
+ * players get the darkness fog (background/darkness.ts); the GM can turn it off or preview it.
  */
 import OBR from "@owlbear-rodeo/sdk";
 import {
-  AURA_CHANNEL, AURA_ON_KEY, AURA_SCOPE_KEY, lightingUpdate, readAuraScope, readSceneLight, RING_STYLE, SCENE_LIGHT_TEXT,
+  AURA_CHANNEL, AURA_ON_KEY, AURA_SCOPE_KEY, lightingUpdate, readAuraScope, readDarknessFog, readSceneLight, RING_STYLE, SCENE_LIGHT_TEXT,
   type AuraScope, type RingKind, type SceneLight,
 } from "../core/vision";
+import { DARKNESS_PREVIEW_KEY } from "../core/darkness";
 import { h, store, type Child } from "./dom";
 
 let scene: SceneLight = "bright";
+let fog = true;
 let subscribed = false;
 
 export const currentSceneLight = () => scene;
 
 /** Call once after OBR.onReady (and again when a scene opens): keeps the scene's light level current. */
 export async function initVisionPanel(onChange: () => void) {
-  try { scene = readSceneLight(await OBR.scene.getMetadata()); } catch { scene = "bright"; }
+  try { const m = await OBR.scene.getMetadata(); scene = readSceneLight(m); fog = readDarknessFog(m); } catch { scene = "bright"; }
   if (subscribed) return;
   subscribed = true;
   OBR.scene.onMetadataChange((m) => {
-    const next = readSceneLight(m);
-    if (next !== scene) { scene = next; onChange(); }
+    const next = readSceneLight(m), nextFog = readDarknessFog(m);
+    if (next !== scene || nextFog !== fog) { scene = next; fog = nextFog; onChange(); }
   });
 }
 
@@ -53,6 +56,26 @@ function legend(): Child {
     h("li", { className: "muted" }, "Ranges count from the edge of the creature's space. Walls and magical darkness aren't drawn: judge those at the table."));
 }
 
+/** The darkness fog: on for players unless the GM turns it off; the GM can preview it see-through. */
+function fogControls(role: "GM" | "PLAYER", rerender: () => void): Child {
+  const what = scene === "dark"
+    ? "black where none of their units can see, a haze where it's only lightly obscured"
+    : "a haze over everything their units don't see clearly";
+  if (role !== "GM") {
+    return fog ? h("div", { className: "small" }, `Darkness covers the map: you see only what your units can (their darkvision and other senses, and any light). Black is heavily obscured, the haze lightly obscured.`) : null;
+  }
+  return h("div", { className: "stack tight" },
+    h("label", { className: "small" },
+      h("input", { type: "checkbox", checked: fog, onchange: async (e: Event) => {
+        const on = (e.target as HTMLInputElement).checked;
+        await OBR.scene.setMetadata(lightingUpdate(await OBR.scene.getMetadata(), { fog: on })).catch((err) => console.error("[Butler] darkness fog failed", err));
+      } }),
+      `Darkness fog for players: ${what}. Each player sees through their own units' senses and every light.`),
+    fog ? h("label", { className: "small" },
+      h("input", { type: "checkbox", checked: store.get(DARKNESS_PREVIEW_KEY) === "1", onchange: (e: Event) => setPref(DARKNESS_PREVIEW_KEY, (e.target as HTMLInputElement).checked ? "1" : "0", rerender) }),
+      "Preview it see-through (what the party sees; only in this browser)") : null);
+}
+
 /** The panel. `rerender` redraws the page it's on. */
 export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child {
   const on = store.get(AURA_ON_KEY) === "1";
@@ -60,7 +83,7 @@ export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child 
   if (role !== "GM" && scene === "bright") return null;
   const levelBtn = (l: SceneLight, label: string) => h("button", {
     className: scene === l ? "on" : "",
-    onclick: () => void OBR.scene.setMetadata(lightingUpdate(l)).catch((e) => console.error("[Butler] scene light failed", e)),
+    onclick: async () => OBR.scene.setMetadata(lightingUpdate(await OBR.scene.getMetadata(), { level: l })).catch((e) => console.error("[Butler] scene light failed", e)),
   }, label);
   const scopes: [AuraScope, string][] = role === "GM"
     ? [["selected", "Selected tokens"], ["party", "Party"], ["all", "All units"]]
@@ -70,8 +93,9 @@ export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child 
     role === "GM" ? h("div", { className: "seg", style: "margin-top:6px" }, levelBtn("bright", "☀ Bright"), levelBtn("dim", "◐ Dim"), levelBtn("dark", "● Dark")) : null,
     h("div", { className: "small muted", style: "margin-top:4px" }, SCENE_LIGHT_TEXT[scene]),
     scene === "bright"
-      ? h("div", { className: "small muted" }, "Set the scene to dim or dark to show light and vision auras.")
+      ? h("div", { className: "small muted" }, "Set the scene to dim or dark for darkness fog and light & vision auras.")
       : h("div", { className: "stack tight", style: "margin-top:6px" },
+        fogControls(role, rerender),
         h("label", { className: "small" },
           h("input", { type: "checkbox", checked: on, onchange: (e: Event) => setPref(AURA_ON_KEY, (e.target as HTMLInputElement).checked ? "1" : "0", rerender) }),
           "Show light & vision auras on the map (only in this browser)"),

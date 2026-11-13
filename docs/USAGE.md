@@ -88,6 +88,7 @@ The active unit gets a map highlight. Controllers receive turn notices, and the 
 
 Scenes are in **bright light** by default. For a night ambush or an unlit cave, open **Tracker → Light & vision** (at the bottom) and set the scene to **◐ Dim** or **● Dark**. Each scene keeps its own setting.
 
+- **Darkness fog for players:** as soon as a scene is dim or dark, each player's map is covered with what their own units can't see. It goes **black** where a square is heavily obscured, **hazy** where it's lightly obscured, and **clear** where they see normally. Their units' darkvision, blindsight, truesight and Devil's Sight cut through it, and so does every light carried by a unit they can see. Each player gets their own view: a player who controls no units sees what the party sees. A unit's own square always stays clear. The fog sits above tokens and their labels, so a goblin in the dark stays hidden, and below rulers. It follows the grid square by square, judged at each square's centre. You don't see it yourself: untick **Darkness fog for players** to turn it off for the scene, or tick **Preview it see-through** to check what the party sees.
 - **Auras:** tick **Show light & vision auras on the map** to draw circles around units. It's a per-browser switch: each player turns it on for themselves, and you can turn it off again at any time. Choose whose senses to draw: **Selected tokens** (click a creature to see what it sees), **Party** or **All units**.
   - **Yellow circles** are carried light: solid for bright light, dashed and paler for dim light. Lights are drawn for every unit you can see, because a torch lights the room for everyone. In a dim scene only the bright part is drawn (the rest of the room is already dim).
   - **Dashed outlines** are senses, labelled with their range: **green** darkvision, **pink** Devil's Sight, **purple** truesight, **blue** blindsight, **brown** tremorsense. Ranges count from the edge of the creature's space.
@@ -173,6 +174,6 @@ Found a bug or have an idea? [Open an issue](https://github.com/corrida-repos/ow
 ## Known limits
 
 - Square grids only.
-- Light and vision auras are circles: they don't stop at walls, a Bullseye Lantern's cone is drawn as a full circle, and magical darkness isn't modelled.
+- Light and vision auras and the darkness fog don't stop at walls (use Owlbear's own fog for walls), a Bullseye Lantern's cone counts as a full circle, and magical darkness isn't modelled. The fog only knows Encounter Butler units and the lights set on their cards.
 - Active spell effects (Mage Armor, Shield) aren't applied to party AC, and multiclass spell slots aren't combined.
 - Lair actions are noted on the card but not listed as actions. Mythic actions are listed with the legendary actions.

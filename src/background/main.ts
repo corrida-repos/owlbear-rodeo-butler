@@ -23,6 +23,8 @@ import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
+import { resetDarkness, updateDarkness } from "./darkness";
+import { DARKNESS_PREVIEW_KEY } from "../core/darkness";
 import { AURA_CHANNEL, AURA_ON_KEY, AURA_SCOPE_KEY, setUnitLight } from "../core/vision";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
@@ -199,7 +201,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetMovementMemory(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetDarkness(); resetMovementMemory(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -216,6 +218,8 @@ async function onSceneChange() {
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
       await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] vision auras failed", e));
+      await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, roomSystem().rules)
+        .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;
@@ -375,7 +379,7 @@ OBR.onReady(async () => {
     selection = next;
     void onSceneChange();
   });
-  window.addEventListener("storage", (e) => { if (e.key === AURA_ON_KEY || e.key === AURA_SCOPE_KEY) void onSceneChange(); });
+  window.addEventListener("storage", (e) => { if (e.key === AURA_ON_KEY || e.key === AURA_SCOPE_KEY || e.key === DARKNESS_PREVIEW_KEY) void onSceneChange(); });
   OBR.broadcast.onMessage(AURA_CHANNEL, () => void onSceneChange());
   OBR.scene.grid.onChange(() => void onSceneChange());
 

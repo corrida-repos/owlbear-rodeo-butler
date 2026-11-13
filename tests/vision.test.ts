@@ -3,7 +3,7 @@ import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet } from "..
 import { EDIT_REQUESTS, isPlayerRequest } from "../src/core/turns";
 import { readUnit } from "../src/core/unit";
 import {
-  isUnitLight, lightAt, lightingUpdate, lightRings, lightsOnSheet, LIGHTING_KEY, readSceneLight, resolveLight, seenAs, senseRings, sensesOf,
+  isUnitLight, lightAt, readDarknessFog, lightingUpdate, lightRings, lightsOnSheet, LIGHTING_KEY, readSceneLight, resolveLight, seenAs, senseRings, sensesOf,
   setUnitLight, visionSummary,
 } from "../src/core/vision";
 import { FakeScene } from "./fakeGateway";
@@ -18,9 +18,14 @@ const sheet = (over: Partial<UnitSheet> = {}): UnitSheet => ({
 describe("scene light", () => {
   it("defaults to bright; dim and dark are stored, bright removes the key", () => {
     expect(readSceneLight({})).toBe("bright");
-    expect(readSceneLight(lightingUpdate("dark"))).toBe("dark");
-    expect(readSceneLight(lightingUpdate("dim"))).toBe("dim");
-    expect(lightingUpdate("bright")).toEqual({ [LIGHTING_KEY]: undefined });
+    expect(readSceneLight(lightingUpdate({}, { level: "dark" }))).toBe("dark");
+    expect(readSceneLight(lightingUpdate({}, { level: "dim" }))).toBe("dim");
+    expect(lightingUpdate({}, { level: "bright" })).toEqual({ [LIGHTING_KEY]: undefined });
+    // The darkness fog is on by default; turning it off survives a change of light level.
+    const off = lightingUpdate(lightingUpdate({}, { level: "dark" }), { fog: false });
+    expect(readDarknessFog(off)).toBe(false);
+    expect(readDarknessFog(lightingUpdate(off, { level: "dim" }))).toBe(false);
+    expect(readDarknessFog(lightingUpdate({}, { level: "dark" }))).toBe(true);
     expect(readSceneLight({ [LIGHTING_KEY]: { level: "pitch" } })).toBe("bright");
   });
 });

@@ -19,8 +19,17 @@ export function readSceneLight(sceneMeta: Record<string, unknown>): SceneLight {
   return raw?.level === "dim" || raw?.level === "dark" ? raw.level : "bright";
 }
 
-/** The scene metadata update that sets the light level (bright removes the key). */
-export const lightingUpdate = (level: SceneLight): Record<string, unknown> => ({ [LIGHTING_KEY]: level === "bright" ? undefined : { level } });
+/** Darkness fog for players (on unless the GM turned it off for this scene). */
+export function readDarknessFog(sceneMeta: Record<string, unknown>): boolean {
+  return (sceneMeta[LIGHTING_KEY] as { fog?: unknown } | undefined)?.fog !== false;
+}
+
+/** The scene metadata update that sets the light level and/or the darkness fog (bright with fog on removes the key). */
+export function lightingUpdate(sceneMeta: Record<string, unknown>, patch: { level?: SceneLight; fog?: boolean }): Record<string, unknown> {
+  const level = patch.level ?? readSceneLight(sceneMeta);
+  const fog = patch.fog ?? readDarknessFog(sceneMeta);
+  return { [LIGHTING_KEY]: level === "bright" && fog ? undefined : { level, ...(fog ? {} : { fog: false }) } };
+}
 
 export const SCENE_LIGHT_TEXT: Record<SceneLight, string> = {
   bright: "Bright light: everyone sees normally.",
