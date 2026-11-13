@@ -24,8 +24,7 @@ import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./mov
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
 import { resetDarkness, updateDarkness } from "./darkness";
-import { DARKNESS_PREVIEW_KEY } from "../core/darkness";
-import { AURA_CHANNEL, AURA_ON_KEY, AURA_SCOPE_KEY, setUnitLight } from "../core/vision";
+import { AURA_CHANNEL, AURA_SCOPE_KEY, HUD_KEY, setUnitLight } from "../core/vision";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
@@ -379,7 +378,7 @@ OBR.onReady(async () => {
     selection = next;
     void onSceneChange();
   });
-  window.addEventListener("storage", (e) => { if (e.key === AURA_ON_KEY || e.key === AURA_SCOPE_KEY || e.key === DARKNESS_PREVIEW_KEY) void onSceneChange(); });
+  window.addEventListener("storage", (e) => { if (e.key === HUD_KEY || e.key === AURA_SCOPE_KEY) void onSceneChange(); });
   OBR.broadcast.onMessage(AURA_CHANNEL, () => void onSceneChange());
   OBR.scene.grid.onChange(() => void onSceneChange());
 

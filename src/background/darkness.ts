@@ -1,14 +1,14 @@
 /**
- * Darkness fog (local, per browser): in a dark or dim scene, a player's map is covered with black where none of their
+ * Darkness fog (local, per browser, part of the Vision HUD): in a dark or dim scene, a player's map is covered with black where none of their
  * units can see, and a haze where it's only lightly obscured. Their units' senses and every visible light cut through.
- * Drawn above tokens and labels (so a monster in the dark stays hidden) but below rulers. The GM sees nothing unless
- * they turn on the see-through preview, which shows what the party sees.
+ * Drawn above tokens and labels (so a monster in the dark stays hidden) but below rulers. Shown only while this browser's
+ * Vision HUD is on, or for players when the GM forces it. The GM's is see-through and shows what the party sees.
  */
 import OBR, { buildPath, type Item } from "@owlbear-rodeo/sdk";
 import { controls } from "../core/card";
-import { darknessGrid, DARKNESS_ID, DARKNESS_PREVIEW_KEY, fogRects, rectCommands, type Area, type Emitter, type Viewer } from "../core/darkness";
+import { darknessGrid, DARKNESS_ID, fogRects, rectCommands, type Area, type Emitter, type Viewer } from "../core/darkness";
 import type { TrackerUnit } from "../core/tracker";
-import { readDarknessFog, readSceneLight, resolveLight, sensesOf } from "../core/vision";
+import { HUD_KEY, hudOn, readForcedFog, readSceneLight, resolveLight, sensesOf } from "../core/vision";
 import { store } from "../extension/dom";
 
 const LAYERS = [{ id: `${DARKNESS_ID}/heavy`, level: 2 as const }, { id: `${DARKNESS_ID}/light`, level: 1 as const }];
@@ -22,8 +22,10 @@ async function clear() {
 
 export async function updateDarkness(units: TrackerUnit[], items: Item[], role: "GM" | "PLAYER", sceneMeta: Record<string, unknown>, rules: "2024" | "2014") {
   const scene = readSceneLight(sceneMeta);
-  const preview = role === "GM" && store.get(DARKNESS_PREVIEW_KEY) === "1";
-  if (scene === "bright" || !readDarknessFog(sceneMeta) || (role === "GM" && !preview)) return clear();
+  // Only with the Vision HUD on (or, for players, when the GM forces it in this scene). The GM's is see-through.
+  const hud = hudOn(store.get(HUD_KEY));
+  if (scene === "bright" || !(hud || (role === "PLAYER" && readForcedFog(sceneMeta)))) return clear();
+  const preview = role === "GM";
 
   const byId = new Map(items.map((i) => [i.id, i]));
   // Only what players can see: hidden tokens neither look nor shed light.

@@ -11,7 +11,7 @@ import { controls } from "../core/card";
 import { BUTLER_NS } from "../core/constants";
 import type { TrackerUnit } from "../core/tracker";
 import {
-  lightRings, readAuraScope, readSceneLight, resolveLight, RING_STYLE, senseRings, sensesOf, AURA_ON_KEY, AURA_SCOPE_KEY, type Ring,
+  lightRings, readAuraScope, readSceneLight, resolveLight, RING_STYLE, senseRings, sensesOf, HUD_KEY, hudOn, AURA_SCOPE_KEY, type Ring,
 } from "../core/vision";
 import { store } from "../extension/dom";
 
@@ -23,7 +23,7 @@ interface Want { id: string; unit: string; ring: Ring }
 export async function updateVision(units: TrackerUnit[], items: Item[], role: "GM" | "PLAYER", sceneMeta: Record<string, unknown>,
   selection: string[], rules: "2024" | "2014") {
   const scene = readSceneLight(sceneMeta);
-  const on = store.get(AURA_ON_KEY) === "1" && scene !== "bright";
+  const on = hudOn(store.get(HUD_KEY)) && scene !== "bright";
   const scope = readAuraScope(store.get(AURA_SCOPE_KEY));
   const byId = new Map(items.map((i) => [i.id, i]));
   const me = { id: OBR.player.id, role };

@@ -1,5 +1,5 @@
 /**
- * Darkness fog: in a dark (or dim) scene, each player's map is covered square by square with what their own units
+ * Darkness fog (part of the Vision HUD): in a dark (or dim) scene, the map is covered square by square with what the viewer's units
  * can't see. A square is clear, lightly obscured (a haze) or heavily obscured (black), judged at its centre from the
  * scene's light, every visible light source, and the best of the viewer's units' senses (vision.ts seenAs).
  * Pure geometry here; background/darkness.ts draws it.
@@ -7,8 +7,6 @@
 import { BUTLER_NS } from "./constants";
 import { lightAt, seenAs, type Seen, type SceneLight, type Senses } from "./vision";
 
-/** Per browser (GM): also draw the players' darkness, see-through, to check what they see. */
-export const DARKNESS_PREVIEW_KEY = "butler.darknessPreview";
 export const DARKNESS_ID = `${BUTLER_NS}/darkness`;
 
 export interface Vec { x: number; y: number }

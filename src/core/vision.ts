@@ -19,16 +19,16 @@ export function readSceneLight(sceneMeta: Record<string, unknown>): SceneLight {
   return raw?.level === "dim" || raw?.level === "dark" ? raw.level : "bright";
 }
 
-/** Darkness fog for players (on unless the GM turned it off for this scene). */
-export function readDarknessFog(sceneMeta: Record<string, unknown>): boolean {
-  return (sceneMeta[LIGHTING_KEY] as { fog?: unknown } | undefined)?.fog !== false;
+/** The GM forces the darkness fog on players in this scene, even when their Vision HUD is off (off by default). */
+export function readForcedFog(sceneMeta: Record<string, unknown>): boolean {
+  return (sceneMeta[LIGHTING_KEY] as { forceFog?: unknown } | undefined)?.forceFog === true;
 }
 
-/** The scene metadata update that sets the light level and/or the darkness fog (bright with fog on removes the key). */
-export function lightingUpdate(sceneMeta: Record<string, unknown>, patch: { level?: SceneLight; fog?: boolean }): Record<string, unknown> {
+/** The scene metadata update that sets the light level and/or the forced fog (bright and not forced removes the key). */
+export function lightingUpdate(sceneMeta: Record<string, unknown>, patch: { level?: SceneLight; forceFog?: boolean }): Record<string, unknown> {
   const level = patch.level ?? readSceneLight(sceneMeta);
-  const fog = patch.fog ?? readDarknessFog(sceneMeta);
-  return { [LIGHTING_KEY]: level === "bright" && fog ? undefined : { level, ...(fog ? {} : { fog: false }) } };
+  const forceFog = patch.forceFog ?? readForcedFog(sceneMeta);
+  return { [LIGHTING_KEY]: level === "bright" && !forceFog ? undefined : { level, ...(forceFog ? { forceFog: true } : {}) } };
 }
 
 export const SCENE_LIGHT_TEXT: Record<SceneLight, string> = {
@@ -246,7 +246,9 @@ export function visionSummary(sheet: Pick<UnitSheet, "senses" | "traits">, state
 // ------------------------------------------------------------------ who sees which auras (per browser)
 
 export type AuraScope = "selected" | "party" | "all";
-export const AURA_ON_KEY = "butler.visionAuras";
+/** Per browser: the Vision HUD (vision circles + darkness fog). Nothing is drawn while it's off. */
+export const HUD_KEY = "butler.visionHud";
+export const hudOn = (v: string | null) => v === "1";
 export const AURA_SCOPE_KEY = "butler.visionScope";
 /** Local broadcast (this browser only) telling the background page the aura choice changed. */
 export const AURA_CHANNEL = `${BUTLER_NS}/vision-prefs`;
