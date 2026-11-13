@@ -74,6 +74,10 @@ Below the sync, **Import published / homebrewed party member** work exactly like
 
 The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits.
 
+## Your players at a glance (Players tab)
+
+The **Players** tab (GM only) has a card for each party member in the scene: HP with a bar and temp HP, AC, initiative, passive Perception, Insight and Investigation, spell save DC (Speed for non-casters), saving throws (proficient ones highlighted), speeds and senses, resistances and immunities, conditions, and which player plays them. The top line gives the party's lowest passive Perception, Insight and Investigation, handy for secret checks. It updates as the scene changes. Click a name to open the full card. Only units marked as party members appear (see *Sync a D&D Beyond party*).
+
 ## Conditions, concentration and movement
 
 - **Add a condition** from a unit's card (**Conditions → Add condition**), or right-click one or more selected tokens → **Conditions** to apply the same one to all of them. Pick a standard condition, **Exhaustion** (with a level) or **Custom effect…** (your own name, e.g. *Hexed*), an optional note and an optional duration:

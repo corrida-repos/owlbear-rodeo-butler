@@ -238,3 +238,18 @@ button.status-chip:disabled { cursor: default; }
 .init-row:last-child { border-bottom: none; }
 .init-row .init-in { flex: none; }
 .init-row input.init-val { width: 44px; text-align: center; }
+
+/* ---- Players tab (GM) ---- */
+.pcard { display: flex; flex-direction: column; gap: 6px; }
+.pcard.down { border-color: var(--bad); }
+.phpwrap { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: none; min-width: 72px; }
+.php { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hpbar { width: 72px; height: 5px; border-radius: 3px; background: var(--bg); overflow: hidden; }
+.hpfill { height: 100%; }
+.hpfill.ok { background: var(--ok); } .hpfill.warn { background: var(--warn); } .hpfill.bad { background: var(--bad); }
+.pstats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.pstat { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px; display: flex; flex-direction: column; align-items: center; }
+.pstat .k { font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.pstat .v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.psaves { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.psaves .prof { font-weight: 700; color: var(--accent); }

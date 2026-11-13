@@ -1,6 +1,6 @@
 /**
  * Encounter Butler popover.
- *  GM: three tabs — Add Creatures, Add Party Members (incl. D&D Beyond sync), Combat.
+ *  GM: tabs — Tracker, Players (party members' key stats), Add Creatures, Add Party Members (incl. D&D Beyond sync), Combat.
  *  Player: their own units (cards to roll from) and the roll log.
  */
 import "./devlog";
@@ -9,6 +9,7 @@ import { refreshCombat, renderCombatTab, resetCombatTab } from "./combatTab";
 import { h, rerender, setRerender, store, ui, type Child } from "./dom";
 import { renderPackageTab, resetPackageTab } from "./packageTab";
 import { renderPartyTab, resetPartyTab } from "./partyTab";
+import { refreshPlayersTab, renderPlayersTab, resetPlayersTab } from "./playersTab";
 import { initPlayerItems, renderPlayerView } from "./playerView";
 import { createRoster } from "./roster";
 import { refreshPartyPanel, resetPartyPanel } from "./partyPanel";
@@ -16,10 +17,10 @@ import { refreshTracker, renderTrackerTab, resetTrackerTab } from "./trackerTab"
 import { initRoomSettings, onRoomSettings } from "./roomSettings";
 import { initVisionPanel } from "./visionPanel";
 
-type Tab = "tracker" | "creatures" | "party" | "combat";
-const TABS: [Tab, string][] = [["tracker", "Tracker"], ["creatures", "Add Creatures"], ["party", "Add Party"], ["combat", "Combat"]];
+type Tab = "tracker" | "players" | "creatures" | "party" | "combat";
+const TABS: [Tab, string][] = [["tracker", "Tracker"], ["players", "Players"], ["creatures", "Add Creatures"], ["party", "Add Party"], ["combat", "Combat"]];
 const savedTab = store.get("butler.tab");
-let tab: Tab = savedTab === "party" || savedTab === "combat" || savedTab === "creatures" ? savedTab : "tracker";
+let tab: Tab = TABS.some(([t]) => t === savedTab) ? savedTab as Tab : "tracker";
 let sceneReady = true;
 let packageOpen = false;
 let role: "GM" | "PLAYER" | null = null;
@@ -53,11 +54,11 @@ function render() {
   }
   const nodes: Child[] = [
     h("nav", { className: "tabs" }, ...TABS.map(([t, label]) =>
-      h("button", { className: t === tab ? "on" : "", onclick: () => { tab = t; store.set("butler.tab", t); ui.error = ""; if (t === "combat") refreshCombat(true); if (t === "tracker") refreshTracker(true); rerender(); } }, label))),
+      h("button", { className: t === tab ? "on" : "", onclick: () => { tab = t; store.set("butler.tab", t); ui.error = ""; if (t === "combat") refreshCombat(true); if (t === "tracker") refreshTracker(true); if (t === "players") refreshPlayersTab(true); rerender(); } }, label))),
   ];
   if (!sceneReady) nodes.push(h("div", { className: "panel warn" }, "Open a scene in Owlbear — this panel updates when it's ready."));
   if (ui.error) nodes.push(h("div", { className: "panel bad" }, ui.error, " ", h("button", { className: "icon", onclick: () => { ui.error = ""; rerender(); } }, "✕")));
-  nodes.push(...(tab === "tracker" ? renderTrackerTab() : tab === "creatures" ? renderCreaturesTab() : tab === "party" ? renderPartyTab() : renderCombatTab()));
+  nodes.push(...(tab === "tracker" ? renderTrackerTab() : tab === "players" ? renderPlayersTab() : tab === "creatures" ? renderCreaturesTab() : tab === "party" ? renderPartyTab() : renderCombatTab()));
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   window.scrollTo(0, scrollY);
   if (focused && focused !== document.body && focused.isConnected && document.activeElement !== focused) focused.focus();
@@ -78,10 +79,11 @@ if (OBR.isAvailable) {
     // Subscribe first, so a scene that becomes ready while we're still starting up isn't missed.
     OBR.scene.onReadyChange((r) => {
       sceneReady = r;
-      if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); }
+      if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); resetPlayersTab(); }
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
       else if (tab === "tracker") refreshTracker(true);
       else if (tab === "combat") refreshCombat(true);
+      else if (tab === "players") refreshPlayersTab(true);
       if (r) void initVisionPanel(() => render()).then(render);
       render();
     });
@@ -90,7 +92,7 @@ if (OBR.isAvailable) {
     if (sceneReady) await initVisionPanel(() => render());
     render();
     // Combat tab follows the scene live (tokens added, removed, initiative changed…)
-    OBR.scene.items.onChange(() => { if (role !== "GM") return; if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); if (tab === "party") void refreshPartyPanel(); });
+    OBR.scene.items.onChange(() => { if (role !== "GM") return; if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); if (tab === "party") void refreshPartyPanel(); if (tab === "players") refreshPlayersTab(); });
     OBR.scene.onMetadataChange(() => { if (tab === "tracker") refreshTracker(); });
   });
 } else {
