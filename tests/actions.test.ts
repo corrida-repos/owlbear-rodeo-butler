@@ -275,7 +275,7 @@ describe("Magic reveals the sheet's spells cast with an action and its Magic act
 describe("Help reveals first aid (5.5E)", () => {
   it("Stabilize sits under Help in 5.5E, and is its own Action in 5E", () => {
     const l = barLayout(actionBar(brann.sheet));
-    expect(l.helpOptions.map((o) => o.name)).toEqual(["Stabilize"]);
+    expect(l.helpOptions.map((o) => o.name)).toEqual(["Help", "Stabilize"]);
     expect(l.sections.flatMap((s) => s.items).some((i) => i.name === "Stabilize")).toBe(false);
     const old = barLayout(actionBar(brann.sheet, "2014"));
     expect(old.helpOptions).toEqual([]);

@@ -401,6 +401,9 @@ export function barLayout(bar: ActionBar, filter: BarFilter = "all"): BarLayout 
     const weapons = bar.items.filter((it) => it.section === "actions" && isAttackOption(it) && (() => { const w = weaponIn(it.name); return !!w && (bar.dualWielder || LIGHT_WEAPONS.includes(w)); })());
     if (weapons.length) reveals[TWF_KEY] = weapons;
   }
+  // Help's ordinary use (help with a check or an attack) sits first among its options, next to first aid.
+  const help = bar.items.find((it) => it.key === HELP_KEY);
+  if (help && reveals[HELP_KEY]?.length) reveals[HELP_KEY] = [{ ...help, key: `${HELP_KEY}#assist` }, ...reveals[HELP_KEY]];
   // Multiattack leads the Actions, then Attack, then the sheet's own, then everyone's (Magic among them).
   const actions = by.get("action")!;
   const lead = [...actions.filter(isMultiattack), ...actions.filter((it) => it.key === ATTACK_KEY)];

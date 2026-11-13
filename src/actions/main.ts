@@ -105,7 +105,7 @@ const hoverReveal = (key: string) => ({
 function revealIntro(it: ActionItem, bar: ActionBar): Child[] {
   if (it.key === ATTACK_KEY) return [h("strong", {}, "Attack: "), bar.attacks > 1 ? `${bar.attacks} attacks per Attack action; each can be any of these.` : "each attack can be any of these."];
   if (MAGIC_KEYS.includes(it.key)) return [h("strong", {}, `${it.name}: `), it.key === "common:Magic" ? "cast one of these spells, or use one of these magic items or magical actions." : "cast one of these spells."];
-  if (it.key === HELP_KEY) return [h("strong", {}, "Help: "), "or use it to give first aid."];
+  if (it.key === HELP_KEY) return [h("strong", {}, "Help: "), "help an ally with a check or an attack, or give first aid."];
   if (it.key === TWF_KEY) return [h("strong", {}, "Two-Weapon Fighting: "), bar.dualWielder ? "the extra attack, with a different weapon than the one you attacked with." : "the extra attack, with a different Light weapon than the one you attacked with."];
   return [h("strong", {}, `${it.name}: `), "with one of these."];
 }
@@ -244,7 +244,8 @@ function render() {
     const layout = barLayout(bar, tab);
     const { sections, magicOptions } = layout;
     reveals = layout.reveals;
-    const sel = bar.items.find((it) => it.key === selected);
+    const sel = bar.items.find((it) => it.key === selected) ?? Object.values(reveals).flat().find((it) => it.key === selected);
+
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
     const addHomebrew = role === "GM" ? h("button", { className: "tile tile-add", title: "Add a homebrew action for everyone in this room", onclick: () => { hbForm = { id: "", name: "", cost: tab === "bonus" || tab === "reaction" ? tab : "action", summary: "", text: "" }; selected = null; render(); } },
       h("span", { className: "ticon" }, "＋"), h("span", { className: "tname" }, "Homebrew"), h("span", { className: "tsum" }, "add an action")) : null;
