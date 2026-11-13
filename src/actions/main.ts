@@ -8,8 +8,7 @@
  */
 import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import { actionBar, COST_EXPLAINED, explain, inTab, type ActionBar, type ActionItem, type Category, type Cost } from "../core/actions";
-import { OPTION_GROUPS } from "../core/combatOptions";
+import { actionBar, BAR_TABS, COST_EXPLAINED, explain, searchItems, sectionOf, tabOf, tabSections, type ActionBar, type ActionItem, type BarTab, type Cost, type Section } from "../core/actions";
 import { cardAccess, controls, editionText, portraitUrl, unitName } from "../core/card";
 import { parseChips } from "../core/chips";
 import { BUTLER_ITEM_KEY } from "../core/constants";
@@ -30,25 +29,29 @@ import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../e
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
 
-type Tab = Category | "all" | "free";
-const TABS: { tab: Tab; label: string; title: string }[] = [
-  { tab: "all", label: "All", title: "Everything on this sheet" },
-  { tab: "action", label: "● Action", title: COST_EXPLAINED.action },
-  { tab: "bonus", label: "▲ Bonus", title: COST_EXPLAINED.bonus },
-  { tab: "reaction", label: "◆ Reaction", title: COST_EXPLAINED.reaction },
-  { tab: "legendary", label: "★ Legendary", title: COST_EXPLAINED.legendary },
-  { tab: "spell", label: "✦ Spells", title: "Spells and spell lists" },
-  { tab: "feature", label: "❖ Features", title: "Features with a limit or a recharge" },
-  { tab: "free", label: "○ Free", title: "Costs no Action or Bonus Action: movement, and things you just do (stand up, drop an item, end Concentration…). Reactions are under ◆ Reaction." },
-  { tab: "common", label: "⚔ Combat", title: "What anyone can do in combat by the rules: actions, Unarmed Strike, Grapple, Shove, movement, and the DMG's optional options" },
-];
+/** One tab per cost: what can I do with my Action, my Bonus Action, my Reaction, for free? */
+const TAB_LABEL: Record<BarTab, string> = { action: "● Action", bonus: "▲ Bonus", reaction: "◆ Reaction", free: "○ Free & Move", legendary: "★ Legendary", other: "⋯ Other" };
+const TAB_INFO: Record<BarTab, string> = {
+  action: COST_EXPLAINED.action,
+  bonus: COST_EXPLAINED.bonus,
+  reaction: COST_EXPLAINED.reaction,
+  free: "No Action or Bonus Action needed: movement, or nothing at all.",
+  legendary: `${COST_EXPLAINED.legendary} ${COST_EXPLAINED.lair}`,
+  other: "Takes longer than a turn (rituals, 1-minute spells), or has no set cost (spell lists, limits).",
+};
+const TAB_GLYPH: Record<BarTab, string> = { action: "●", bonus: "▲", reaction: "◆", free: "○", legendary: "★", other: "" };
+const SECTION_LABEL: Partial<Record<Section, string>> = { Mounted: "🐎 Mounted", "DMG optional rules": "DMG optional rules (used in this room)", "Lair actions": "Lair actions (initiative count 20)" };
+const SECTION_ICON: Record<Section, string> = { Mounted: "⬡", Attacks: "⚔", Spells: "✦", Features: "❖", "Anyone can": "⬡", Movement: "⬡", "DMG optional rules": "◇", "Legendary actions": "★", "Lair actions": "⌂" };
+
 const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", lair: "⌂", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
 const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", lair: "Lair Action (count 20)", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
 
 let item: Item | null = null;
 let role: "GM" | "PLAYER" = "PLAYER";
 let meId = "";
-let tab: Tab = (store.get("butler.actionsTab") as Tab | null) ?? "all";
+let tab: BarTab = (BAR_TABS as string[]).includes(store.get("butler.actionsTab") ?? "") ? store.get("butler.actionsTab") as BarTab : "action";
+/** Search across every tab by name. */
+let query = "";
 let selected: string | null = null;
 let note = "";
 let lite: SceneItemLite[] = [];
@@ -70,16 +73,35 @@ function head(sheet: UnitSheet, state: UnitState): Child {
 }
 
 function tabsRow(bar: ActionBar): Child {
-  const counts = (t: Tab) => bar.items.filter((it) => inTab(it, t)).length;
+  const count = (t: BarTab) => bar.items.filter((it) => tabOf(it) === t).length;
+  // Legendary and Other only when there's something in them.
+  const tabs = BAR_TABS.filter((t) => (t !== "legendary" && t !== "other") || count(t));
+  const search = h("input", { type: "text", className: "ab-search", value: query, placeholder: "🔍 Find…", title: "Find an option by name in every tab" }) as HTMLInputElement;
+  search.oninput = () => { query = search.value; render(); };
+  search.onkeydown = (e: KeyboardEvent) => { if (e.key === "Escape") { query = ""; render(); } };
   return h("div", { className: "ab-tabs" },
-    ...TABS.filter((t) => t.tab === "all" || t.tab === "common" || counts(t.tab)).map((t) => h("button", {
-      className: `${tab === t.tab ? "on" : ""} tab-${t.tab}`, title: t.title,
-      onclick: () => { tab = t.tab; store.set("butler.actionsTab", t.tab); render(); },
-    }, t.label, t.tab !== "common" ? h("span", { className: "count" }, ` ${counts(t.tab)}`) : null)));
+    ...tabs.map((t) => h("button", {
+      className: `${!query && tab === t ? "on" : ""} tab-${t}`, title: TAB_INFO[t],
+      onclick: () => { tab = t; query = ""; store.set("butler.actionsTab", t); render(); },
+    }, TAB_LABEL[t], h("span", { className: "count" }, ` ${count(t)}`))),
+    search);
+}
+
+/** A tab's sections, or the search results grouped by tab. */
+function grid(bar: ActionBar): Child[] {
+  const head = (label: string) => h("div", { className: "ab-group" }, label);
+  if (query.trim()) {
+    const found = searchItems(bar.items, query);
+    if (!found.length) return [h("div", { className: "small muted" }, `Nothing called “${query.trim()}”.`)];
+    return BAR_TABS.flatMap((t) => { const inTab = found.filter((it) => tabOf(it) === t); return inTab.length ? [head(TAB_LABEL[t]), ...inTab.map(tile)] : []; });
+  }
+  const groups = tabSections(bar.items, tab);
+  if (!groups.length) return [h("div", { className: "small muted" }, "Nothing here.")];
+  return groups.flatMap((g) => [head(SECTION_LABEL[g.section] ?? g.section), ...g.items.map(tile)]);
 }
 
 function tile(it: ActionItem): HTMLElement {
-  const icon = it.category === "spell" ? "✦" : it.category === "common" ? (it.source === "DMG" ? "◇" : "⬡") : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
+  const icon = SECTION_ICON[sectionOf(it)];
   const badge = it.source === "DMG" ? "DMG" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
   return h("button", {
     className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}`,
@@ -87,7 +109,8 @@ function tile(it: ActionItem): HTMLElement {
     onclick: () => { selected = selected === it.key ? null : it.key; menu = null; render(); },
     oncontextmenu: (e: MouseEvent) => { e.preventDefault(); menu = { key: it.key, x: e.clientX, y: e.clientY }; render(); },
   },
-  h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
+  // The tab already says the cost: the corner only marks what differs (⚔ one attack, ⇢ movement, ⌂ lair, ⧗ longer).
+  !query.trim() && COST_GLYPH[it.cost] === TAB_GLYPH[tab] ? null : h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
   badge ? h("span", { className: "tbadge" }, badge) : null,
   h("span", { className: "ticon" }, icon),
   h("span", { className: "tname" }, it.name),
@@ -291,7 +314,10 @@ document.addEventListener("focusout", () => { if (renderPending) { renderPending
 
 function render() {
   const focused = document.activeElement as HTMLElement | null;
-  if (focused && focused.tagName === "INPUT" && (focused as HTMLInputElement).type === "text") { renderPending = true; return; }
+  // Don't re-render under someone typing a trigger; the search box re-renders as you type and keeps its focus.
+  const searching = !!focused?.classList.contains("ab-search");
+  const caret = searching ? (focused as HTMLInputElement).selectionStart : null;
+  if (focused && focused.tagName === "INPUT" && (focused as HTMLInputElement).type === "text" && !searching) { renderPending = true; return; }
   const scroll = document.querySelector(".ab-grid")?.scrollTop ?? 0;
   const nodes: Child[] = [];
   const u = item ? readUnit(item.metadata) : null;
@@ -301,33 +327,25 @@ function render() {
     const { sheet, state } = u;
     const m = mountedOf(state);
     const bar = actionBar(sheet, roomSystem().rules, roomSettings().dmgOptions, m ? { mount: m.note } : null);
-    const shown = bar.items.filter((it) => inTab(it, tab));
+    // A remembered tab this unit has nothing in (Legendary on a character): back to Action.
+    if (!bar.items.some((it) => tabOf(it) === tab)) tab = "action";
     const sel = bar.items.find((it) => it.key === selected);
-    const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab]
-      : tab === "free" ? "No Action or Bonus Action needed: just movement, or nothing at all. Reactions are under ◆ Reaction." : "";
     nodes.push(
       head(sheet, state),
       mountedLine(state),
       readiedLine(state),
       tabsRow(bar),
-      tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
-      h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
-        : tab === "common" || tab === "free" ? [
-          ...(tab === "free" && shown.some((it) => it.category !== "common")
-            ? [h("div", { className: "ab-group" }, "From your sheet"), ...shown.filter((it) => it.category !== "common").map(tile)] : []),
-          ...OPTION_GROUPS.flatMap((g) => {
-            const inGroup = shown.filter((it) => it.category === "common" && it.group === g);
-            return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (used in this room)" : g === "Mounted" ? "🐎 Mounted" : g), ...inGroup.map(tile)] : [];
-          })]
-          : shown.map(tile))),
+      !query.trim() ? h("div", { className: `small cost-text cost-${tab}` }, TAB_INFO[tab]) : null,
+      h("div", { className: "ab-grid" }, ...grid(bar)),
       sel ? detail(sel, bar, state) : h("div", { className: "small muted" }, "Click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
       footer(sheet, state),
       contextMenu(bar, state));
   }
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
-  const grid = document.querySelector(".ab-grid");
-  if (grid) grid.scrollTop = scroll;
+  const gridEl = document.querySelector(".ab-grid");
+  if (gridEl) gridEl.scrollTop = scroll;
+  if (searching) { const box = document.querySelector(".ab-search") as HTMLInputElement | null; box?.focus(); if (box && caret !== null) box.setSelectionRange(caret, caret); }
 }
 
 OBR.onReady(async () => {

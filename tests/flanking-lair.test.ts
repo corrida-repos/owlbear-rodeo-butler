@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
-import { actionBar, explain, inTab } from "../src/core/actions";
+import { actionBar, explain, sectionOf, tabOf } from "../src/core/actions";
 import { combatOptions } from "../src/core/combatOptions";
 import { convertDdbCharacter } from "../src/core/ddb";
 import { isEconomyChange, applyEconomy } from "../src/core/economy";
@@ -87,7 +87,7 @@ describe("lair actions", () => {
     const bar = actionBar(m);
     const lair = bar.items.filter((i) => i.cost === "lair");
     expect(lair.map((i) => i.name)).toEqual(["Lair Action 1", "Lair Action 2"]);
-    expect(lair.every((i) => inTab(i, "legendary"))).toBe(true);
+    expect(lair.every((i) => tabOf(i) === "legendary" && sectionOf(i) === "Lair actions")).toBe(true);
     expect(explain(lair[0]!)[0]).toMatch(/initiative count 20/);
     expect(bar.items.some((i) => i.name === "Lair Actions")).toBe(false);
   });

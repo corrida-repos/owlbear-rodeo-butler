@@ -219,15 +219,64 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", dmg
   return { items: [...items, ...commonActions(sheet, rules, dmg, mounted)], legendary: legendaryPerRound(sheet) };
 }
 
-/** Which tab an item shows under. Spells and features show under their cost too. */
-export function inTab(it: ActionItem, tab: Category | "all" | "free"): boolean {
-  if (tab === "all") return it.category !== "common";
-  // Free: costs no Action or Bonus Action (movement or nothing), from the sheet or the rules.
-  if (tab === "free") return it.cost === "free" || it.cost === "move";
-  if (tab === it.category) return true;
-  if (tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary") return (it.cost === tab || (tab === "legendary" && it.cost === "lair")) && it.category !== "common";
-  return false;
+// ------------------------------------------------------------------ tabs and sections
+
+/**
+ * The bar answers one question per tab: "what can I do with my Action / Bonus Action / Reaction / for free?".
+ * Every option sits in exactly one tab, by what it costs, and within it in a section by what it is.
+ */
+export type BarTab = "action" | "bonus" | "reaction" | "free" | "legendary" | "other";
+export const BAR_TABS: BarTab[] = ["action", "bonus", "reaction", "free", "legendary", "other"];
+
+export type Section = "Mounted" | "Attacks" | "Spells" | "Features" | "Anyone can" | "Movement" | "DMG optional rules" | "Legendary actions" | "Lair actions";
+export const SECTIONS: Section[] = ["Mounted", "Attacks", "Legendary actions", "Lair actions", "Spells", "Features", "Anyone can", "Movement", "DMG optional rules"];
+
+export function tabOf(it: Pick<ActionItem, "cost">): BarTab {
+  switch (it.cost) {
+    case "action": case "attack": return "action";
+    case "bonus": return "bonus";
+    case "reaction": return "reaction";
+    case "free": case "move": return "free";
+    case "legendary": case "lair": return "legendary";
+    default: return "other"; // longer casting times, no set cost
+  }
 }
+
+const ATTACK_ROLL = /\[1d20[+-]\d+\]/;
+
+export function sectionOf(it: ActionItem): Section {
+  if (it.category === "common") {
+    switch (it.group) {
+      case "Mounted": return "Mounted";
+      case "Attack options": return "Attacks";
+      case "Movement": return "Movement";
+      case "DMG optional rules": return "DMG optional rules";
+      default: return it.name === "Attack" ? "Attacks" : "Anyone can";
+    }
+  }
+  if (it.cost === "lair") return "Lair actions";
+  if (it.category === "legendary") return "Legendary actions";
+  if (it.category === "spell") return "Spells";
+  // Weapons, natural attacks and Multiattack.
+  if (it.section !== "traits" && (/^Multiattack\b/i.test(it.name) || /\bAttack Roll:|\bWeapon Attack:/.test(it.text) || (it.section === "actions" && ATTACK_ROLL.test(it.text)))) return "Attacks";
+  return "Features";
+}
+
+/** A tab's options in its sections, in order; spells by level (cantrips first), the rest as on the sheet. */
+export function tabSections(items: ActionItem[], tab: BarTab): { section: Section; items: ActionItem[] }[] {
+  const mine = items.filter((it) => tabOf(it) === tab);
+  return SECTIONS.map((section) => {
+    const list = mine.filter((it) => sectionOf(it) === section);
+    if (section === "Spells") list.sort((a, b) => (a.spellLevel ?? 99) - (b.spellLevel ?? 99));
+    return { section, items: list };
+  }).filter((g) => g.items.length);
+}
+
+/** Options whose name matches `query` (every tab), for the search box. */
+export const searchItems = (items: ActionItem[], query: string) => {
+  const q = query.trim().toLowerCase();
+  return q ? items.filter((it) => it.name.toLowerCase().includes(q)) : [];
+};
 
 // ------------------------------------------------------------------ explanations
 

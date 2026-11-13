@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
-import { actionBar, explain, inTab, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf } from "../src/core/actions";
+import { actionBar, explain, legendaryPerRound, searchItems, sectionOf, tabOf, tabSections, parseEntryName, saveOf, spellLevelOf, summaryOf } from "../src/core/actions";
 import { combatOptions, DMG_OPTIONS, skillBonus } from "../src/core/combatOptions";
+import type { ActionItem, BarTab } from "../src/core/actions";
+/** Sheet options (not the rules' common ones) in a tab. */
+const sheetIn = (items: ActionItem[], t: BarTab) => items.filter((i) => tabOf(i) === t && i.category !== "common").map((i) => i.name);
 import { DEFAULT_SETTINGS, readSettings, SETTINGS_KEY, settingsUpdate } from "../src/core/settings";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
@@ -63,7 +66,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(bar.items.find((i) => i.name === "Second Wind")).toMatchObject({ cost: "bonus", category: "bonus", limit: { max: 2, reset: "long" } });
     expect(bar.items.find((i) => i.name === "Unarmed Strike")).toMatchObject({ cost: "action" });
     expect(bar.items.filter((i) => i.category === "common").map((i) => i.name)).toContain("Dash");
-    expect(bar.items.filter((i) => inTab(i, "bonus")).map((i) => i.name)).toEqual(["Second Wind"]);
+    expect(sheetIn(bar.items, "bonus")).toEqual(["Second Wind"]);
     expect(bar.items.some((i) => i.name === "Improved Critical")).toBe(false);
     expect(actionBar(brann.sheet, "2014").items.some((i) => i.name === "Use an Object")).toBe(true);
   });
@@ -88,7 +91,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(b.items.find((i) => i.name === "Misty Step")).toMatchObject({ category: "spell", cost: "bonus", spellLevel: 2 });
     const hold = b.items.find((i) => i.name === "Hold Person")!;
     expect(hold).toMatchObject({ cost: "action", concentration: true });
-    expect(b.items.filter((i) => inTab(i, "reaction")).map((i) => i.name)).toEqual(["Shield"]);
+    expect(sheetIn(b.items, "reaction")).toEqual(["Shield"]);
     expect(b.items.some((i) => i.name.startsWith("Spellcasting"))).toBe(false);
     // Explanations.
     const shield = explain(b.items.find((i) => i.name === "Shield")!);
@@ -180,7 +183,7 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(combatOptions(brann.sheet).some((o) => o.name === "Unarmed Strike")).toBe(false);
     const disarm = actionBar(sheet, "2024", ["disarm"]).items.find((i) => i.name === "Disarm")!;
     expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide, switched on by your GM/);
-    expect(inTab(disarm, "common")).toBe(true);
+    expect(sectionOf(disarm)).toBe("DMG optional rules");
   });
 });
 
@@ -204,7 +207,7 @@ describe("DMG optional combat rules: switched on one by one in Room settings", (
 
 describe("Free tab: what costs no Action or Bonus Action", () => {
   const bar = actionBar(brann.sheet);
-  const free = bar.items.filter((i) => inTab(i, "free")).map((i) => i.name);
+  const free = bar.items.filter((i) => tabOf(i) === "free").map((i) => i.name);
   it("lists movement and no-action options from the rules", () => {
     for (const n of ["Move", "Stand Up", "Crawl", "Drop Prone", "Jump", "Climb", "Swim", "Squeeze", "Mount or Dismount",
       "Interact with an Object", "Drop an Item", "End Concentration", "Release a Grapple", "Equip or Unequip a Weapon", "Speak"]) expect(free).toContain(n);
@@ -222,7 +225,7 @@ describe("Free tab: what costs no Action or Bonus Action", () => {
     c.actions.class.push({ name: "Action Surge", snippet: "Take one additional action.", activation: { activationType: 2 }, limitedUse: { maxUses: 1, resetType: 1, numberUsed: 0 } });
     const surge = actionBar(convertDdbCharacter(c).sheet).items.find((i) => i.name === "Action Surge")!;
     expect(surge).toMatchObject({ cost: "free", category: "feature", limit: { max: 1, reset: "short" } });
-    expect(inTab(surge, "free")).toBe(true);
+    expect(tabOf(surge)).toBe("free");
     expect(explain(surge)[0]).toBe("Doesn't take an action.");
   });
 });
@@ -245,11 +248,39 @@ describe("Mounted combat: only while mounted", () => {
   it("on the bar: in the Combat tab, and the free / movement ones in the Free tab", () => {
     const bar = actionBar(rider, "2024", [], { mount: "Pony" });
     expect(bar.items.find((i) => i.name === "Ride (controlled mount)")).toMatchObject({ category: "common", group: "Mounted", cost: "free" });
-    expect(bar.items.filter((i) => inTab(i, "free")).map((i) => i.name)).toEqual(expect.arrayContaining(["Ride (controlled mount)", "Dismount"]));
-    expect(bar.items.filter((i) => inTab(i, "free")).map((i) => i.name)).not.toContain("Mount Falls");
+    expect(bar.items.filter((i) => tabOf(i) === "free").map((i) => i.name)).toEqual(expect.arrayContaining(["Ride (controlled mount)", "Dismount"]));
+    expect(bar.items.filter((i) => tabOf(i) === "free").map((i) => i.name)).not.toContain("Mount Falls");
   });
   it("Mounted is a condition in both editions", () => {
     expect(DND5E_2024.conditions.some((c) => c.key === "mounted")).toBe(true);
     expect(DND5E_2014.conditions.some((c) => c.key === "mounted")).toBe(true);
+  });
+});
+
+describe("one tab per cost, sections inside", () => {
+  const c = structuredClone(fighter) as any;
+  c.classes[0].definition = { name: "Wizard", spellCastingAbilityId: 4, spellRules: { levelSpellSlots: [[], [2], [3], [4, 2]] } };
+  const sp = (name: string, level: number, type: number, extra: any = {}) => ({ prepared: true, definition: { name, level, activation: { activationType: type, activationTime: 1 }, range: { rangeValue: 60 }, snippet: `${name}.`, ...extra } });
+  c.classSpells = [{ characterClassId: c.classes[0].id, spells: [sp("Hold Person", 2, 1, { concentration: true }), sp("Fire Bolt", 0, 1, { attackType: 2 }), sp("Misty Step", 2, 3), sp("Shield", 1, 4), sp("Detect Magic", 1, 6, { ritual: true })] }];
+  const items = actionBar(convertDdbCharacter(c).sheet).items;
+  const sections = (t: BarTab) => tabSections(items, t).map((g) => [g.section, g.items.map((i) => i.name)] as const);
+  it("the Action tab holds attacks, spells, features and everyone's actions together", () => {
+    const action = Object.fromEntries(sections("action"));
+    expect(Object.keys(action)).toEqual(["Attacks", "Spells", "Anyone can"]);
+    expect(action.Attacks).toEqual(expect.arrayContaining(["Unarmed Strike", "Attack", "Grapple", "Shove", "Improvised Weapon"]));
+    expect(action.Spells).toEqual(["Fire Bolt", "Hold Person"]); // cantrips first, then by level
+    expect(action["Anyone can"]).toEqual(expect.arrayContaining(["Dash", "Dodge", "Help", "Hide", "Influence", "Don or Doff a Shield"]));
+  });
+  it("Bonus, Reaction and Free gather theirs from the sheet and the rules", () => {
+    expect(Object.fromEntries(sections("bonus"))).toEqual({ Attacks: ["Two-Weapon Fighting"], Spells: ["Misty Step"], Features: ["Second Wind"], "Anyone can": ["Drink or Administer a Potion"] });
+    expect(Object.fromEntries(sections("reaction"))).toEqual({ Attacks: ["Opportunity Attack"], Spells: ["Shield"] });
+    expect(sections("free").map(([s]) => s)).toEqual(["Anyone can", "Movement"]);
+    expect(Object.fromEntries(sections("other"))).toEqual({ Spells: ["Detect Magic"] }); // 1-minute casting time
+    expect(sections("legendary")).toEqual([]);
+  });
+  it("every option is in exactly one tab, and search finds across tabs", () => {
+    for (const it of items) expect(["action", "bonus", "reaction", "free", "legendary", "other"]).toContain(tabOf(it));
+    expect(searchItems(items, "shi").map((i) => i.name)).toEqual(expect.arrayContaining(["Shield", "Don or Doff a Shield"]));
+    expect(searchItems(items, "  ")).toEqual([]);
   });
 });

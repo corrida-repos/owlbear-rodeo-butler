@@ -232,3 +232,8 @@ button.econ-action { background: var(--act); } button.econ-bonus { background: v
 .ab-tabs button.tab-free:not(.on) { color: var(--text); }
 .mountline { display: flex; gap: 6px; align-items: center; padding: 3px 8px; border: 1px solid var(--bonus); border-radius: 8px; }
 button.tile.cost-lair { border-bottom-color: var(--leg); } .tile.cost-lair .tcost, .cost-text.cost-lair { color: var(--leg); }
+.ab-tabs .ab-search { width: auto; flex: 1 1 90px; min-width: 80px; padding: 3px 8px; border-radius: 14px; font-size: 12px; }
+.ab-tabs button.tab-free:not(.on) { color: var(--text); } .ab-tabs button.tab-other:not(.on) { color: var(--muted); }
+/* The grid takes the popover's free height; tiles a little more compact. */
+.ab-grid { max-height: max(150px, calc(100vh - 185px)); }
+button.tile { min-height: 64px; padding-top: 12px; }

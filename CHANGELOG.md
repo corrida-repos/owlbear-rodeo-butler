@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Action bar layout:** one tab per cost (● Action, ▲ Bonus, ◆ Reaction, ○ Free & Move, plus ★ Legendary and ⋯ Other when needed), each with the same sections: Mounted, Attacks, Spells, Features, Anyone can, Movement, DMG optional rules. What you can do with your Action is all in one place, from the sheet and the rules alike. A search box finds any option across tabs. (Replaces the All / Spells / Features / Combat tabs.)
 - **Flanking (DMG optional rule):** switch it on in **Combat → Room settings → DMG optional combat rules**, and a creature with two able enemies next to it on opposite sides or corners of its space gets the **Flanked** condition automatically (and loses it when they move). Party members flank creatures and vice versa.
 - **Lair actions:** creatures from the 2014 books now bring their lair actions from 5etools, on the card and the action bar (★ Legendary, marked ⌂). The GM gets a reminder when the turn passes initiative count 20. (2024 creatures have none.)
 - **Action bar:** new options Don or Doff a Shield, Escape Restraints and Wake a Creature. Movement can be readied as well as actions (right-click Move).
