@@ -24,6 +24,8 @@ export interface CombatOption {
   summary?: string;
   /** Done along with an attack of the Attack action without replacing it (2024 Equip or Unequip a Weapon). */
   withAttack?: boolean;
+  /** Done with another action (2024 Stabilize: the Help action), so shown under that action's tile. */
+  under?: "Help";
 }
 
 /** A skill's bonus from the sheet ("Athletics" or "Athletics (expertise)"), else the plain ability modifier. */
@@ -81,7 +83,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Escape a Grapple", cost: "action", group: "Actions", source: "PHB", summary: best, text: o2024
       ? `While Grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) against the grapple's escape DC. On a success you're no longer Grappled.`
       : `While grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by the grappler's Strength (Athletics). On a success you escape.` },
-    { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${fmtMod(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${fmtMod(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
+    { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, ...(o2024 ? { under: "Help" as const } : {}), group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${fmtMod(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${fmtMod(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
 
     // ---- attack options
     ...(hasUnarmed ? [] : [{ name: "Unarmed Strike", cost: "attack" as const, costNote: "One attack of the Attack action", group: "Attack options" as const, source: "PHB" as const, summary: `${fmtMod(unarmedHit)} · ${unarmedDmg} Bludgeoning`,

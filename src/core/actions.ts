@@ -45,6 +45,8 @@ export interface ActionItem {
   source?: "PHB" | "DMG" | "Homebrew";
   /** Done along with an attack of the Attack action (shown under Attack though it costs nothing). */
   withAttack?: boolean;
+  /** Done with another action (2024 Stabilize: the Help action), so revealed under that action's tile. */
+  under?: "Help";
   /** Homebrew entries: their id in the room's list. */
   homebrewId?: string;
 }
@@ -211,6 +213,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
     ...(c.withAttack ? { withAttack: true } : {}),
+    ...(c.under ? { under: c.under } : {}),
   }));
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
     key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
@@ -253,13 +256,26 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opt
 }
 
 export const ATTACK_KEY = "common:Attack";
+/** The Magic action (2024) or Cast a Spell (2014): hovering it reveals the sheet's Magic options. */
+export const MAGIC_KEYS = ["common:Magic", "common:Cast a Spell"];
+export const HELP_KEY = "common:Help";
+/** Revealed under Help: what's done with the Help action (2024: Stabilize). */
+export const isHelpOption = (it: Pick<ActionItem, "under">) => it.under === "Help";
+export const isMultiattack = (it: Pick<ActionItem, "section" | "name">) => it.section === "actions" && /^Multiattack\b/i.test(it.name);
 
-/** Revealed under the Attack action: the sheet's attacks (weapons, a creature's Multiattack and natural weapons),
- *  every option that replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…), and what goes with an
- *  attack (2024: equip or unequip a weapon). */
+/** Revealed under the Attack action: the sheet's attacks (weapons, a creature's natural weapons), every option that
+ *  replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…), and what goes with an attack (2024: equip
+ *  or unequip a weapon). Multiattack is an Action of its own, shown first. */
 export function isAttackOption(it: ActionItem): boolean {
   if (it.category === "common") return it.cost === "attack" || !!it.withAttack;
-  return it.section === "actions" && it.cost === "action" && (/\[1d20[+-]\d+\]/.test(it.text) || /^Multiattack\b/i.test(it.name));
+  return it.section === "actions" && it.cost === "action" && !isMultiattack(it) && /\[1d20[+-]\d+\]/.test(it.text);
+}
+
+/** Revealed under Magic: the sheet's spells cast with an action (and spells or spell lists whose casting time isn't
+ *  known, almost always an action), and the sheet's actions that say they're a Magic action. */
+export function isMagicOption(it: ActionItem): boolean {
+  if (it.category === "spell") return it.cost === "action" || it.cost === "none";
+  return it.category !== "common" && it.cost === "action" && !isAttackOption(it) && !isMultiattack(it) && /\bMagic action\b/i.test(it.text);
 }
 
 export type BarFilter = "all" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature" | "move";
@@ -268,44 +284,52 @@ export interface BarSection { id: SectionId; title: string; items: ActionItem[] 
 
 export const SECTION_TITLES: Record<SectionId, string> = {
   action: "Actions", bonus: "Bonus Actions", reaction: "Reactions", legendary: "Legendary Actions",
-  spell: "Spells", feature: "Limited features", move: "Movement", free: "Free & other",
+  spell: "Longer spells & rituals", feature: "Limited features", move: "Movement", free: "Free & other",
 };
 const SECTION_ORDER: SectionId[] = ["action", "bonus", "reaction", "legendary", "spell", "feature", "move", "free"];
 
-/** Which section an item lives in when everything is shown. Attack options aren't in any: they're under Attack. */
+/** Which section an item lives in when everything is shown. Attack and Magic options aren't in any: they're under
+ *  Attack and Magic. Spells go by their casting time like everything else; the ones that take longer get their own. */
 export function sectionOf(it: ActionItem): SectionId | null {
-  if (isAttackOption(it)) return null;
-  if (it.category === "spell") return "spell";
+  if (isAttackOption(it) || isMagicOption(it) || isHelpOption(it)) return null;
   const byCost = it.cost === "action" || it.cost === "bonus" || it.cost === "reaction" || it.cost === "legendary" ? it.cost : null;
-  if (it.category === "feature" && !byCost) return "feature";
   if (byCost) return byCost;
+  if (it.category === "spell") return it.cost === "free" ? "free" : "spell";
+  if (it.category === "feature") return "feature";
   if (it.cost === "move") return "move";
   return "free";
 }
 
-/** The bar as shown: sections in order (sheet entries first, then the rules' options), and the Attack options. */
-export function barLayout(bar: ActionBar, filter: BarFilter = "all"): { sections: BarSection[]; attackOptions: ActionItem[] } {
-  const attackOptions = [...bar.items.filter((it) => isAttackOption(it) && it.category !== "common"), ...bar.items.filter((it) => isAttackOption(it) && it.category === "common")];
+/** Sheet entries first, then the rules' options. */
+const sheetFirst = (items: ActionItem[]) => [...items.filter((it) => it.category !== "common"), ...items.filter((it) => it.category === "common")];
+
+export interface BarLayout { sections: BarSection[]; attackOptions: ActionItem[]; magicOptions: ActionItem[]; helpOptions: ActionItem[] }
+
+/** The bar as shown: sections in order, and what Attack and Magic reveal. Filtering by Spells lists every spell. */
+export function barLayout(bar: ActionBar, filter: BarFilter = "all"): BarLayout {
+  const attackOptions = sheetFirst(bar.items.filter(isAttackOption));
+  const magicOptions = bar.items.filter(isMagicOption);
+  if (filter === "spell") {
+    const spells = bar.items.filter((it) => it.category === "spell");
+    return { sections: spells.length ? [{ id: "spell", title: "Spells", items: spells }] : [], attackOptions: [], magicOptions: [], helpOptions: [] };
+  }
   const by = new Map<SectionId, ActionItem[]>(SECTION_ORDER.map((id) => [id, []]));
   for (const it of bar.items) { const s = sectionOf(it); if (s) by.get(s)!.push(it); }
-  // Attack leads the Actions, then the sheet's own, then everyone's.
+  // Multiattack leads the Actions, then Attack, then the sheet's own, then everyone's (Magic among them).
   const actions = by.get("action")!;
-  const attack = actions.find((it) => it.key === ATTACK_KEY);
-  by.set("action", [...(attack ? [attack] : []), ...actions.filter((it) => it !== attack && it.category !== "common"), ...actions.filter((it) => it !== attack && it.category === "common")]);
-  // Filtering by cost also shows the spells with that cost.
-  const pick = (ids: SectionId[]): BarSection[] => ids.map((id) => {
-    let items = by.get(id)!;
-    if ((id === "action" || id === "bonus" || id === "reaction" || id === "legendary") && filter === id) items = [...items, ...by.get("spell")!.filter((s) => s.cost === id)];
-    return { id, title: SECTION_TITLES[id], items };
-  }).filter((s) => s.items.length);
+  const lead = [...actions.filter(isMultiattack), ...actions.filter((it) => it.key === ATTACK_KEY)];
+  by.set("action", [...lead, ...sheetFirst(actions.filter((it) => !lead.includes(it)))]);
+  for (const id of ["bonus", "reaction", "legendary"] as const) by.set(id, sheetFirst(by.get(id)!));
   const ids: SectionId[] = filter === "all" ? SECTION_ORDER : filter === "move" ? ["move", "free"] : [filter];
-  return { sections: pick(ids), attackOptions: filter === "all" || filter === "action" ? attackOptions : [] };
+  const sections = ids.map((id) => ({ id, title: SECTION_TITLES[id], items: by.get(id)! })).filter((sec) => sec.items.length);
+  const withReveals = filter === "all" || filter === "action";
+  return { sections, attackOptions: withReveals ? attackOptions : [], magicOptions: withReveals ? magicOptions : [], helpOptions: withReveals ? bar.items.filter(isHelpOption) : [] };
 }
 
 /** How many entries a filter shows (attack options included under Action). */
 export function filterCount(bar: ActionBar, filter: BarFilter): number {
-  const { sections, attackOptions } = barLayout(bar, filter);
-  return sections.reduce((n, s) => n + s.items.length, 0) + (filter === "action" ? attackOptions.length : 0);
+  const { sections, attackOptions, magicOptions, helpOptions } = barLayout(bar, filter);
+  return sections.reduce((n, s) => n + s.items.length, 0) + (filter === "action" ? attackOptions.length + magicOptions.length + helpOptions.length : 0);
 }
 
 // ------------------------------------------------------------------ explanations

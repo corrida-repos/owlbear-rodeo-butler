@@ -8,7 +8,7 @@ import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
 
 /** Names an item shows under (attack options count under Action), like the old tabs. */
-const under = (bar: ActionBar, f: BarFilter) => { const l = barLayout(bar, f); return [...l.sections.flatMap((s) => s.items), ...(f === "action" ? l.attackOptions : [])]; };
+const under = (bar: ActionBar, f: BarFilter) => { const l = barLayout(bar, f); return [...l.sections.flatMap((s) => s.items), ...(f === "action" ? [...l.attackOptions, ...l.magicOptions, ...l.helpOptions] : [])]; };
 const inTab = (it: { key: string }, bar: ActionBar, f: BarFilter) => under(bar, f).some((x) => x.key === it.key);
 
 const brann = convertDdbCharacter(fighter);
@@ -231,11 +231,53 @@ describe("one list: the sheet and the rules together, Attack gathering every way
     const b = actionBar({ ...brann.sheet, traits: [...brann.sheet.traits, { name: "Extra Attack", text: "Attack twice." }] });
     expect(b.items.find((i) => i.name === "Attack")!.summary).toBe("2 attacks");
   });
-  it("a creature's attacks and Multiattack sit under Attack; its breath weapon stays an Action", () => {
-    const d = barLayout(actionBar({ ...dragon, actions: [{ name: "Multiattack", text: "The dragon makes two Rend attacks." }, ...dragon.actions] }));
-    expect(d.attackOptions.slice(0, 2).map((o) => o.name)).toEqual(["Multiattack", "Rend"]);
-    expect(d.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toContain("Fire Breath");
+  it("Multiattack is the first Action, then Attack (with the creature's natural weapons under it); the breath weapon stays an Action", () => {
+    const d = barLayout(actionBar({ ...dragon, actions: [...dragon.actions, { name: "Multiattack", text: "The dragon makes two Rend attacks." }] }));
+    const actions = d.sections.find((s) => s.id === "action")!.items.map((i) => i.name);
+    expect(actions.slice(0, 2)).toEqual(["Multiattack", "Attack"]);
+    expect(actions).toContain("Fire Breath");
+    expect(d.attackOptions[0]!.name).toBe("Rend");
+    expect(d.attackOptions.some((o) => o.name === "Multiattack")).toBe(false);
     expect(d.sections.find((s) => s.id === "legendary")!.items.map((i) => i.name)).toEqual(["Pounce", "Wing Attack"]);
+  });
+});
+
+describe("Magic reveals the sheet's spells cast with an action and its Magic actions", () => {
+  const caster: UnitSheet = { ...dragon, spells: [
+    { name: "Fire Bolt (Cantrip)", text: "Ranged spell attack +5 [1d20+5]; 2d10 [2d10] fire. [Action, 120 ft.]" },
+    { name: "Misty Step (Level 2)", text: "Teleport. [Bonus Action, Self]" },
+    { name: "Shield (Level 1)", text: "+5 AC. [Reaction, Self]" },
+    { name: "Alarm (Level 1)", text: "A ward. [1 minute, Ritual, 30 ft.]" },
+    ...dragon.spells,
+  ], actions: [...dragon.actions, { name: "Change Shape", text: "The dragon shape-shifts (Magic action)… it takes a Magic action to do so." }] };
+  const bar = actionBar(caster);
+  const l = barLayout(bar);
+  it("action spells, creature spell lists and Magic actions under Magic; other spells by their casting time", () => {
+    expect(l.magicOptions.map((o) => o.name)).toEqual(["Change Shape", "Fire Bolt", "At Will", "1/Day Each"]);
+    const names = (id: string) => l.sections.find((s) => s.id === id)?.items.map((i) => i.name) ?? [];
+    expect(names("bonus")).toContain("Misty Step");
+    expect(names("reaction")).toContain("Shield");
+    expect(names("spell")).toEqual(["Alarm"]);
+    expect(names("action")).not.toContain("Fire Bolt");
+    expect(names("action")).not.toContain("Change Shape");
+    expect(names("action")).toContain("Magic");
+  });
+  it("the Spells filter still lists every spell, and the Action filter counts what Attack and Magic gather", () => {
+    expect(barLayout(bar, "spell").sections[0]!.items.map((i) => i.name)).toEqual(["Fire Bolt", "Misty Step", "Shield", "Alarm", "At Will", "1/Day Each"]);
+    const a = barLayout(bar, "action");
+    expect(filterCount(bar, "action")).toBe(a.sections[0]!.items.length + a.attackOptions.length + a.magicOptions.length + a.helpOptions.length);
+    expect(barLayout(bar, "bonus").magicOptions).toEqual([]);
+  });
+});
+
+describe("Help reveals first aid (5.5E)", () => {
+  it("Stabilize sits under Help in 5.5E, and is its own Action in 5E", () => {
+    const l = barLayout(actionBar(brann.sheet));
+    expect(l.helpOptions.map((o) => o.name)).toEqual(["Stabilize"]);
+    expect(l.sections.flatMap((s) => s.items).some((i) => i.name === "Stabilize")).toBe(false);
+    const old = barLayout(actionBar(brann.sheet, "2014"));
+    expect(old.helpOptions).toEqual([]);
+    expect(old.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toContain("Stabilize");
   });
 });
 
