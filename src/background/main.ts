@@ -105,29 +105,15 @@ async function createMenus() {
     onClick: async (ctx) => {
       logClick("roll-initiative", ctx.items); const n = await rollInitiativeFor(obrGateway, ids(ctx.items), { rules: roomSystem().rules }); await notify(`Rolled initiative for ${n} unit${n === 1 ? "" : "s"}.`, "SUCCESS"); },
   });
+  // Change status: HP (damage, heal, temp, set) and every condition, Dead, Stable and Death Saves included, in one screen.
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/hp`,
-    icons: [{ icon, label: "Damage / heal", filter: { ...gm, every: [...UNIT_FILTER] } }],
+    icons: [{ icon, label: "Change status", filter: { ...gm, every: [...UNIT_FILTER] } }],
     onClick: async (ctx, elementId) => {
-      logClick("hp", ctx.items);
+      logClick("status", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
-      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 320, height: 460, anchorElementId: elementId });
+      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 340, height: 520, anchorElementId: elementId });
     },
-  });
-  await OBR.contextMenu.create({
-    id: `${BUTLER_NS}/conditions`,
-    icons: [{ icon, label: "Conditions", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx, elementId) => {
-      logClick("conditions", ctx.items);
-      await OBR.popover.close(HP_POPOVER).catch(() => {});
-      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?focus=conditions&ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 320, height: 460, anchorElementId: elementId });
-    },
-  });
-  await OBR.contextMenu.create({
-    id: `${BUTLER_NS}/dead`,
-    icons: [{ icon, label: "Mark as dead", filter: { ...gm, every: [...UNIT_FILTER] } }],
-    onClick: async (ctx) => {
-      logClick("dead", ctx.items); await markUnitsDead(obrGateway, ids(ctx.items)); },
   });
   await OBR.contextMenu.create({
     id: `${BUTLER_NS}/collect`,

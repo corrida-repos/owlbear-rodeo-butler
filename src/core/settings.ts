@@ -13,9 +13,11 @@ export interface RoomSettings {
   playerEdits: boolean;
   /** Creatures reaching 0 HP are marked dead automatically (otherwise Butler offers it). */
   autoDeadAtZero: boolean;
+  /** The Dungeon Master's Guide optional action options (Disarm, Overrun, Tumble…) show on action bars. */
+  dmgOptions: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -24,6 +26,7 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     system: typeof s.system === "string" && s.system in SYSTEMS ? (s.system as SystemId) : DEFAULT_SETTINGS.system,
     playerEdits: typeof s.playerEdits === "boolean" ? s.playerEdits : DEFAULT_SETTINGS.playerEdits,
     autoDeadAtZero: typeof s.autoDeadAtZero === "boolean" ? s.autoDeadAtZero : DEFAULT_SETTINGS.autoDeadAtZero,
+    dmgOptions: typeof s.dmgOptions === "boolean" ? s.dmgOptions : DEFAULT_SETTINGS.dmgOptions,
   };
 }
 

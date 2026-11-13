@@ -191,7 +191,7 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 .ab-detail { padding: 8px; }
 .ab-detail .entry-text { margin: 4px 0; max-height: 110px; overflow-y: auto; }
 .ab-footer { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.ab-grid { max-height: 190px; }
+.ab-grid { max-height: 230px; }
 .ab-how ul { margin: 2px 0 4px; padding-left: 18px; }
 .ab-how li { margin: 2px 0; }
 .dice { font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
@@ -200,7 +200,31 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 .ab-group { grid-column: 1 / -1; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: 4px; }
 button.tile.cost-move { border-bottom-color: var(--accent); } button.tile.cost-attack { border-bottom-color: var(--act); }
 .tile.cost-attack .tcost, .cost-text.cost-attack { color: var(--act); } .tile.cost-move .tcost, .cost-text.cost-move { color: var(--accent); }
+.ab-group:first-child { margin-top: 0; }
+/* Attack: hovering (or clicking) it reveals every way to attack, as a row right under it. */
+button.tile.is-attack.open { border-color: var(--act); box-shadow: 0 0 0 2px var(--act); }
+.ab-attack { display: none; grid-column: 1 / -1; background: var(--bg); border: 1px solid var(--act); border-radius: 8px; padding: 5px; }
+.ab-attack.open { display: block; }
+.ab-attack-head { display: flex; gap: 4px; align-items: center; margin-bottom: 4px; color: var(--muted); }
+.ab-attack-head strong { color: var(--act); }
+.ab-attack-head button { margin-left: auto; }
+.ab-attack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 5px; }
+.ab-attack-sep { grid-column: 1 / -1; height: 0; border-top: 1px dashed var(--border); }
+button.tile.tile-add { border-style: dashed; color: var(--muted); border-bottom-width: 1px; }
+.ab-hb { display: flex; flex-direction: column; gap: 6px; }
+.ab-hb label.col { flex-direction: column; gap: 2px; }
+.ab-hb textarea { font-family: inherit; font-size: 12px; min-height: 54px; }
+.warn-text { color: var(--bad); }
 /* Light & vision legend */
 .legend li { display: flex; gap: 6px; align-items: flex-start; margin: 3px 0; }
 .swatch { flex: none; display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-top: 1px; box-sizing: border-box; }
 .vision-lines { margin: 4px 0 0; padding-left: 16px; }
+/* Change status popover (hp.html): conditions as toggles */
+.status-chips { gap: 4px; }
+button.status-chip { font-weight: 500; }
+button.status-chip.some { border-color: var(--accent); color: var(--accent); border-style: dashed; }
+button.status-chip.auto { opacity: .8; cursor: default; }
+button.status-chip.life-dead.on { background: var(--bad); border-color: var(--bad); }
+button.status-chip.life-stable.on { background: var(--ok); border-color: var(--ok); }
+button.status-chip.life-dying.on { background: var(--warn); border-color: var(--warn); }
+button.status-chip:disabled { cursor: default; }

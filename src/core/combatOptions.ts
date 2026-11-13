@@ -1,15 +1,15 @@
 /**
  * Combat options every creature has by the rules, beyond what its sheet lists: the Player's Handbook actions
  * (Dash, Dodge, Help…), Unarmed Strike with Grapple and Shove, movement (jumping, climbing, standing up…), and the
- * Dungeon Master's Guide optional action options (Disarm, Overrun, Tumble…). Worded for the room's edition, with the
+ * Dungeon Master's Guide optional action options (Disarm, Overrun, Tumble…), listed alongside the rest unless the GM
+ * turns them off. Worded for the room's edition, with the
  * numbers worked out from the unit's sheet (to-hit, DCs, skill bonuses, jump distances). Reference only.
  */
 import { fmtMod } from "./dice";
 import { abilityMod, type UnitSheet } from "./sheet";
 
 export type OptionCost = "action" | "bonus" | "reaction" | "free" | "move" | "attack";
-export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Other" | "DMG optional rules";
-export const OPTION_GROUPS: OptionGroup[] = ["Actions", "Attack options", "Movement", "Other", "DMG optional rules"];
+export type OptionGroup = "Actions" | "Attack options" | "Movement" | "Other";
 
 export interface CombatOption {
   name: string;
@@ -30,7 +30,7 @@ export function skillBonus(sheet: Pick<UnitSheet, "skills" | "abilities">, skill
   return s ? s.bonus : abilityMod(sheet.abilities[ability]);
 }
 
-export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): CombatOption[] {
+export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opts: { dmg?: boolean } = {}): CombatOption[] {
   const str = abilityMod(sheet.abilities.str);
   const pb = sheet.proficiencyBonus;
   const ath = skillBonus(sheet, "Athletics", "str");
@@ -108,13 +108,13 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024")
     { name: o2024 ? "Drink or Administer a Potion" : "Drink a Potion", cost: o2024 ? "bonus" : "action", group: "Other", source: "PHB", text: o2024 ? "Drinking a potion, or giving one to another creature within 5 ft., takes a Bonus Action." : "Drinking a potion, or giving one to another creature, takes an action." },
     { name: "Speak", cost: "free", group: "Other", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
 
-    // ---- DMG optional rules
-    { name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },
-    { name: "Mark", cost: "free", costNote: "With a melee attack", group: "DMG optional rules", source: "DMG", text: "When you make a melee attack, mark the target. Until the end of your next turn, your Opportunity Attacks against it have Advantage and don't use your Reaction (still only one per turn, and not while something stops you taking reactions)." },
-    { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
-    { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "DMG optional rules", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
-    { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "DMG optional rules", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
-    { name: "Climb onto a Bigger Creature", cost: "action", group: "DMG optional rules", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
+    // ---- DMG optional action options (with the rest; the room setting can leave them out)
+    { name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },
+    { name: "Mark", cost: "free", costNote: "With a melee attack", group: "Attack options", source: "DMG", text: "When you make a melee attack, mark the target. Until the end of your next turn, your Opportunity Attacks against it have Advantage and don't use your Reaction (still only one per turn, and not while something stops you taking reactions)." },
+    { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
+    { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
+    { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
+    { name: "Climb onto a Bigger Creature", cost: "action", group: "Other", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
-  return list;
+  return opts.dmg === false ? list.filter((o) => o.source !== "DMG") : list;
 }

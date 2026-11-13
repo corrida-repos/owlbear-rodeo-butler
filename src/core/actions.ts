@@ -1,11 +1,15 @@
 /**
  * The action bar (BG3-style hotbar), read-only: what a unit can do, grouped by what it costs (Action, Bonus Action,
- * Reaction, Legendary), with a plain explanation of how each option works. Nothing is counted or spent here (Butler
+ * Reaction, Legendary), with a plain explanation of how each option works. The sheet's own entries and the options
+ * anyone has by the rules (PHB, the DMG's optional ones unless the GM turns them off, and the room's homebrew) sit
+ * together in one list; the Attack action gathers every way to make an attack (the sheet's weapons, Unarmed Strike,
+ * Grapple, Shove…). Nothing is counted or spent here (Butler
  * only tracks HP): it's for players to consult. Built from the unit's sheet (for party members: the D&D Beyond sync),
  * so a re-sync updates it. Pure, so the parsing and explanations are unit-tested; the actions page renders it.
  */
 import { parseChips, rollSegments } from "./chips";
 import { combatOptions, type OptionGroup } from "./combatOptions";
+import type { HomebrewAction } from "./homebrew";
 import type { SheetEntry, UnitSheet } from "./sheet";
 
 /** What using an entry costs. "longer": a casting time of a minute or more; "none": passive or unknown. */
@@ -21,7 +25,7 @@ export interface ActionItem {
   /** Name without the uses / recharge note. */
   name: string;
   text: string;
-  section: "traits" | "actions" | "bonusActions" | "reactions" | "legendary" | "spells" | "common";
+  section: "traits" | "actions" | "bonusActions" | "reactions" | "legendary" | "spells" | "common" | "homebrew";
   category: Category;
   cost: Cost;
   /** Casting time or cost note ("1 minute", "Reaction: when you are hit…", "Costs 2 Actions"). */
@@ -36,9 +40,11 @@ export interface ActionItem {
   ritual?: boolean;
   /** "+5 · 1d8+3 Slashing · DC 13 Dex" */
   summary: string;
-  /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule). */
+  /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule, Homebrew = the GM's). */
   group?: OptionGroup;
-  source?: "PHB" | "DMG";
+  source?: "PHB" | "DMG" | "Homebrew";
+  /** Homebrew entries: their id in the room's list. */
+  homebrewId?: string;
 }
 
 // ------------------------------------------------------------------ parsing
@@ -149,7 +155,7 @@ const SECTION_CATEGORY: Record<string, Category> = { actions: "action", bonusAct
 const isHeader = (section: string, name: string) =>
   (section === "legendary" && /^(Legendary|Mythic) Actions$/i.test(name)) || /^Spellcasting\b/i.test(name) || (section === "spells" && /other known spells$/i.test(name));
 
-type SheetSection = Exclude<ActionItem["section"], "common">;
+type SheetSection = Exclude<ActionItem["section"], "common" | "homebrew">;
 
 function itemOf(entry: SheetEntry, section: SheetSection): ActionItem | null {
   if (isHeader(section, entry.name)) return null;
@@ -190,19 +196,41 @@ export function legendaryPerRound(sheet: Pick<UnitSheet, "legendary">): number {
 
 // ------------------------------------------------------------------ combat options (PHB + DMG)
 
-/** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers. */
-export function commonActions(sheet: UnitSheet, rules: "2024" | "2014"): ActionItem[] {
-  return combatOptions(sheet, rules).map((c) => ({
+export interface BarOptions {
+  /** Include the DMG's optional action options (room setting, on by default). */
+  dmg?: boolean;
+  /** The room's homebrew actions. */
+  homebrew?: HomebrewAction[];
+}
+
+/** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers, plus homebrew. */
+export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: BarOptions = {}): ActionItem[] {
+  const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg }).map((c) => ({
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
   }));
+  const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
+    key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
+    ...(hb.cost === "attack" ? { costNote: "One attack of the Attack action" } : {}),
+    summary: hb.summary ?? "", source: "Homebrew", homebrewId: hb.id,
+  }));
+  return [...rulesOptions, ...homebrew];
 }
 
 // ------------------------------------------------------------------ the bar
 
-export interface ActionBar { items: ActionItem[]; legendary: number }
+export interface ActionBar { items: ActionItem[]; legendary: number; attacks: number }
 
-export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): ActionBar {
+/** Attacks per Attack action, from Extra Attack and its upgrades on the sheet. */
+export function attacksPerAction(sheet: Pick<UnitSheet, "traits" | "actions">): number {
+  const names = [...sheet.traits, ...sheet.actions].map((e) => e.name);
+  if (names.some((n) => /\bThree Extra Attacks\b/i.test(n))) return 4;
+  if (names.some((n) => /\bTwo Extra Attacks\b/i.test(n))) return 3;
+  if (names.some((n) => /^Extra Attack\b/i.test(n))) return 2;
+  return 1;
+}
+
+export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opts: BarOptions = {}): ActionBar {
   const items: ActionItem[] = [];
   const seen = new Set<string>();
   for (const section of ["actions", "bonusActions", "reactions", "legendary", "spells", "traits"] as const) {
@@ -215,15 +243,65 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): Ac
       items.push(it);
     }
   }
-  return { items: [...items, ...commonActions(sheet, rules)], legendary: legendaryPerRound(sheet) };
+  const attacks = attacksPerAction(sheet);
+  const common = commonActions(sheet, rules, opts).map((it) =>
+    it.key === "common:Attack" && attacks > 1 ? { ...it, summary: `${attacks} attacks` } : it);
+  return { items: [...items, ...common], legendary: legendaryPerRound(sheet), attacks };
 }
 
-/** Which tab an item shows under. Spells and features show under their cost too. */
-export function inTab(it: ActionItem, tab: Category | "all"): boolean {
-  if (tab === "all") return it.category !== "common";
-  if (tab === it.category) return true;
-  if (tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary") return it.cost === tab && it.category !== "common";
-  return false;
+export const ATTACK_KEY = "common:Attack";
+
+/** Revealed under the Attack action: the sheet's attacks (weapons, a creature's Multiattack and natural weapons),
+ *  and every option that replaces one attack (Unarmed Strike, Grapple, Shove, Disarm, homebrew…). */
+export function isAttackOption(it: ActionItem): boolean {
+  if (it.category === "common") return it.cost === "attack";
+  return it.section === "actions" && it.cost === "action" && (/\[1d20[+-]\d+\]/.test(it.text) || /^Multiattack\b/i.test(it.name));
+}
+
+export type BarFilter = "all" | "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature" | "move";
+export type SectionId = "action" | "bonus" | "reaction" | "legendary" | "spell" | "feature" | "move" | "free";
+export interface BarSection { id: SectionId; title: string; items: ActionItem[] }
+
+export const SECTION_TITLES: Record<SectionId, string> = {
+  action: "Actions", bonus: "Bonus Actions", reaction: "Reactions", legendary: "Legendary Actions",
+  spell: "Spells", feature: "Limited features", move: "Movement", free: "Free & other",
+};
+const SECTION_ORDER: SectionId[] = ["action", "bonus", "reaction", "legendary", "spell", "feature", "move", "free"];
+
+/** Which section an item lives in when everything is shown. Attack options aren't in any: they're under Attack. */
+export function sectionOf(it: ActionItem): SectionId | null {
+  if (isAttackOption(it)) return null;
+  if (it.category === "spell") return "spell";
+  const byCost = it.cost === "action" || it.cost === "bonus" || it.cost === "reaction" || it.cost === "legendary" ? it.cost : null;
+  if (it.category === "feature" && !byCost) return "feature";
+  if (byCost) return byCost;
+  if (it.cost === "move") return "move";
+  return "free";
+}
+
+/** The bar as shown: sections in order (sheet entries first, then the rules' options), and the Attack options. */
+export function barLayout(bar: ActionBar, filter: BarFilter = "all"): { sections: BarSection[]; attackOptions: ActionItem[] } {
+  const attackOptions = [...bar.items.filter((it) => isAttackOption(it) && it.category !== "common"), ...bar.items.filter((it) => isAttackOption(it) && it.category === "common")];
+  const by = new Map<SectionId, ActionItem[]>(SECTION_ORDER.map((id) => [id, []]));
+  for (const it of bar.items) { const s = sectionOf(it); if (s) by.get(s)!.push(it); }
+  // Attack leads the Actions, then the sheet's own, then everyone's.
+  const actions = by.get("action")!;
+  const attack = actions.find((it) => it.key === ATTACK_KEY);
+  by.set("action", [...(attack ? [attack] : []), ...actions.filter((it) => it !== attack && it.category !== "common"), ...actions.filter((it) => it !== attack && it.category === "common")]);
+  // Filtering by cost also shows the spells with that cost.
+  const pick = (ids: SectionId[]): BarSection[] => ids.map((id) => {
+    let items = by.get(id)!;
+    if ((id === "action" || id === "bonus" || id === "reaction" || id === "legendary") && filter === id) items = [...items, ...by.get("spell")!.filter((s) => s.cost === id)];
+    return { id, title: SECTION_TITLES[id], items };
+  }).filter((s) => s.items.length);
+  const ids: SectionId[] = filter === "all" ? SECTION_ORDER : filter === "move" ? ["move", "free"] : [filter];
+  return { sections: pick(ids), attackOptions: filter === "all" || filter === "action" ? attackOptions : [] };
+}
+
+/** How many entries a filter shows (attack options included under Action). */
+export function filterCount(bar: ActionBar, filter: BarFilter): number {
+  const { sections, attackOptions } = barLayout(bar, filter);
+  return sections.reduce((n, s) => n + s.items.length, 0) + (filter === "action" ? attackOptions.length : 0);
 }
 
 // ------------------------------------------------------------------ explanations
@@ -257,8 +335,9 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   }
   if (it.category === "common") {
     // The rule, with this unit's numbers, comes first; then what it costs.
-    out.unshift(it.text);
-    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide: only if your GM uses it.");
+    if (it.text) out.unshift(it.text);
+    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide (the GM can turn these off in Room settings).");
+    if (it.source === "Homebrew") out.push("Homebrew: added by the GM for this room.");
     return out;
   }
 

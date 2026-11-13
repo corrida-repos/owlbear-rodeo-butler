@@ -143,7 +143,10 @@ function renderSettings(): Child {
     h("label", { className: "small" }, h("input", { type: "checkbox", checked: roomSettings().playerEdits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ playerEdits: (e.target as HTMLInputElement).checked }))() }),
       "Players may change their own units' HP, conditions and initiative, end their own turn and re-sync from D&D Beyond"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoDeadAtZero, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoDeadAtZero: (e.target as HTMLInputElement).checked }))() }),
-      "Mark creatures dead automatically at 0 HP (party members still make death saves)"));
+      "Mark creatures dead automatically at 0 HP (party members still make death saves)"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().dmgOptions, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ dmgOptions: (e.target as HTMLInputElement).checked }))() }),
+      "Action bars include the DMG's optional action options (Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature)"),
+    h("div", { className: "small muted", style: "margin-top:4px" }, "Homebrew actions: add them with ＋ Homebrew on any unit's action bar; they show for every unit in the room."));
 }
 
 export function renderCombatTab(): Child[] {

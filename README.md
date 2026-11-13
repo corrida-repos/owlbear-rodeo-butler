@@ -29,7 +29,7 @@ A combat assistant for [Owlbear Rodeo](https://www.owlbear.rodeo): bring in crea
 |---|---|
 | Creatures & party | Published creatures, homebrew, quantities, rolled HP, D&D Beyond party sync and prepared encounter imports. |
 | Cards & dice | Native stat blocks, clickable rolls, advantage/disadvantage, critical damage, public/private rolls and a session log. |
-| Action bar | A BG3-style reference hotbar: actions, bonus actions, reactions and spells, each explained in plain words, built from the D&D Beyond sync. |
+| Action bar | A BG3-style reference hotbar: the sheet's actions, bonus actions, reactions and spells together with every PHB and DMG option (the DMG ones can be turned off) and the GM's homebrew actions, each explained in plain words. Hover Attack for every way to attack. |
 | Unit identity | Portraits, names, aliases and controlling players. Players can open their own cards. |
 | Combat core | Tracker, turn controls, rounds, HP/temp HP, death saves, Stable, Dead, turn notices and an active-turn ring. |
 | Light & vision | Dim and dark scenes, carried lights (torch, lantern, *Light*…) and per-browser auras for darkvision, blindsight, truesight and tremorsense, so you can see what's lightly or heavily obscured. |

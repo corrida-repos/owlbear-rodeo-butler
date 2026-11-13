@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
-import { actionBar, explain, inTab, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf } from "../src/core/actions";
+import { actionBar, attacksPerAction, barLayout, explain, filterCount, isAttackOption, legendaryPerRound, parseEntryName, saveOf, spellLevelOf, summaryOf, type ActionBar, type BarFilter } from "../src/core/actions";
+import { HOMEBREW_KEY, readHomebrew, removeHomebrew, upsertHomebrew } from "../src/core/homebrew";
 import { combatOptions, skillBonus } from "../src/core/combatOptions";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
+
+/** Names an item shows under (attack options count under Action), like the old tabs. */
+const under = (bar: ActionBar, f: BarFilter) => { const l = barLayout(bar, f); return [...l.sections.flatMap((s) => s.items), ...(f === "action" ? l.attackOptions : [])]; };
+const inTab = (it: { key: string }, bar: ActionBar, f: BarFilter) => under(bar, f).some((x) => x.key === it.key);
 
 const brann = convertDdbCharacter(fighter);
 
@@ -61,7 +66,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(bar.items.find((i) => i.name === "Second Wind")).toMatchObject({ cost: "bonus", category: "bonus", limit: { max: 2, reset: "long" } });
     expect(bar.items.find((i) => i.name === "Unarmed Strike")).toMatchObject({ cost: "action" });
     expect(bar.items.filter((i) => i.category === "common").map((i) => i.name)).toContain("Dash");
-    expect(bar.items.filter((i) => inTab(i, "bonus")).map((i) => i.name)).toEqual(["Second Wind"]);
+    expect(under(bar, "bonus").filter((i) => i.category !== "common").map((i) => i.name)).toEqual(["Second Wind"]);
     expect(bar.items.some((i) => i.name === "Improved Critical")).toBe(false);
     expect(actionBar(brann.sheet, "2014").items.some((i) => i.name === "Use an Object")).toBe(true);
   });
@@ -86,7 +91,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(b.items.find((i) => i.name === "Misty Step")).toMatchObject({ category: "spell", cost: "bonus", spellLevel: 2 });
     const hold = b.items.find((i) => i.name === "Hold Person")!;
     expect(hold).toMatchObject({ cost: "action", concentration: true });
-    expect(b.items.filter((i) => inTab(i, "reaction")).map((i) => i.name)).toEqual(["Shield"]);
+    expect(under(b, "reaction").filter((i) => i.category !== "common").map((i) => i.name)).toEqual(["Shield"]);
     expect(b.items.some((i) => i.name.startsWith("Spellcasting"))).toBe(false);
     // Explanations.
     const shield = explain(b.items.find((i) => i.name === "Shield")!);
@@ -152,7 +157,8 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     for (const n of ["Attack", "Dash", "Disengage", "Dodge", "Help", "Hide", "Influence", "Magic", "Ready", "Search", "Study", "Utilize",
       "Grapple", "Shove", "Two-Weapon Fighting", "Opportunity Attack", "Improvised Weapon", "Drop Prone", "Stand Up", "Jump", "Climb", "Swim",
       "Interact with an Object", "Stabilize", "Disarm", "Mark", "Overrun", "Shove Aside", "Tumble", "Climb onto a Bigger Creature"]) expect(names).toContain(n);
-    expect(opts.filter((o) => o.source === "DMG").every((o) => o.group === "DMG optional rules")).toBe(true);
+    expect(opts.filter((o) => o.source === "DMG").map((o) => o.name)).toEqual(["Disarm", "Mark", "Overrun", "Shove Aside", "Tumble", "Climb onto a Bigger Creature"]);
+    expect(combatOptions(sheet, "2024", { dmg: false }).some((o) => o.source === "DMG")).toBe(false);
     expect(by("Drink or Administer a Potion").cost).toBe("bonus");
   });
   it("uses the 2014 wording and rules in a 5E room", () => {
@@ -168,6 +174,75 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(combatOptions(brann.sheet).some((o) => o.name === "Unarmed Strike")).toBe(false);
     const disarm = actionBar(sheet).items.find((i) => i.name === "Disarm")!;
     expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide/);
-    expect(inTab(disarm, "common")).toBe(true);
+    expect(isAttackOption(disarm)).toBe(true);
+  });
+});
+
+describe("one list: the sheet and the rules together, Attack gathering every way to attack", () => {
+  const bar = actionBar(brann.sheet);
+  const layout = barLayout(bar);
+  it("Attack leads the Actions and reveals the sheet's weapons, then the rules' attack options (not bonus/reaction ones)", () => {
+    const actions = layout.sections.find((s) => s.id === "action")!;
+    expect(actions.items[0]!.name).toBe("Attack");
+    const names = layout.attackOptions.map((o) => o.name);
+    expect(names).toContain("Unarmed Strike");
+    expect(names).toEqual(expect.arrayContaining(["Grapple", "Shove", "Improvised Weapon", "Disarm", "Shove Aside"]));
+    expect(names).not.toContain("Two-Weapon Fighting");
+    expect(names).not.toContain("Opportunity Attack");
+    expect(names).not.toContain("Mark");
+    // Sheet attacks come first.
+    const firstCommon = layout.attackOptions.findIndex((o) => o.category === "common");
+    expect(layout.attackOptions.slice(0, firstCommon).every((o) => o.category !== "common")).toBe(true);
+    expect(firstCommon).toBeGreaterThan(0);
+    // ...and aren't repeated elsewhere.
+    expect(layout.sections.flatMap((s) => s.items).some((i) => i.name === "Unarmed Strike")).toBe(false);
+  });
+  it("no separate tab for the sheet or for the DMG: they're sorted by cost with the rest", () => {
+    const bonus = layout.sections.find((s) => s.id === "bonus")!.items.map((i) => i.name);
+    expect(bonus).toEqual(expect.arrayContaining(["Second Wind", "Two-Weapon Fighting"]));
+    expect(layout.sections.find((s) => s.id === "reaction")!.items.map((i) => i.name)).toContain("Opportunity Attack");
+    expect(layout.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toEqual(expect.arrayContaining(["Dash", "Overrun", "Tumble"]));
+    expect(layout.sections.some((s) => /DMG/.test(s.title))).toBe(false);
+    expect(filterCount(bar, "action")).toBe(under(bar, "action").length);
+  });
+  it("the room setting leaves the DMG options out", () => {
+    const off = actionBar(brann.sheet, "2024", { dmg: false });
+    expect(off.items.some((i) => i.source === "DMG")).toBe(false);
+  });
+  it("Extra Attack shows on the Attack tile", () => {
+    expect(attacksPerAction({ traits: [{ name: "Extra Attack", text: "" }], actions: [] })).toBe(2);
+    expect(attacksPerAction({ traits: [{ name: "Two Extra Attacks", text: "" }], actions: [] })).toBe(3);
+    const b = actionBar({ ...brann.sheet, traits: [...brann.sheet.traits, { name: "Extra Attack", text: "Attack twice." }] });
+    expect(b.items.find((i) => i.name === "Attack")!.summary).toBe("2 attacks");
+  });
+  it("a creature's attacks and Multiattack sit under Attack; its breath weapon stays an Action", () => {
+    const d = barLayout(actionBar({ ...dragon, actions: [{ name: "Multiattack", text: "The dragon makes two Rend attacks." }, ...dragon.actions] }));
+    expect(d.attackOptions.slice(0, 2).map((o) => o.name)).toEqual(["Multiattack", "Rend"]);
+    expect(d.sections.find((s) => s.id === "action")!.items.map((i) => i.name)).toContain("Fire Breath");
+    expect(d.sections.find((s) => s.id === "legendary")!.items.map((i) => i.name)).toEqual(["Pounce", "Wing Attack"]);
+  });
+});
+
+describe("homebrew actions", () => {
+  it("are added, edited and removed, and checked before saving", () => {
+    let list = upsertHomebrew([], { name: "Called Shot", cost: "attack", summary: "-5 to hit", text: "Aim for a weak spot." });
+    expect(list).toHaveLength(1);
+    const id = list[0]!.id;
+    list = upsertHomebrew(list, { id, name: "Called Shot", cost: "attack", text: "Aim carefully." });
+    expect(list).toEqual([{ id, name: "Called Shot", cost: "attack", text: "Aim carefully." }]);
+    expect(() => upsertHomebrew(list, { name: "called shot", cost: "action", text: "" })).toThrow(/already/);
+    expect(() => upsertHomebrew(list, { name: " ", cost: "action", text: "" })).toThrow(/name/);
+    expect(() => upsertHomebrew(list, { name: "Long", cost: "action", text: "x".repeat(700) })).toThrow(/under/);
+    expect(removeHomebrew(list, id)).toEqual([]);
+    expect(readHomebrew({ [HOMEBREW_KEY]: [...list, { name: "bad", cost: "teleport" }, null] })).toEqual(list);
+  });
+  it("show on the bar by their cost, attack ones under Attack", () => {
+    const homebrew = upsertHomebrew(upsertHomebrew([], { name: "Called Shot", cost: "attack", text: "Aim." }), { name: "Flourish", cost: "bonus", summary: "+1d4", text: "Twirl." });
+    const bar = actionBar(brann.sheet, "2024", { homebrew });
+    const l = barLayout(bar);
+    expect(l.attackOptions.map((o) => o.name)).toContain("Called Shot");
+    const flourish = l.sections.find((s) => s.id === "bonus")!.items.find((i) => i.name === "Flourish")!;
+    expect(flourish).toMatchObject({ source: "Homebrew", summary: "+1d4" });
+    expect(explain(flourish)).toEqual(["Twirl.", expect.stringMatching(/Bonus Action/), "Homebrew: added by the GM for this room."]);
   });
 });

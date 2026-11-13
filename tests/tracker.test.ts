@@ -4,11 +4,11 @@ import {
   activeAndNext, EMPTY_ENCOUNTER, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat, turnOrder,
   waitingForInitiative, type OrderUnit,
 } from "../src/core/encounter";
-import { applyDeathSave, applyHp, markDead, parseHpInput, revive, setStable } from "../src/core/hp";
+import { applyDeathSave, applyHp, lifeStatusPatch, markDead, parseHpInput, revive, setStable } from "../src/core/hp";
 import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet, type UnitState } from "../src/core/sheet";
 import {
   changeHp, encounterAction, endTurnFor, markUnitsDead, moveTie, recordDeathSave, reviveUnits, rollInitiativeFor, setInEncounter,
-  setInitiative, setMaxHp, trackerView,
+  setInitiative, setLifeStatus, setMaxHp, toggleConditionOn, trackerView,
 } from "../src/core/tracker";
 import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
@@ -241,6 +241,32 @@ describe("tracker operations in a scene", () => {
     await markUnitsDead(scene, ["pc"]);
     expect(state("pc").deathSaves).toBeUndefined();
     expect(state("pc").conditions.map((c) => c.key)).toEqual(["dead"]);
+  });
+
+  it("Change status: Dead, Stable and Death Saves exclude each other, other conditions toggle on and off", async () => {
+    // Death Saves on a party member at full HP: down to 0, counters reset; creatures are skipped.
+    expect(await setLifeStatus(scene, ["pc", "w1"], "dying")).toEqual({ skipped: [expect.any(String)] });
+    expect(state("pc")).toMatchObject({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
+    expect(state("w1").hp).toBe(20);
+    await setLifeStatus(scene, ["pc", "w1"], "stable");
+    expect(state("pc").conditions.map((c) => c.key)).toEqual(["stable"]);
+    expect(state("w1")).toMatchObject({ hp: 0 });
+    expect(state("w1").conditions.map((c) => c.key)).toEqual(["stable"]);
+    await setLifeStatus(scene, ["pc"], "dead");
+    expect(state("pc").conditions.map((c) => c.key)).toEqual(["dead"]);
+    // Revive: Dead off; still at 0 HP, so death saves again.
+    await setLifeStatus(scene, ["pc"], "none");
+    expect(state("pc")).toMatchObject({ conditions: [], deathSaves: { successes: 0, failures: 0 } });
+    await toggleConditionOn(scene, ["w1", "w2"], "prone", true);
+    await toggleConditionOn(scene, ["w1", "w2"], "prone", true); // no duplicates
+    expect(state("w2").conditions.map((c) => c.key)).toEqual(["prone"]);
+    await toggleConditionOn(scene, ["w1", "w2"], "prone", false);
+    expect(state("w2").conditions).toEqual([]);
+    await toggleConditionOn(scene, ["w2"], "exhaustion", true, { level: 1 });
+    await toggleConditionOn(scene, ["w2"], "exhaustion", true, { level: 3 });
+    expect(state("w2").conditions).toMatchObject([{ key: "exhaustion", level: 3 }]);
+    expect(lifeStatusPatch({ conditions: [], hp: 5, party: false }, "stable")).toMatchObject({ hp: 0, deathSaves: undefined });
+    expect(() => lifeStatusPatch({ conditions: [], hp: 0, party: false }, "dying")).toThrow(/party/);
   });
 
   it("typed initiative, rolled initiative, ties, max HP and player end-turn requests", async () => {

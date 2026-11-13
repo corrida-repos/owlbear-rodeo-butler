@@ -1,15 +1,17 @@
 /**
  * Action bar popover (actions.html?id=<itemId>): a BG3-style hotbar for one unit, to consult.
- *  - Everything the unit can do as tiles, sorted by what it costs: ● Action, ▲ Bonus Action, ◆ Reaction, ★ Legendary,
- *    plus spells, limited features and every combat option the PHB (and the DMG's optional rules) give anyone.
+ *  - Everything the unit can do as tiles, in one list sorted by what it costs: ● Action, ▲ Bonus Action, ◆ Reaction,
+ *    ★ Legendary, spells, limited features, movement. The sheet's entries sit with the options anyone has (PHB, the
+ *    DMG's optional ones unless the GM turns them off, and the room's homebrew, which the GM adds right here).
+ *  - Hovering (or clicking) Attack reveals every way to attack: the sheet's weapons, Unarmed Strike, Grapple, Shove…
  *  - A tile opens "how it works" in plain words and the sheet's text.
  * Read-only: nothing is spent or counted here (Butler only tracks HP); rolls are made from the unit card.
  * Built from the unit's sheet: for a party member that's their D&D Beyond sync, so re-syncing updates it.
  */
 import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import { actionBar, COST_EXPLAINED, explain, inTab, type ActionBar, type ActionItem, type Category, type Cost } from "../core/actions";
-import { OPTION_GROUPS } from "../core/combatOptions";
+import { actionBar, ATTACK_KEY, barLayout, COST_EXPLAINED, explain, filterCount, type ActionBar, type ActionItem, type BarFilter, type Cost } from "../core/actions";
+import { HOMEBREW_COSTS, HOMEBREW_LIMITS, type HomebrewCost } from "../core/homebrew";
 import { cardAccess, controls, editionText, portraitUrl, unitName } from "../core/card";
 import { parseChips } from "../core/chips";
 import { BUTLER_ITEM_KEY } from "../core/constants";
@@ -20,31 +22,40 @@ import { openCard } from "../extension/cardPopover";
 import { DDB_ORIGIN, onDdbExport } from "../extension/ddbLink";
 import { h, store, type Child } from "../extension/dom";
 import { sendRequest } from "../extension/requests";
+import { deleteHomebrew, homebrewActions, initHomebrew, onHomebrew, saveHomebrew } from "../extension/homebrewStore";
 import { initRoomSettings, onRoomSettings, roomSettings, roomSystem } from "../extension/roomSettings";
 
 const app = document.getElementById("app")!;
 const itemId = new URLSearchParams(location.search).get("id") ?? "";
 
-type Tab = Category | "all";
+type Tab = BarFilter;
 const TABS: { tab: Tab; label: string; title: string }[] = [
-  { tab: "all", label: "All", title: "Everything on this sheet" },
+  { tab: "all", label: "All", title: "Everything this unit can do: its sheet and what anyone can do by the rules" },
   { tab: "action", label: "● Action", title: COST_EXPLAINED.action },
   { tab: "bonus", label: "▲ Bonus", title: COST_EXPLAINED.bonus },
   { tab: "reaction", label: "◆ Reaction", title: COST_EXPLAINED.reaction },
   { tab: "legendary", label: "★ Legendary", title: COST_EXPLAINED.legendary },
   { tab: "spell", label: "✦ Spells", title: "Spells and spell lists" },
   { tab: "feature", label: "❖ Features", title: "Features with a limit or a recharge" },
-  { tab: "common", label: "⚔ Combat", title: "What anyone can do in combat by the rules: actions, Unarmed Strike, Grapple, Shove, movement, and the DMG's optional options" },
+  { tab: "move", label: "⇢ Move & other", title: "Movement, and what takes no action" },
 ];
+const TAB_IDS = new Set(TABS.map((t) => t.tab));
 const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction: "◆", legendary: "★", free: "○", longer: "⧗", move: "⇢", attack: "⚔", none: "" };
 const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
 
 let item: Item | null = null;
 let role: "GM" | "PLAYER" = "PLAYER";
 let meId = "";
-let tab: Tab = (store.get("butler.actionsTab") as Tab | null) ?? "all";
+const savedTab = store.get("butler.actionsTab") as Tab | null;
+let tab: Tab = savedTab && TAB_IDS.has(savedTab) ? savedTab : "all";
 let selected: string | null = null;
 let note = "";
+/** The Attack options: open while the pointer is over Attack or its options (or pinned by a click). */
+let attackOpen = false;
+let attackPinned = false;
+let attackTimer: ReturnType<typeof setTimeout> | undefined;
+/** The GM's homebrew form: null when closed, else the entry being edited ("" id = new). */
+let hbForm: { id: string; name: string; cost: HomebrewCost; summary: string; text: string; error?: string } | null = null;
 
 const itemInfo = (i: Item) => ({ visible: i.visible, createdUserId: i.createdUserId, name: i.name, label: (i as any).text?.plainText || undefined, imageUrl: (i as any).image?.url });
 
@@ -62,21 +73,46 @@ function head(sheet: UnitSheet, state: UnitState): Child {
 }
 
 function tabsRow(bar: ActionBar): Child {
-  const counts = (t: Tab) => bar.items.filter((it) => inTab(it, t)).length;
   return h("div", { className: "ab-tabs" },
-    ...TABS.filter((t) => t.tab === "all" || t.tab === "common" || counts(t.tab)).map((t) => h("button", {
+    ...TABS.map((t) => ({ ...t, n: t.tab === "all" ? 0 : filterCount(bar, t.tab) })).filter((t) => t.tab === "all" || t.n).map((t) => h("button", {
       className: `${tab === t.tab ? "on" : ""} tab-${t.tab}`, title: t.title,
       onclick: () => { tab = t.tab; store.set("butler.actionsTab", t.tab); render(); },
-    }, t.label, t.tab !== "common" ? h("span", { className: "count" }, ` ${counts(t.tab)}`) : null)));
+    }, t.label, t.tab !== "all" ? h("span", { className: "count" }, ` ${t.n}`) : null)));
+}
+
+function setAttackOpen(open: boolean) {
+  clearTimeout(attackTimer);
+  if (open === attackOpen) return;
+  attackOpen = open;
+  document.querySelector(".ab-attack")?.classList.toggle("open", open || attackPinned);
+  document.querySelector(".tile.is-attack")?.classList.toggle("open", open || attackPinned);
+}
+const hoverAttack = { onmouseenter: () => setAttackOpen(true), onmouseleave: () => { clearTimeout(attackTimer); attackTimer = setTimeout(() => setAttackOpen(false), 350); } };
+
+/** Every way to make an attack, under the Attack tile. */
+function attackReveal(options: ActionItem[], bar: ActionBar): Child {
+  const open = attackOpen || attackPinned || options.some((o) => o.key === selected);
+  const sheetCount = options.filter((o) => o.category !== "common").length;
+  return h("div", { className: `ab-attack${open ? " open" : ""}`, ...hoverAttack },
+    h("div", { className: "ab-attack-head small" },
+      h("strong", {}, "Attack: "),
+      bar.attacks > 1 ? `${bar.attacks} attacks per Attack action; each can be any of these.` : "each attack can be any of these.",
+      attackPinned ? h("button", { className: "icon tiny", title: "Hide the attack options", onclick: () => { attackPinned = false; attackOpen = false; render(); } }, "✕") : null),
+    h("div", { className: "ab-attack-grid" }, ...options.map((o, i) => [i === sheetCount && sheetCount ? h("span", { className: "ab-attack-sep" }) : null, tile(o)]).flat()));
 }
 
 function tile(it: ActionItem): HTMLElement {
-  const icon = it.category === "spell" ? "✦" : it.category === "common" ? (it.source === "DMG" ? "◇" : "⬡") : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
-  const badge = it.source === "DMG" ? "DMG" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
+  const icon = it.category === "spell" ? "✦" : it.key === ATTACK_KEY ? "⚔" : it.category === "common" ? "⬡" : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
+  const badge = it.source === "DMG" ? "DMG" : it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
+  const isAttack = it.key === ATTACK_KEY;
   return h("button", {
-    className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}`,
-    title: `${it.name}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}`,
-    onclick: () => { selected = selected === it.key ? null : it.key; render(); },
+    className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}${isAttack ? ` is-attack${attackOpen || attackPinned ? " open" : ""}` : ""}`,
+    title: `${it.name}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}${isAttack ? " · hover or click for every way to attack" : ""}`,
+    onclick: () => {
+      if (isAttack) { attackPinned = selected !== it.key; attackOpen = attackPinned; }
+      selected = selected === it.key ? null : it.key; render();
+    },
+    ...(isAttack ? hoverAttack : {}),
   },
   h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
   badge ? h("span", { className: "tbadge" }, badge) : null,
@@ -106,7 +142,38 @@ function detail(it: ActionItem, bar: ActionBar): Child {
     how.length ? h("div", { className: "ab-how" }, h("div", { className: "small muted" }, "How it works"),
       h("ul", { className: "small" }, ...how.map((line) => h("li", {}, line)))) : null,
     it.category !== "common" ? h("details", { className: "small", open: !how.length },
-      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null);
+      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null,
+    it.source === "Homebrew" && role === "GM" ? h("div", { className: "row" },
+      h("button", { className: "secondary small", onclick: () => { const hb = homebrewActions().find((x) => x.id === it.homebrewId); if (hb) { hbForm = { id: hb.id, name: hb.name, cost: hb.cost, summary: hb.summary ?? "", text: hb.text }; render(); } } }, "Edit"),
+      h("button", { className: "secondary small", onclick: () => { if (confirm(`Remove the homebrew action ${it.name} from the room?`)) { selected = null; void deleteHomebrew(it.homebrewId!).catch(showErr); } } }, "Remove")) : null);
+}
+
+function showErr(e: unknown) { note = e instanceof Error ? e.message : String(e); render(); }
+
+/** The GM's form for a homebrew action (shared by the whole room). */
+function homebrewForm(): Child {
+  if (!hbForm) return null;
+  const f = hbForm;
+  const input = (key: "name" | "summary", placeholder: string, max: number) => h("input", { type: "text", value: f[key], placeholder, maxLength: max, oninput: (e: Event) => { f[key] = (e.target as HTMLInputElement).value; } });
+  return h("div", { className: "panel ab-detail ab-hb" },
+    h("div", { className: "row between" }, h("strong", {}, f.id ? "Edit homebrew action" : "New homebrew action"),
+      h("button", { className: "icon tiny", title: "Close", onclick: () => { hbForm = null; render(); } }, "✕")),
+    h("div", { className: "small muted" }, "Shows on every unit's action bar in this room."),
+    h("div", { className: "grid2" },
+      h("label", {}, "Name", input("name", "Called Shot", HOMEBREW_LIMITS.name)),
+      h("label", {}, "Costs", h("select", { onchange: (e: Event) => { f.cost = (e.target as HTMLSelectElement).value as HomebrewCost; } },
+        ...HOMEBREW_COSTS.map((c) => h("option", { value: c.cost, selected: c.cost === f.cost }, c.label))))),
+    h("label", { className: "small col" }, "Short line for the tile (optional)", input("summary", "−5 to hit, +10 damage", HOMEBREW_LIMITS.summary)),
+    h("label", { className: "small col" }, "How it works",
+      h("textarea", { value: f.text, maxLength: HOMEBREW_LIMITS.text, placeholder: "What it does, what to roll, any limit.", oninput: (e: Event) => { f.text = (e.target as HTMLTextAreaElement).value; } })),
+    f.error ? h("div", { className: "small warn-text" }, f.error) : null,
+    h("div", { className: "row" },
+      h("button", { className: "small", onclick: () => {
+        void saveHomebrew({ ...(f.id ? { id: f.id } : {}), name: f.name, cost: f.cost, summary: f.summary, text: f.text })
+          .then(() => { hbForm = null; render(); })
+          .catch((e) => { f.error = e instanceof Error ? e.message : String(e); render(); });
+      } }, "Save"),
+      h("button", { className: "secondary small", onclick: () => { hbForm = null; render(); } }, "Cancel")));
 }
 
 function footer(sheet: UnitSheet, state: UnitState): Child {
@@ -151,21 +218,23 @@ function render() {
   else if (cardAccess({ id: meId, role }, itemInfo(item), u.state) !== "full") nodes.push(h("div", { className: "panel warn" }, "These actions belong to the GM or another player."));
   else {
     const { sheet, state } = u;
-    const bar = actionBar(sheet, roomSystem().rules);
-    const shown = bar.items.filter((it) => inTab(it, tab));
+    const bar = actionBar(sheet, roomSystem().rules, { dmg: roomSettings().dmgOptions, homebrew: homebrewActions() });
+    const { sections, attackOptions } = barLayout(bar, tab);
     const sel = bar.items.find((it) => it.key === selected);
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
+    const addHomebrew = role === "GM" ? h("button", { className: "tile tile-add", title: "Add a homebrew action for everyone in this room", onclick: () => { hbForm = { id: "", name: "", cost: tab === "bonus" || tab === "reaction" ? tab : "action", summary: "", text: "" }; selected = null; render(); } },
+      h("span", { className: "ticon" }, "＋"), h("span", { className: "tname" }, "Homebrew"), h("span", { className: "tsum" }, "add an action")) : null;
+    const grid: Child[] = sections.flatMap((sec) => [
+      h("div", { className: `ab-group group-${sec.id}` }, sec.title),
+      ...sec.items.flatMap((it) => it.key === ATTACK_KEY && attackOptions.length ? [tile(it), attackReveal(attackOptions, bar)] : [tile(it)]),
+    ]);
+    if (addHomebrew) grid.push(addHomebrew);
     nodes.push(
       head(sheet, state),
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
-      h("div", { className: "ab-grid" }, ...(!shown.length ? [h("div", { className: "small muted" }, "Nothing here.")]
-        : tab === "common" ? OPTION_GROUPS.flatMap((g) => {
-          const inGroup = shown.filter((it) => it.group === g);
-          return inGroup.length ? [h("div", { className: "ab-group" }, g === "DMG optional rules" ? "DMG optional rules (ask your GM)" : g), ...inGroup.map(tile)] : [];
-        })
-          : shown.map(tile))),
-      sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Click an option to see how it works."),
+      h("div", { className: "ab-grid" }, ...(grid.length ? grid : [h("div", { className: "small muted" }, "Nothing here.")])),
+      hbForm ? homebrewForm() : sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Hover Attack for every way to attack; click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
       footer(sheet, state));
   }
@@ -177,8 +246,9 @@ function render() {
 OBR.onReady(async () => {
   role = await OBR.player.getRole();
   meId = OBR.player.id;
-  await initRoomSettings();
+  await Promise.all([initRoomSettings(), initHomebrew()]);
   onRoomSettings(() => render());
+  onHomebrew(() => render());
   [item = null] = await OBR.scene.items.getItems([itemId]);
   render();
   OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });

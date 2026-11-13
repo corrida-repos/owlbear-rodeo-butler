@@ -8,7 +8,7 @@ import {
   activeAndNext, endCombat, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat,
   turnOrder, waitingForInitiative, type EncounterState, type OrderUnit,
 } from "./encounter";
-import { applyDeathSave, applyHp, markDead, revive, setStable, type DeathSaveOutcome, type HpChange, type HpEvent } from "./hp";
+import { applyDeathSave, applyHp, lifeStatusPatch, markDead, revive, setStable, type DeathSaveOutcome, type HpChange, type HpEvent, type LifeStatus } from "./hp";
 import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
@@ -270,6 +270,36 @@ export async function removeConditionFrom(gw: SceneGateway, id: string, conditio
   const patch: Partial<UnitState> = removeCondition(u.state, conditionId);
   if (u.state.conditions.find((c) => c.id === conditionId)?.key === "concentration") patch.concentrationCheck = undefined;
   await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+}
+
+/**
+ * "Change status": turns a condition on or off for one or more units. On adds it to the units that lack it (Exhaustion:
+ * sets the level); off removes every instance of it (a custom effect: the ones with that name). Durations and notes go through addConditionTo.
+ */
+export async function toggleConditionOn(gw: SceneGateway, ids: string[], key: string, on: boolean, opts: { level?: number; label?: string } = {}) {
+  const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
+  const match = (c: { key: string; label?: string }) => c.key === key && (key !== "custom" || c.label === opts.label);
+  const patches = units.flatMap((u) => {
+    const has = u.state.conditions.some(match);
+    if (on && has && key !== "exhaustion") return [];
+    if (!on && !has) return [];
+    const patch: Partial<UnitState> = on ? addCondition(u.state, key, { level: opts.level, label: opts.label }) : { conditions: u.state.conditions.filter((c) => !match(c)) };
+    if (!on && key === "concentration") patch.concentrationCheck = undefined;
+    return [{ id: u.id, key: STATE_KEY, patch }];
+  });
+  if (patches.length) await gw.patchMetadata(patches);
+  if (on) await revertIfIncapacitated(gw, ids);
+}
+
+/** "Change status": Dead, Stable, Death Saves or none of them (see lifeStatusPatch). Death Saves skips non-party units. */
+export async function setLifeStatus(gw: SceneGateway, ids: string[], to: LifeStatus): Promise<{ skipped: string[] }> {
+  if (to === "dead") { await markUnitsDead(gw, ids); return { skipped: [] }; }
+  await requireGm(gw);
+  const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
+  const skipped = to === "dying" ? units.filter((u) => !u.party).map((u) => u.name) : [];
+  const patches = units.filter((u) => to !== "dying" || u.party).map((u) => ({ id: u.id, key: STATE_KEY, patch: lifeStatusPatch(u.state, to) as Record<string, unknown> }));
+  if (patches.length) await gw.patchMetadata(patches);
+  return { skipped };
 }
 
 /** Result of a Concentration save (the roll's total): below the DC ends Concentration. Clears the pending check. */

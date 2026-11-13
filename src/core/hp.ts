@@ -150,3 +150,27 @@ export function setStable(state: Pick<UnitState, "conditions" | "hp" | "party">)
   if (!state.party || state.hp > 0) throw new Error("Only a party member at 0 HP can be Stable.");
   return { conditions: [...without(state.conditions, "stable"), condition("stable")], deathSaves: { ...ZERO } };
 }
+
+/**
+ * The 0-HP statuses as conditions you can set by hand ("Change status"): Dead, Stable, Death Saves, or none of them.
+ *  - Dead: as markDead.
+ *  - Stable: 0 HP, no death saves (any unit: a creature knocked out rather than killed is Stable too).
+ *  - Death Saves: a party member at 0 HP making death saving throws (counters reset).
+ *  - none: clears Dead and Stable; a party member still at 0 HP goes back to death saves.
+ * Dropping to 0 HP this way also ends Concentration, as damage would.
+ */
+export type LifeStatus = "dead" | "stable" | "dying" | "none";
+
+export function lifeStatusPatch(state: Pick<UnitState, "conditions" | "hp" | "party" | "deathSaves">, to: LifeStatus): Partial<UnitState> {
+  if (to === "dead") return markDead(state);
+  const base = without(without(state.conditions, "dead"), "stable");
+  const toZero = (conds: ConditionInstance[]): Partial<UnitState> => state.hp > 0
+    ? { hp: 0, conditions: without(conds, "concentration"), concentrationCheck: undefined }
+    : { conditions: conds };
+  if (to === "stable") return { ...toZero([...base, condition("stable")]), deathSaves: state.party ? { ...ZERO } : undefined };
+  if (to === "dying") {
+    if (!state.party) throw new Error("Only party members make death saves (other creatures die or are Stable at 0 HP).");
+    return { ...toZero(base), deathSaves: { ...ZERO } };
+  }
+  return { conditions: base, deathSaves: state.party && state.hp <= 0 ? { ...ZERO } : undefined };
+}
