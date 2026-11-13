@@ -186,6 +186,7 @@ button.tile.cost-reaction { border-bottom-color: var(--react); } button.tile.cos
 .tile .tbadge { position: absolute; top: 2px; right: 4px; font-size: 10px; font-weight: 700; color: var(--muted); }
 .tile .tconc { position: absolute; bottom: 3px; right: 5px; font-size: 11px; color: var(--muted); }
 .tile .ticon { font-size: 17px; line-height: 1.1; color: var(--accent); }
+.tile .ticon svg { display: block; width: 24px; height: 24px; }
 .tile .tname { font-size: 11.5px; font-weight: 600; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tile .tsum { font-size: 10px; color: var(--muted); line-height: 1.2; }
 .ab-detail { padding: 8px; }

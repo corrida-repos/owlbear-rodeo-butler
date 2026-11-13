@@ -11,6 +11,7 @@
  * Built from the unit's sheet: for a party member that's their D&D Beyond sync, so re-syncing updates it.
  */
 import "../extension/devlog";
+import { commonActionIcon } from "./icons";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { actionBar, ATTACK_KEY, barLayout, HELP_KEY, MAGIC_KEYS, TWF_KEY, COST_EXPLAINED, explain, filterCount, type ActionBar, type ActionItem, type BarFilter, type Cost } from "../core/actions";
 import { HOMEBREW_COSTS, HOMEBREW_LIMITS, type HomebrewCost } from "../core/homebrew";
@@ -137,7 +138,7 @@ function tile(it: ActionItem): HTMLElement {
   },
   h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
   badge ? h("span", { className: "tbadge" }, badge) : null,
-  h("span", { className: "ticon" }, icon),
+  h("span", { className: "ticon", "aria-hidden": "true" }, commonActionIcon(it) ?? icon),
   h("span", { className: "tname" }, it.name),
   it.summary ? h("span", { className: "tsum" }, it.summary) : null,
   it.concentration ? h("span", { className: "tconc", title: "Concentration" }, "◎") : null);
