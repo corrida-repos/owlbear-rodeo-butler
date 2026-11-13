@@ -98,3 +98,14 @@ describe("player self-sync from D&D Beyond (applied by the GM's client)", () => 
     await expect(applySelfSync(scene, "t1", member, "keep")).resolves.toBe(member.name);
   });
 });
+
+describe("players resizing their own tokens", () => {
+  const base = { v: 1, unitId: "u", playerId: "p", playerName: "Ana", type: "token-size" };
+  it("validates the size and follows the Player edits setting", () => {
+    expect(isPlayerRequest({ ...base, size: "L" })).toBe(true);
+    expect(isPlayerRequest({ ...base, size: "T" })).toBe(true);
+    expect(isPlayerRequest({ ...base, size: "XL" })).toBe(false);
+    expect(isPlayerRequest({ ...base })).toBe(false);
+    expect(EDIT_REQUESTS).toContain("token-size");
+  });
+});

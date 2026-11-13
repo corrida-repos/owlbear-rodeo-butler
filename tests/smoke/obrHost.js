@@ -70,7 +70,7 @@
       case "OBR_BROADCAST_SEND_MESSAGE": {
         S.broadcasts.push(clone(d));
         // LOCAL and ALL reach this browser's pages (the background shows roll notifications); REMOTE doesn't.
-        if (d.options?.destination !== "REMOTE") emit("OBR_BROADCAST_EVENT_MESSAGE", { channel: d.channel, data: d.data, connectionId: S.connectionId });
+        if (d.options?.destination !== "REMOTE") emit(`OBR_BROADCAST_MESSAGE_${d.channel}`, { data: d.data, connectionId: S.connectionId });
         return {};
       }
       case "OBR_CONTEXT_MENU_CREATE": S.menus.push(clone(d)); return {};

@@ -8,6 +8,7 @@ import type { PartyMember } from "./ddb";
 import type { HpChange } from "./hp";
 import type { ResolvedImage } from "./importer";
 import type { UnitSheet } from "./sheet";
+import { TOKEN_SIZES, type TokenSize } from "./layout";
 import { isKnownShape, type KnownShape } from "./wildshape";
 
 export const REQUEST_CHANNEL = `${BUTLER_NS}/request`;
@@ -28,6 +29,8 @@ export interface ConditionAddRequest extends Base { type: "condition-add"; key: 
 export interface ConditionRemoveRequest extends Base { type: "condition-remove"; conditionId: string }
 /** Limited uses (uses.ts): how many of a resource are spent. */
 export interface UsesRequest extends Base { type: "uses"; key: string; spent: number }
+/** Resize the player's own token (right-click → Set size). */
+export interface TokenSizeRequest extends Base { type: "token-size"; size: TokenSize }
 /** Undo the unit's last HP change. */
 export interface HpUndoRequest extends Base { type: "hp-undo" }
 /** F15: the player's character re-synced from D&D Beyond (converted in the player's browser). */
@@ -42,10 +45,10 @@ export type WildShapeOp =
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
 export type PlayerRequest = EndTurnRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest
-  | UsesRequest | HpUndoRequest;
+  | UsesRequest | HpUndoRequest | TokenSizeRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
-export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn", "uses", "hp-undo"];
+export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "condition-add", "condition-remove", "sheet-sync", "end-turn", "uses", "hp-undo", "token-size"];
 
 export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
@@ -60,6 +63,7 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   if (r.type === "condition-remove") return typeof r.conditionId === "string";
   if (r.type === "uses") return typeof r.key === "string" && r.key.length < 200 && Number.isInteger(r.spent) && r.spent >= 0 && r.spent <= 20;
   if (r.type === "hp-undo") return true;
+  if (r.type === "token-size") return (TOKEN_SIZES as readonly string[]).includes(r.size);
   if (r.type === "wild-shape") {
     const w = r as WildShapeRequest;
     const ref = (x: any) => !!x && typeof x.name === "string" && typeof x.source === "string";

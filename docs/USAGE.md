@@ -99,7 +99,9 @@ The tracker lists each creature's uses under its name (*Fire Breath ✗ · Legen
 
 ## Token size
 
-Right-click one or more tokens → **Set size** and pick **Tiny**, **Small**, **Medium**, **Large**, **Huge** or **Gargantuan**. Tiny is half a cell, Small and Medium one, Large 2×2, Huge 3×3, Gargantuan 4×4. Large and Gargantuan tokens snap to grid corners, the others to the middle of a cell. Any token on the Character layer works, Encounter Butler unit or not. A manual stretch is reset so the size is exact. Only the token changes: the stat block keeps its own size, so it suits Enlarge/Reduce or a homebrew token whose picture came in at the wrong size. (GM only.)
+Right-click one or more tokens → **Set size** and pick **Tiny**, **Small**, **Medium**, **Large**, **Huge** or **Gargantuan**. Tiny is half a cell, Small and Medium one, Large 2×2, Huge 3×3, Gargantuan 4×4. Large and Gargantuan tokens snap to grid corners, the others to the middle of a cell. Any token on the Character layer works, Encounter Butler unit or not. A manual stretch is reset so the size is exact. Only the token changes: the stat block keeps its own size, so it suits Enlarge/Reduce or a homebrew token whose picture came in at the wrong size.
+
+Players can resize their own tokens the same way: ones you set them as the controller of, or ones they placed themselves. Their Encounter Butler sends the change to yours, which checks the token is theirs and applies it, so you need to be in the room. It follows the **Player edits** setting in the Combat tab: with player edits off, only you can resize.
 
 ## Conditions, concentration and movement
 

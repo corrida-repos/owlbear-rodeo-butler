@@ -201,3 +201,43 @@ test("Set size: the picker resizes and re-snaps the selected tokens, then closes
   expect([(pos.x - 75) % 150, (pos.y - 75) % 150]).toEqual([0, 0]);
   expect(errors).toEqual([]);
 });
+
+test("Set size by a player: their own token, applied by the GM's client; other tokens refused", async ({ page, context }) => {
+  // The player's browser: the menu entry exists for them, and the picker sends a request instead of resizing.
+  const perr = await boot(page, { role: "PLAYER", name: "Ana", id: "player-1", roomMeta: { "dev.owlbear-butler/settings": { playerEdits: true } } });
+  await open(page, "background.html", "background");
+  await expect.poll(async () => (await obr(page)).menus.find((m: any) => m.id === "dev.owlbear-butler/size")?.icons.length).toBe(3);
+  const sizeMenu = (await obr(page)).menus.find((m: any) => m.id === "dev.owlbear-butler/size");
+  expect(sizeMenu.icons.filter((i: any) => i.filter.roles?.includes("PLAYER"))).toHaveLength(2);
+  const f = await open(page, "size.html?ids=pc", "size");
+  await expect(f.getByText("Size: Thorn")).toBeVisible();
+  await f.getByRole("button", { name: "Large" }).click();
+  await expect(f.getByText(/Sent: the GM's Encounter Butler resizes your token to Large/)).toBeVisible();
+  const reqs = (await obr(page)).broadcasts.filter((b: any) => b.channel === "dev.owlbear-butler/request");
+  expect(reqs.map((r: any) => [r.data.type, r.data.unitId, r.data.size, r.options.destination])).toEqual([["token-size", "pc", "L", "REMOTE"]]);
+  expect((await obr(page)).items.find((i: any) => i.id === "pc").grid.dpi).toBe(300); // the player didn't write it
+
+  // The GM's browser: its background applies the request for Thorn (Ana controls it), and refuses the goblin.
+  const gm = await context.newPage();
+  const gerr = await boot(gm, { roomMeta: { "dev.owlbear-butler/settings": { playerEdits: true } } });
+  await open(gm, "background.html", "background");
+  await expect.poll(async () => (await obr(gm)).menus.length).toBeGreaterThan(5);
+  const deliver = (data: unknown) => gm.evaluate((d) => {
+    const s = (window as any).__obr;
+    for (const fr of s.frames) fr.contentWindow.postMessage({ id: "OBR_BROADCAST_MESSAGE_dev.owlbear-butler/request", data: { data: d, connectionId: "c-2" } }, location.origin);
+  }, data);
+  await deliver(reqs[0].data);
+  await expect.poll(async () => (await obr(gm)).items.find((i: any) => i.id === "pc").grid.dpi).toBe(150);
+  await deliver({ ...reqs[0].data, unitId: "gob" });
+  await gm.waitForTimeout(300);
+  expect((await obr(gm)).items.find((i: any) => i.id === "gob").grid.dpi).toBe(300);
+  expect([...perr, ...gerr]).toEqual([]);
+});
+
+test("Set size by a player: blocked while the GM has player edits off", async ({ page }) => {
+  const errors = await boot(page, { role: "PLAYER", name: "Ana", id: "player-1", roomMeta: { "dev.owlbear-butler/settings": { playerEdits: false } } });
+  const f = await open(page, "size.html?ids=pc", "size");
+  await expect(f.getByText(/turned player edits off/)).toBeVisible();
+  await expect(f.getByRole("button")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
