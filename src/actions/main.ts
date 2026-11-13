@@ -240,7 +240,7 @@ function render() {
   else if (cardAccess({ id: meId, role }, itemInfo(item), u.state) !== "full") nodes.push(h("div", { className: "panel warn" }, "These actions belong to the GM or another player."));
   else {
     const { sheet, state } = u;
-    const bar = actionBar(sheet, roomSystem().rules, { dmg: roomSettings().dmgOptions, homebrew: homebrewActions() });
+    const bar = actionBar(sheet, roomSystem().rules, { dmg: roomSettings().dmgOptions, homebrew: homebrewActions(), conditions: state.conditions.map((c) => c.key) });
     const layout = barLayout(bar, tab);
     const { sections, magicOptions } = layout;
     reveals = layout.reveals;

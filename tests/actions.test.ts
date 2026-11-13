@@ -178,6 +178,20 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(old.some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
     expect(old.find((o) => o.name === "Interact with an Object")!.text).toMatch(/draw or sheathe a weapon/);
   });
+  it("shows options that depend on a condition only when it applies", () => {
+    const names = (conditions: string[]) => actionBar(sheet, "2024", { conditions }).items.map((i) => i.name);
+    const none = names([]);
+    expect(none).not.toContain("Escape a Grapple");
+    expect(none).not.toContain("Stand Up");
+    expect(none).not.toContain("Dismount");
+    expect(none).toEqual(expect.arrayContaining(["Drop Prone", "Mount"]));
+    const hampered = names(["grappled", "prone", "mounted"]);
+    expect(hampered).toEqual(expect.arrayContaining(["Escape a Grapple", "Stand Up", "Dismount"]));
+    expect(hampered).not.toContain("Drop Prone");
+    expect(hampered).not.toContain("Mount");
+    // Without the unit's conditions (reference use), every option shows.
+    expect(actionBar(sheet).items.map((i) => i.name)).toEqual(expect.arrayContaining(["Escape a Grapple", "Mount", "Dismount"]));
+  });
   it("uses the 2014 wording and rules in a 5E room", () => {
     const old = combatOptions(sheet, "2014");
     const names = old.map((o) => o.name);

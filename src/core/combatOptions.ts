@@ -26,6 +26,10 @@ export interface CombatOption {
   withAttack?: boolean;
   /** Done with another action (2024 Stabilize: the Help action), so shown under that action's tile. */
   under?: "Help";
+  /** Only while the creature has this condition (Escape a Grapple: Grappled; Stand Up: Prone; Dismount: Mounted). */
+  ifCondition?: string;
+  /** Only while it doesn't (Drop Prone, Mount). */
+  unlessCondition?: string;
 }
 
 /** A skill's bonus from the sheet ("Athletics" or "Athletics (expertise)"), else the plain ability modifier. */
@@ -80,7 +84,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: o2024 ? "Utilize" : "Use an Object", cost: "action", group: "Actions", source: "PHB", text: o2024
       ? "Use a nonmagical object that needs your action (pull a stuck lever, light a lantern, pick up a fallen ally's weapon if it's a second object this turn)."
       : "Use an object that needs your action, or interact with a second object this turn." },
-    { name: "Escape a Grapple", cost: "action", group: "Actions", source: "PHB", summary: best, text: o2024
+    { name: "Escape a Grapple", cost: "action", ifCondition: "grappled", group: "Actions", source: "PHB", summary: best, text: o2024
       ? `While Grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) against the grapple's escape DC. On a success you're no longer Grappled.`
       : `While grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by the grappler's Strength (Athletics). On a success you escape.` },
     { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, ...(o2024 ? { under: "Help" as const } : {}), group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${fmtMod(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${fmtMod(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
@@ -104,12 +108,13 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
 
     // ---- movement
     { name: "Move", cost: "move", group: "Movement", source: "PHB", summary: `${speed} ft.`, text: `Move up to your Speed (${speed} ft.) on your turn, before, after or between your actions and attacks. Difficult terrain costs 1 extra foot per foot. You can move through an ally's space, but not end there; an enemy's space only if it's two sizes bigger or smaller than you.` },
-    { name: "Drop Prone", cost: "free", group: "Movement", source: "PHB", text: "Drop to the ground without using movement. While Prone you crawl (1 extra foot per foot), have Disadvantage on attacks, attacks against you within 5 ft. have Advantage, and attacks from farther away have Disadvantage." },
-    { name: "Stand Up", cost: "move", costNote: "Half your Speed", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting up from Prone costs half your Speed (${Math.floor(speed / 2)} ft.). You can't if your Speed is 0.` },
+    { name: "Drop Prone", cost: "free", unlessCondition: "prone", group: "Movement", source: "PHB", text: "Drop to the ground without using movement. While Prone you crawl (1 extra foot per foot), have Disadvantage on attacks, attacks against you within 5 ft. have Advantage, and attacks from farther away have Disadvantage." },
+    { name: "Stand Up", cost: "move", ifCondition: "prone", costNote: "Half your Speed", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting up from Prone costs half your Speed (${Math.floor(speed / 2)} ft.). You can't if your Speed is 0.` },
     { name: "Jump", cost: "move", group: "Movement", source: "PHB", summary: `${longJump} ft. / ${highJump} ft.`, text: `Long jump: up to ${longJump} ft. (your Strength score) after a 10 ft. run-up, half that from standing. High jump: ${highJump} ft. (3 + Strength modifier) after a run-up, half from standing. Jumped distance costs movement as usual.` },
     { name: "Climb", cost: "move", group: "Movement", source: "PHB", text: `${climb} A slippery or sheer surface may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
     { name: "Swim", cost: "move", group: "Movement", source: "PHB", text: `${swim} Rough water may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
-    { name: "Mount or Dismount", cost: "move", costNote: "Half your Speed", group: "Movement", source: "PHB", text: "Climbing onto or off a willing creature at least one size larger than you, within 5 ft., costs half your Speed. A controlled mount moves on your turn and can only Dash, Disengage or Dodge." },
+    { name: "Mount", cost: "move", costNote: "Half your Speed", unlessCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Climbing onto a willing creature at least one size larger than you, within 5 ft., costs half your Speed (${Math.floor(speed / 2)} ft.). A controlled mount moves on your turn and can only Dash, Disengage or Dodge. Mark the rider Mounted (Change status) to see Dismount here instead.` },
+    { name: "Dismount", cost: "move", costNote: "Half your Speed", ifCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting off your mount costs half your Speed (${Math.floor(speed / 2)} ft.). If the mount is moved against its will while you're on it, or you're knocked Prone, you make a DC 10 Dexterity saving throw or fall off, landing Prone within 5 ft. of it.` },
 
     // ---- other
     { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: o2024

@@ -56,6 +56,8 @@ const BUTLER: ConditionDef[] = [
   { key: "dead", label: "Dead" },
   /** Party member at 0 HP who no longer makes death saves (set by hand or by 3 successes); supersedes Death Saves. */
   { key: "stable", label: "Stable" },
+  /** Riding a mount: the action bar offers Dismount instead of Mount. */
+  { key: "mounted", label: "Mounted" },
 ];
 /** Party members at 0 HP that aren't Dead or Stable (both supersede it). Both systems. */
 const DEATH_SAVES: ConditionDef = { key: "death-saves", label: "Death Saves", automatic: true };

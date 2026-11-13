@@ -6,6 +6,8 @@ const MAGIC = "M12 3 10 9 4 11 10 13 12 19 14 13 20 11 14 9Z M19 2v4 M17 4h4 M4 
 const UTILIZE = "M14 4a5 5 0 0 0-6 6L3 15a3 3 0 0 0 4 4l5-5a5 5 0 0 0 6-6l-3 3-3-3 3-3Z";
 const POTION = "M9 3h6 M10 3v5l-5 8a4 4 0 0 0 3 5h8a4 4 0 0 0 3-5l-5-8V3 M8 13h8 M10 17h4 M12 15v4";
 
+const MOUNT = "M3 13h12l3-7h3v9l-3 2-1 5 M5 13v9 M13 13v9 M8 13l-1-5 M8 3a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M9 6l3 3h4 M9 6v7h3v4";
+
 const PATHS: Readonly<Record<string, string>> = {
   Attack: "M10 14 18 4 21 3 20 6 12 16Z M8 12l6 6 M10 16l-5 5 M3 19l2 2",
   "Cast a Spell": MAGIC,
@@ -36,7 +38,8 @@ const PATHS: Readonly<Record<string, string>> = {
   Jump: "M10 3a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M11 6l-2 6 5 3 4-1 M9 12l-4 3-2-2 M10 8l6 1 3-3 M5 8 8 6 M2 21h6 M16 21h6 M4 19c2-3 5-3 7-2 M14 17l2 2 1-3",
   Climb: "M15 3a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M15 6l-3 6 4 3v6 M12 12l-4 4-2 5 M14 8l5 1V6 M13 8 9 6V3 M21 2v20 M19 11h2 M19 18h2",
   Swim: "M15 7a2 2 0 1 0 4 0 2 2 0 1 0-4 0 M5 12l6-5-4-4H3 M11 7l4 6 M2 16q2-3 5 0t5 0 5 0 5 0 M2 21q2-3 5 0t5 0 5 0 5 0",
-  "Mount or Dismount": "M3 13h12l3-7h3v9l-3 2-1 5 M5 13v9 M13 13v9 M8 13l-1-5 M8 3a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0 M9 6l3 3h4 M9 6v7h3v4",
+  Mount: MOUNT,
+  Dismount: MOUNT,
   "Interact with an Object": "M4 21v-6l4-3V7a1.5 1.5 0 0 1 3 0v6l4-1 3 3-2 6Z M15 4h6v6h-6Z M13 7h2 M18 10v2",
   "Drink or Administer a Potion": POTION,
   "Drink a Potion": POTION,

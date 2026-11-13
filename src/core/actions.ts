@@ -51,6 +51,9 @@ export interface ActionItem {
   under?: string;
   /** Homebrew entries: their id in the room's list. */
   homebrewId?: string;
+  /** Combat options shown only while the unit has (or lacks) a condition (see CombatOption). */
+  ifCondition?: string;
+  unlessCondition?: string;
 }
 
 // ------------------------------------------------------------------ parsing
@@ -207,6 +210,9 @@ export interface BarOptions {
   dmg?: boolean;
   /** The room's homebrew actions. */
   homebrew?: HomebrewAction[];
+  /** The unit's condition keys: options that depend on a condition (Escape a Grapple, Stand Up, Mount / Dismount…)
+   *  show only when it applies. Left out, every option shows. */
+  conditions?: string[];
 }
 
 /** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers, plus homebrew. */
@@ -216,6 +222,8 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
     ...(c.withAttack ? { withAttack: true } : {}),
     ...(c.under ? { under: `common:${c.under}` } : {}),
+    ...(c.ifCondition ? { ifCondition: c.ifCondition } : {}),
+    ...(c.unlessCondition ? { unlessCondition: c.unlessCondition } : {}),
   }));
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
     key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
@@ -302,7 +310,10 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opt
   }
   const attacks = attacksPerAction(sheet);
   const dualWielder = [...sheet.traits, ...sheet.bonusActions].some((e) => /^Dual Wielder\b/i.test(e.name));
-  const common = commonActions(sheet, rules, opts).map((it) =>
+  const conds = opts.conditions && new Set(opts.conditions);
+  const common = commonActions(sheet, rules, opts)
+    .filter((it) => !conds || ((!it.ifCondition || conds.has(it.ifCondition)) && (!it.unlessCondition || !conds.has(it.unlessCondition))))
+    .map((it) =>
     it.key === ATTACK_KEY && attacks > 1 ? { ...it, summary: `${attacks} attacks` } : it);
   const all = [...items, ...itemActions(sheet, rules), ...common];
   // What the sheet rules out: Magic with no spells, magic items or magical actions (a wolf); Cast a Spell with no
