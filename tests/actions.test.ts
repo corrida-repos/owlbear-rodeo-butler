@@ -163,6 +163,7 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
   });
   it("2024: equipping or unequipping a weapon goes with an attack, not the free object interaction", () => {
     expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", withAttack: true });
+    expect(by("Equip or Unequip a Weapon").text).toMatch(/one swap per attack/);
     expect(by("Interact with an Object").text).not.toMatch(/draw or sheathe a weapon/);
     expect(by("Attack").text).toMatch(/equip or unequip one weapon/);
     const layout = barLayout(actionBar(sheet));
