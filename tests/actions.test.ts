@@ -196,6 +196,7 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(by("Equip or Unequip a Weapon").text).toMatch(/War Magic/);
     expect(by("Equip or Unequip a Weapon").text).toMatch(/spellcasting focus isn't one/);
     expect(by("Interact with an Object").text).toMatch(/spellcasting focus or component pouch uses this/);
+    expect(by("Interact with an Object").text).toMatch(/open or close a door, pick up a dropped item, take an item out of your pack/);
     expect(by("Magic").text).toMatch(/free hand/);
     expect(by("Interact with an Object").text).not.toMatch(/draw or sheathe a weapon/);
     expect(by("Attack").text).toMatch(/equip or unequip one weapon/);
