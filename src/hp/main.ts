@@ -29,7 +29,7 @@ let busy = false;
 
 const EVENTS: Record<string, string> = {
   "creature-at-zero": "at 0 HP: Dead, Death saves, Stable or Alive?", "dropped-to-zero": "down: death saves (or Dead, Stable, Alive)", "death-save-failure": "death save failure",
-  "three-failures": "three failures", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
+  "three-failures": "three failures: dead", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
   "concentration-check": "Concentration check (on its card)", "concentration-lost": "Concentration lost",
   "wild-shape-ended": "Wild Shape ended (back to normal form)",
 };
@@ -156,7 +156,7 @@ function render() {
   if (note) nodes.push(h("div", { className: "panel small" }, note));
   if (error) nodes.push(h("div", { className: "panel bad small" }, error));
   if (results) nodes.push(h("div", { className: "panel small" }, ...results.map((r) =>
-    h("div", {}, h("strong", {}, r.name), r.markedDead ? ": at 0 HP, marked dead" : r.events.length ? `: ${r.events.map((e) => EVENTS[e] ?? e).join(", ")}` : ": done"))));
+    h("div", {}, h("strong", {}, r.name), r.markedDead ? (r.deadBy === "setting" ? ": at 0 HP, marked dead (room setting)" : r.deadBy === "three-failures" ? ": third death save failure, dead" : ": massive damage at 0 HP, dead") : r.events.length ? `: ${r.events.map((e) => EVENTS[e] ?? e).join(", ")}` : ": done"))));
   const focusWasOnInput = document.activeElement?.id === "amt";
   const val = (document.getElementById("amt") as HTMLInputElement | null)?.value ?? "";
   const openDetails = !!document.querySelector("details[open]");

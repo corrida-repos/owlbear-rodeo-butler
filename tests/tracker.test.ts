@@ -271,12 +271,14 @@ describe("tracker operations in a scene", () => {
     expect(r2[0]).toMatchObject({ events: ["creature-at-zero"], markedDead: false });
   });
 
-  it("death saves from the card, PC down then marked dead", async () => {
+  it("death saves from the card: the third failure kills by the rules (no Mark as dead needed)", async () => {
+    await encounterAction(scene, "start");
     await changeHp(scene, ["pc"], { kind: "damage", amount: 20 });
     expect(state("pc").deathSaves).toEqual({ successes: 0, failures: 0 });
     expect(await recordDeathSave(scene, "pc", 4)).toBe("failure");
     expect(await recordDeathSave(scene, "pc", 1)).toBe("dead");
-    await markUnitsDead(scene, ["pc"]);
+    expect(state("pc").inEncounter).toBe(false);
+    await expect(recordDeathSave(scene, "pc", 15)).rejects.toThrow(/isn't making death saves/);
     expect(state("pc").deathSaves).toBeUndefined();
     expect(state("pc").conditions.map((c) => c.key)).toEqual(["dead"]);
   });
@@ -339,6 +341,35 @@ describe("tracker operations in a scene", () => {
     // Auto-dead (room setting) skips the prompt.
     await changeHp(scene, ["bandit"], { kind: "damage", amount: 99 }, { autoDeadAtZero: true });
     expect(state("bandit").zeroHpPending).toBeUndefined();
+  });
+
+  it("death save rules: damage at 0 HP to a third failure kills; massive damage at 0 HP kills; any healing brings it back", async () => {
+    await changeHp(scene, ["pc"], { kind: "damage", amount: 20 });
+    await setDeathSaves(scene, "pc", 1, 2);
+    const [r] = await changeHp(scene, ["pc"], { kind: "damage", amount: 1 });
+    expect(r).toMatchObject({ markedDead: true, deadBy: "three-failures" });
+    expect(state("pc").conditions.map((c) => c.key)).toEqual(["dead"]);
+    // Massive damage while making death saves (a creature put on them too).
+    await changeHp(scene, ["w1"], { kind: "damage", amount: 20 });
+    await chooseAtZero(scene, "w1", "dying");
+    expect((await changeHp(scene, ["w1"], { kind: "damage", amount: 20 }))[0]).toMatchObject({ deadBy: "massive-damage" });
+    expect(state("w1").conditions.map((c) => c.key)).toEqual(["dead"]);
+    // Three failures ticked by hand: dead too.
+    await changeHp(scene, ["w2"], { kind: "damage", amount: 3 });
+    await chooseAtZero(scene, "w2", "dying");
+    expect(await setDeathSaves(scene, "w2", 0, 3)).toBe("dead");
+    expect(state("w2").conditions.map((c) => c.key)).toEqual(["dead"]);
+    // Healing even 1 HP: back up at once, from death saves, Stable or the pending prompt.
+    for (const [setup, id] of [["dying", "bandit"], ["stable", "npc"], [null, "bandit"]] as const) {
+      await changeHp(scene, [id], { kind: "damage", amount: 99 });
+      if (setup) await chooseAtZero(scene, id, setup);
+      await changeHp(scene, [id], { kind: "heal", amount: 1 });
+      const st = state(id);
+      expect(st.hp).toBe(1);
+      expect(st.deathSaves).toBeUndefined();
+      expect(st.zeroHpPending).toBeUndefined();
+      expect(st.conditions).toEqual([]);
+    }
   });
 
   it("who answers the 0 HP prompt", () => {

@@ -43,8 +43,8 @@ const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
   "creature-at-zero": (n) => `${n} is at 0 HP: choose Dead, Death saves, Stable or Alive (the 0 HP prompt).`,
   "dropped-to-zero": (n) => `${n} dropped to 0 HP: on death saves until their controller chooses (Dead, Death saves, Stable or Alive).`,
   "death-save-failure": (n) => `${n} took damage at 0 HP: one death save failure.`,
-  "three-failures": (n) => `${n} has three death save failures: mark as dead (☠)?`,
-  "massive-damage": (n) => `${n} took massive damage (at least their max HP past 0): instant death by the rules. Mark as dead (☠)?`,
+  "three-failures": (n) => `${n} has three death save failures and is dead.`,
+  "massive-damage": (n) => `${n} took massive damage (at least their max HP past 0): instant death by the rules. Choose Dead in the 0 HP prompt (☠)?`,
   "stable-lost": (n) => `${n} is no longer Stable.`,
   "revived-from-zero": (n) => `${n} is back above 0 HP.`,
   "concentration-check": (n) => `${n} must make a Concentration save: the prompt is on its card.`,
@@ -53,7 +53,10 @@ const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
 };
 
 function report(rs: HpReport[]) {
-  notes = rs.flatMap((r) => r.markedDead ? [`${r.name} is at 0 HP and was marked dead (room setting).`] : r.events.flatMap((e) => EVENT_TEXT[e] ? [EVENT_TEXT[e]!(r.name)] : []));
+  notes = rs.flatMap((r) => r.deadBy === "setting" ? [`${r.name} is at 0 HP and was marked dead (room setting).`]
+    : r.deadBy === "three-failures" ? [`${r.name} took damage at 0 HP: third death save failure. ${r.name} is dead.`]
+    : r.deadBy === "massive-damage" ? [`${r.name} took massive damage at 0 HP (at least their max HP) and is dead.`]
+    : r.events.flatMap((e) => EVENT_TEXT[e] ? [EVENT_TEXT[e]!(r.name)] : []));
 }
 
 function hpBox(u: TrackerUnit): HTMLInputElement {

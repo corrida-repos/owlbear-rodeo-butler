@@ -169,11 +169,13 @@ export async function setParty(gw: SceneGateway, ids: string[], on: boolean) {
 
 // ------------------------------------------------------------------ HP, death, revive
 
-export interface HpReport { id: string; name: string; events: HpEvent[]; markedDead: boolean }
+/** `deadBy`: why changeHp marked the unit dead (the room setting, or the death save rules). */
+export interface HpReport { id: string; name: string; events: HpEvent[]; markedDead: boolean; deadBy?: "setting" | "three-failures" | "massive-damage" }
 
 /**
  * Applies one HP change to several units (e.g. one Fireball). Creatures reaching 0 HP are marked dead when the room
- * setting says so; everything else is reported so the UI can offer it.
+ * setting says so. A unit making death saves dies by the rules: a third failure from damage at 0 HP, or damage at
+ * 0 HP of at least its max HP (massive damage). Everything else is reported so the UI can offer it.
  */
 export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange, opts: { autoDeadAtZero?: boolean; system?: GameSystem } = {}): Promise<HpReport[]> {
   const { view, items } = await load(gw);
@@ -191,11 +193,15 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
     const wild = active ? wildShapeHp(u.sheet, u.state, active, change, opts.system) : null;
     const { patch, events } = wild ?? applyHp(u.sheet, u.state, change, opts.system);
     let full: Partial<UnitState> = patch;
-    const autoDead = opts.autoDeadAtZero && events.includes("creature-at-zero");
+    const alreadyDown = u.state.hp <= 0 && !u.dead;
+    const deadBy = opts.autoDeadAtZero && events.includes("creature-at-zero") ? "setting" as const
+      : alreadyDown && events.includes("three-failures") ? "three-failures" as const
+      : alreadyDown && events.includes("massive-damage") ? "massive-damage" as const : undefined;
+    const autoDead = !!deadBy;
     if (autoDead) { full = { ...patch, ...markDead({ conditions: patch.conditions ?? u.state.conditions }) }; dying.push(id); }
     if (wild?.revert && item) reverts.push({ item, patch: full });
     else if (Object.keys(full).length) patches.push({ id, key: STATE_KEY, patch: full });
-    reports.push({ id, name: u.name, events, markedDead: !!autoDead });
+    reports.push({ id, name: u.name, events, markedDead: autoDead, ...(deadBy ? { deadBy } : {}) });
   }
   if (dying.length) {
     const enc = passTurnFrom(view.encounter, view.order, dying);
@@ -245,22 +251,25 @@ export async function makeStable(gw: SceneGateway, id: string) {
   await gw.patchMetadata([{ id, key: STATE_KEY, patch: setStable(u.state) }]);
 }
 
-/** Records a death saving throw rolled from the card (natural d20 value). */
+/** Records a death saving throw (natural d20 value), by the rules: a third failure kills (Mark as dead). */
 export async function recordDeathSave(gw: SceneGateway, id: string, natural: number): Promise<DeathSaveOutcome> {
   const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
   if (!u) throw new Error("That token is no longer in the scene.");
+  if (!needsDeathSaves(u.state)) throw new Error(`${u.name} isn't making death saves.`);
   const { patch, outcome } = applyDeathSave(u.state, natural);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+  if (outcome === "dead") await markUnitsDead(gw, [id]);
   return outcome;
 }
 
-/** Death save counters set by hand (rolled at the table, or a correction). Three successes: Stable. */
+/** Death save counters set by hand (rolled at the table, or a correction). Three successes: Stable; three failures: dead. */
 export async function setDeathSaves(gw: SceneGateway, id: string, successes: number, failures: number): Promise<"set" | "stable" | "dead"> {
   const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
   if (!u) throw new Error("That token is no longer in the scene.");
-  if (u.state.hp > 0 || isDead(u.state)) throw new Error(`${u.name} isn't at 0 HP making death saves.`);
+  if (!needsDeathSaves(u.state)) throw new Error(`${u.name} isn't at 0 HP making death saves.`);
   const { patch, outcome } = setDeathSaveCounts(u.state, successes, failures);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+  if (outcome === "dead") await markUnitsDead(gw, [id]);
   return outcome;
 }
 

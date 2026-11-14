@@ -2,7 +2,8 @@
  * The 0-HP pieces shared by the unit card and the 0 HP popover:
  *  - The prompt when a unit drops to 0 HP: Dead, Death saves, Stable or Alive.
  *  - The death save tracker: roll digitally (recorded automatically), or type a d20 rolled at the table, or tick
- *    successes and failures by hand. Clicking the dots corrects the counters.
+ *    successes and failures by hand. Clicking the dots corrects the counters. Only the death save rules decide the
+ *    outcome (three successes: Stable; three failures: dead; natural 20 or any healing: back up).
  * The GM's client writes directly; a player's goes through the GM's client (requests.ts).
  */
 import { chooseAtZero, recordDeathSave, setDeathSaves } from "../core/tracker";
@@ -15,7 +16,7 @@ import { sendRequest } from "./requests";
 
 const OUTCOME_TEXT: Partial<Record<DeathSaveOutcome | "set", string>> = {
   "stable": "Three successes: Stable.",
-  "dead": "Three failures: mark as dead?",
+  "dead": "Three failures: dead.",
   "regain-1-hp": "Natural 20: back up with 1 HP!",
   "two-failures": "Natural 1: two failures.",
 };
@@ -96,12 +97,7 @@ export function deathSavePanel(ui: ZeroHpUi, state: Pick<UnitState, "deathSaves"
       h("span", { className: "small muted" }, "Track by hand:"),
       h("button", { className: "secondary small", disabled: ds.successes >= 3, onclick: set(ds.successes + 1, ds.failures) }, "+1 ✓ success"),
       h("button", { className: "secondary small", disabled: ds.failures >= 3, onclick: set(ds.successes, ds.failures + 1) }, "+1 ✗ failure")),
-    ds.failures >= 3
-      ? h("div", { className: "row between" }, h("span", { className: "bad" }, "Three failures."),
-        h("button", { className: "danger-bg", onclick: run(ui, () => answerZeroHp(ui.role, ui.unitId, "dead")) }, "💀 Mark as dead"))
-      : h("div", { className: "row" },
-        h("button", { className: "secondary small", title: ZERO_HP_HINT.stable, onclick: run(ui, () => answerZeroHp(ui.role, ui.unitId, "stable")) }, "🛌 Stable"),
-        h("button", { className: "secondary small", title: ZERO_HP_HINT.dead, onclick: run(ui, () => answerZeroHp(ui.role, ui.unitId, "dead")) }, "💀 Dead")));
+    h("div", { className: "small muted" }, "3 successes: Stable · 3 failures: dead · healed any HP: back up at once."));
 }
 
 /** The card's / popover's 0-HP section: the prompt while pending, otherwise the tracker while making death saves. */

@@ -9,7 +9,8 @@
  *    removes Stable and death saves resume. Damage at 0 HP that equals or exceeds max HP kills outright (massive
  *    damage); Butler offers Mark as dead rather than doing it silently.
  *  - Death save: 10+ succeeds, a natural 1 counts as two failures, a natural 20 restores 1 HP. Three successes:
- *    Stable. Three failures: dead (offered).
+ *    Stable. Three failures: dead (tracker.ts marks the unit dead), as is massive damage taken while already at 0 HP.
+ *  - Any healing above 0 HP brings the unit back at once: death saves, Stable and the 0 HP prompt end.
  *  - Any unit dropping to 0 HP from above is flagged `zeroHpPending`: its controller chooses Dead, Death saves, Stable
  *    or Alive (see zeroHpChoicePatch). Until then a party member is on death saves (the rules' default) and a creature
  *    is simply at 0 HP. Death saves aren't only for the party: a creature put on them follows the same rules.
@@ -142,7 +143,7 @@ function deathSaveResult(state: S, natural: number): { patch: Partial<UnitState>
 
 /**
  * Death save counters set by hand (the player rolled at the table, or a correction): each 0–3. Three successes make
- * the unit Stable, as a rolled third success would; three failures are reported ("dead") for Mark as dead.
+ * the unit Stable, as a rolled third success would; three failures are reported ("dead") and the unit dies.
  */
 export function setDeathSaveCounts(state: S, successes: number, failures: number): { patch: Partial<UnitState>; outcome: "set" | "stable" | "dead" } {
   const clamp = (n: number) => Math.max(0, Math.min(3, Math.floor(Number(n) || 0)));

@@ -303,14 +303,14 @@ async function handleRequest(req: unknown) {
       case "dash": await setDash(await OBR.scene.getMetadata(), req.unitId, req.on); break;
       case "death-save": {
         const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
-        if (outcome === "dead") await notify(`${name}: third death save failure. Mark as dead?`, "WARNING");
+        if (outcome === "dead") await notify(`${name}: third death save failure. ${name} is dead.`, "WARNING");
         if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
         if (outcome === "regain-1-hp") await notify(`${name} rolled a natural 20 and is back up with 1 HP!`, "SUCCESS");
         break;
       }
       case "death-save-set": {
         const outcome = await setDeathSaves(obrGateway, req.unitId, req.successes, req.failures);
-        if (outcome === "dead") await notify(`${name}: three death save failures. Mark as dead?`, "WARNING");
+        if (outcome === "dead") await notify(`${name}: three death save failures. ${name} is dead.`, "WARNING");
         if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
         break;
       }
@@ -323,6 +323,8 @@ async function handleRequest(req: unknown) {
         const [r] = await changeHp(obrGateway, [req.unitId], req.change, { system: roomSystem() });
         if (r?.events.includes("wild-shape-ended")) await notify(`${name}'s Wild Shape ended: back to their normal form.`, "WARNING");
         if (r?.events.includes("dropped-to-zero")) await notify(`${name} dropped to 0 HP.`, "WARNING");
+        if (r?.deadBy === "three-failures") await notify(`${name} took damage at 0 HP: third death save failure. ${name} is dead.`, "WARNING");
+        if (r?.deadBy === "massive-damage") await notify(`${name} took massive damage at 0 HP and is dead.`, "WARNING");
         break;
       }
       case "initiative": await setInitiative(obrGateway, req.unitId, req.value); break;
