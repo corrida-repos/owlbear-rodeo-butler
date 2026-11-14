@@ -217,6 +217,9 @@ export function legendaryPerRound(sheet: Pick<UnitSheet, "legendary">): number {
 export interface BarOptions {
   /** Include the DMG's optional action options (room setting, on by default). */
   dmg?: boolean;
+  /** Include handheld management: Don or Doff a Shield, Equip or Unequip a Weapon, and the notes on drawing weapons
+   *  and spellcasting foci (room setting, on by default). */
+  handheld?: boolean;
   /** The room's homebrew actions. */
   homebrew?: HomebrewAction[];
   /** The unit's condition keys: options that depend on a condition (Escape a Grapple, Stand Up, Mount / Dismount…)
@@ -226,7 +229,7 @@ export interface BarOptions {
 
 /** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers, plus homebrew. */
 export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: BarOptions = {}): ActionItem[] {
-  const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg }).map((c) => ({
+  const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg, handheld: opts.handheld }).map((c) => ({
     key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
     ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
     ...(c.withAttack ? { withAttack: true } : {}),

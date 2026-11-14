@@ -23,6 +23,7 @@ const PATHS: Readonly<Record<string, string>> = {
   Study: "M12 6C8 3 4 4 2 5v14c3-2 7-1 10 1 3-2 7-3 10-1V5c-3-1-7-2-10 1Z M12 6v14 M5 8l4 1 M5 12l4 1 M15 9l4-1 M15 13l4-1",
   Utilize: UTILIZE,
   "Use an Object": UTILIZE,
+  "Don or Doff a Shield": "M9 4 3 6v6c0 4 6 8 6 8s6-4 6-8V6Z M9 8v8 M6 11h6 M15 12h7 M19 9l3 3-3 3",
   "Escape a Grapple": "M7 6 4 9a4 4 0 0 0 6 6l2-2 M17 18l3-3a4 4 0 0 0-6-6l-2 2 M8 12l3-3 M13 15l3-3 M8 2v3 M4 3l2 3 M16 19v3 M18 18l3 3",
   Stabilize: "M8 3h8v5h5v8h-5v5H8v-5H3V8h5Z M7 12h3l1-2 2 4 1-2h3",
   "Unarmed Strike": "M6 12V8a1.5 1.5 0 0 1 3 0v3-6a1.5 1.5 0 0 1 3 0v6-5a1.5 1.5 0 0 1 3 0v5-3a1.5 1.5 0 0 1 3 0v6l-3 4v3H8v-3l-4-5a1.5 1.5 0 0 1 2-2l3 2",

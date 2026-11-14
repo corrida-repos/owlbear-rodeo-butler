@@ -207,6 +207,25 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(old.some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
     expect(old.find((o) => o.name === "Interact with an Object")!.text).toMatch(/draw or sheathe a weapon/);
   });
+  it("handheld management: Don or Doff a Shield, weapon swaps and focus notes show only with the room setting on", () => {
+    expect(by("Don or Doff a Shield")).toMatchObject({ cost: "action", costNote: "Utilize action", group: "Actions" });
+    expect(combatOptions(sheet, "2014").find((o) => o.name === "Don or Doff a Shield")!.text).toMatch(/^Donning or doffing a shield takes an action/);
+    for (const rules of ["2024", "2014"] as const) {
+      const off = combatOptions(sheet, rules, { handheld: false });
+      const names = off.map((o) => o.name);
+      expect(names).not.toContain("Don or Doff a Shield");
+      expect(names).not.toContain("Equip or Unequip a Weapon");
+      const text = (n: string) => off.find((o) => o.name === n)?.text ?? "";
+      expect(text("Interact with an Object")).not.toMatch(/focus|weapon/i);
+      expect(text("Attack")).not.toMatch(/equip|sheath|object interaction/i);
+      expect(text("Interact with an Object")).toMatch(/open or close a door/);
+    }
+    expect(combatOptions(sheet, "2024", { handheld: false }).find((o) => o.name === "Magic")!.text).not.toMatch(/free hand|focus/);
+    const bar = (handheld: boolean) => actionBar(sheet, "2024", { handheld }).items.map((i) => i.name);
+    expect(bar(true)).toEqual(expect.arrayContaining(["Don or Doff a Shield", "Equip or Unequip a Weapon"]));
+    expect(bar(false)).not.toContain("Don or Doff a Shield");
+    expect(bar(false)).not.toContain("Equip or Unequip a Weapon");
+  });
   it("shows options that depend on a condition only when it applies", () => {
     const names = (conditions: string[]) => actionBar(sheet, "2024", { conditions }).items.map((i) => i.name);
     const none = names([]);
