@@ -170,18 +170,24 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(rolls("Improvised Weapon")).toEqual(["+3=1d20+3", "1d4 + 3=1d4+3"]);
     expect(rolls("Escape a Grapple")).toEqual(["+5=1d20+5", "+2=1d20+2"]);
     expect(rolls("Shove Aside")).toEqual(["+5 dis=2d20kl1+5"]);
-    for (const n of ["Influence", "Search", "Study", "Stabilize", "Climb", "Swim", "Disarm", "Overrun", "Tumble", "Climb onto a Bigger Creature", "Dismount"]) {
+    for (const n of ["Influence", "Search", "Study", "Stabilize", "Climb", "Swim", "Disarm", "Overrun", "Tumble", "Climb onto a Bigger Creature"]) {
       expect(rolls(n).length, n).toBeGreaterThan(0);
     }
     // Every roll in a rule's text is a chip too, with its kind from the wording.
     const kinds = (n: string) => rollSegments(parseChips(by(n).text)).map((r) => r.kind);
     expect(kinds("Unarmed Strike")).toEqual(["attack"]);
     expect(kinds("Influence")).toEqual(["check", "check", "check", "check", "check"]);
-    expect(kinds("Dismount")).toEqual(["save"]);
+    // Saves show the DC, not a roll.
+    expect(kinds("Dismount")).toEqual([]);
+    expect(by("Dismount").summary).toBe("15 ft. · DC 10 Dex save");
+    expect(rolls("Grapple")).toEqual([]);
+    expect(by("Grapple").summary).toBe("DC 13 Str/Dex");
     expect(kinds("Improvised Weapon")).toEqual(["attack", "attack", "damage"]);
   });
   it("keeps a sheet entry's dice rollable on its tile", () => {
     expect(summaryOf("Melee Attack Roll: +5 [1d20+5], reach 5 ft. Hit: 1d8+3 [1d8+3] Slashing damage.", true)).toBe("+5 [1d20+5] · 1d8+3 [1d8+3] Slashing");
+    expect(summaryOf("Dexterity Saving Throw: DC 17, Failure: 16d6 [16d6] Fire damage.", true)).toBe("16d6 [16d6] Fire · DC 17 Dex");
+    expect(summaryOf("Make a saving throw +3 [1d20+3].", true)).toBe("");
   });
   it("2024: equipping or unequipping a weapon goes with an attack, not the free object interaction", () => {
     expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", withAttack: true });

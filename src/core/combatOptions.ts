@@ -61,7 +61,6 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const medicine = skillBonus(sheet, "Medicine", "wis");
   const best = `Athletics ${d20Chip(ath)} or Acrobatics ${d20Chip(acro)}`;
   const strMod = str;
-  const dexSave = sheet.saves.dex ?? abilityMod(sheet.abilities.dex);
   // Disarm uses a weapon attack: the sheet's best to-hit, else an Unarmed Strike's.
   const weaponHit = Math.max(...[...sheet.actions].flatMap((a) => [...a.text.matchAll(/\[1d20([+-]\d+)\]/g)].map((m) => Number(m[1]))), str + pb);
   const influence: [string, keyof UnitSheet["abilities"]][] = [["Persuasion", "cha"], ["Deception", "cha"], ["Intimidation", "cha"], ["Performance", "cha"], ["Animal Handling", "wis"]];
@@ -138,7 +137,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Climb", cost: "move", group: "Movement", source: "PHB", summary: `Athletics ${d20Chip(ath)}`, text: `${climb} A slippery or sheer surface may need a Strength (Athletics) check (you: ${d20Chip(ath)}).` },
     { name: "Swim", cost: "move", group: "Movement", source: "PHB", summary: `Athletics ${d20Chip(ath)}`, text: `${swim} Rough water may need a Strength (Athletics) check (you: ${d20Chip(ath)}).` },
     { name: "Mount", cost: "move", costNote: "Half your Speed", unlessCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Climbing onto a willing creature at least one size larger than you, within 5 ft., costs half your Speed (${Math.floor(speed / 2)} ft.). A controlled mount moves on your turn and can only Dash, Disengage or Dodge. Mark the rider Mounted (Change status) to see Dismount here instead.` },
-    { name: "Dismount", cost: "move", costNote: "Half your Speed", ifCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft. · Dex save ${d20Chip(dexSave)}`, text: `Getting off your mount costs half your Speed (${Math.floor(speed / 2)} ft.). If the mount is moved against its will while you're on it, or you're knocked Prone, you make a DC 10 Dexterity saving throw (you: ${d20Chip(dexSave)}) or fall off, landing Prone within 5 ft. of it.` },
+    { name: "Dismount", cost: "move", costNote: "Half your Speed", ifCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft. · DC 10 Dex save`, text: `Getting off your mount costs half your Speed (${Math.floor(speed / 2)} ft.). If the mount is moved against its will while you're on it, or you're knocked Prone, you make a DC 10 Dexterity saving throw or fall off, landing Prone within 5 ft. of it.` },
 
     // ---- other
     { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: o2024

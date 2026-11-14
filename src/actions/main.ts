@@ -147,10 +147,10 @@ function rollsOf(it: ActionItem): { seg: RollSegment; label: string }[] {
   const out: { seg: RollSegment; label: string }[] = [];
   const seen = new Set<string>();
   segs.forEach((sg, i) => {
-    if (sg.t !== "roll") return;
+    if (sg.t !== "roll" || sg.kind === "save") return; // a save shows its DC, it isn't rolled from here
     const prev = segs[i - 1];
     const skill = prev?.t === "text" && sg.kind !== "attack" && sg.kind !== "damage" ? skillBefore(prev.text) : undefined;
-    const label = skill ? `${skill} ${sg.kind === "save" ? "save" : "check"}` : rollLabel("", sg).replace(/^ · /, "");
+    const label = skill ? `${skill} check` : rollLabel("", sg).replace(/^ · /, "");
     const id = `${sg.formula}|${label}`;
     if (seen.has(id)) return;
     seen.add(id);
@@ -204,6 +204,7 @@ function withChips(it: ActionItem, text: string, inTile = false): Child[] {
   const out: Child[] = [];
   for (const s of parseChips(editionText(text, roomSystem().rules))) {
     if (s.t === "text") { s.text.split("\n").forEach((line, i) => { if (i) out.push(h("br")); out.push(line); }); continue; }
+    if (s.kind === "save") { out.push(s.display); continue; } // saves: the DC is what matters, shown as text
     const match = known.find((k) => k.seg.formula === s.formula);
     out.push(rollChip(it, match?.seg ?? s, match?.label ?? rollLabel("", s).replace(/^ · /, ""), inTile));
   }

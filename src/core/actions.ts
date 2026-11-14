@@ -160,7 +160,8 @@ export function summaryOf(text: string, chips = false): string {
   const save = saveOf(text);
   if (save) parts.push(`DC ${save.dc} ${save.ability.slice(0, 3)}`);
   if (!parts.length) {
-    const other = rolls.find((r) => r.kind === "dice" || r.kind === "check" || r.kind === "save");
+    // Saves show their DC (above), never a roll.
+    const other = rolls.find((r) => r.kind === "dice" || r.kind === "check");
     if (other) parts.push(rollText(other, chips));
   }
   return parts.join(" · ");
