@@ -24,7 +24,7 @@ import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./mov
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
 import { resetDarkness, updateDarkness } from "./darkness";
-import { AURA_CHANNEL, AURA_SCOPE_KEY, HUD_KEY, setUnitLight } from "../core/vision";
+import { AURA_CHANNEL, AURA_CHOSEN_KEY, AURA_SCOPE_KEY, HUD_KEY, readChosen, readSceneLight, setUnitLight, toggleChosen } from "../core/vision";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
@@ -74,6 +74,22 @@ async function createMenus() {
     icons: [{ icon, label: "Actions", filter: { max: 1, every: [...UNIT_FILTER] } }],
     onClick: async (ctx) => {
       logClick("actions", ctx.items); if (ctx.items[0]) await openActions(ctx.items[0].id); },
+  });
+  // Vision HUD: show or hide this unit's vision circles (and, for the GM, look through its eyes in the darkness fog).
+  await OBR.contextMenu.create({
+    id: `${BUTLER_NS}/vision-toggle`,
+    icons: [{ icon, label: "Show / hide vision aura", filter: { every: [...UNIT_FILTER] } }],
+    onClick: async (ctx) => {
+      logClick("vision-toggle", ctx.items);
+      const picked = ids(ctx.items);
+      const chosen = toggleChosen(readChosen(store.get(AURA_CHOSEN_KEY)), picked);
+      store.set(AURA_CHOSEN_KEY, JSON.stringify(chosen));
+      store.set(AURA_SCOPE_KEY, "chosen");
+      store.set(HUD_KEY, "1");
+      await OBR.broadcast.sendMessage(AURA_CHANNEL, { key: AURA_CHOSEN_KEY }, { destination: "LOCAL" }).catch(() => {});
+      if (readSceneLight(await OBR.scene.getMetadata()) === "bright") await notify("Vision auras show in dim or dark scenes: set the scene's light in Tracker → Light & vision.");
+      void onSceneChange();
+    },
   });
   // Wild Shape: on druids (set up from their sheet or by the GM); the GM can set it up on any party member.
   await OBR.contextMenu.create({
@@ -179,7 +195,7 @@ async function onSceneChange() {
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
       await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] vision auras failed", e));
-      await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, roomSystem().rules)
+      await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
@@ -340,7 +356,7 @@ OBR.onReady(async () => {
     selection = next;
     void onSceneChange();
   });
-  window.addEventListener("storage", (e) => { if (e.key === HUD_KEY || e.key === AURA_SCOPE_KEY) void onSceneChange(); });
+  window.addEventListener("storage", (e) => { if (e.key === HUD_KEY || e.key === AURA_SCOPE_KEY || e.key === AURA_CHOSEN_KEY) void onSceneChange(); });
   OBR.broadcast.onMessage(AURA_CHANNEL, () => void onSceneChange());
   OBR.scene.grid.onChange(() => void onSceneChange());
 

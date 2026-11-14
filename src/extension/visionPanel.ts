@@ -5,7 +5,7 @@
  */
 import OBR from "@owlbear-rodeo/sdk";
 import {
-  AURA_CHANNEL, AURA_SCOPE_KEY, HUD_KEY, hudOn, lightingUpdate, readAuraScope, readForcedFog, readSceneLight, RING_STYLE, SCENE_LIGHT_TEXT,
+  AURA_CHANNEL, AURA_CHOSEN_KEY, AURA_SCOPE_KEY, HUD_KEY, hudOn, readChosen, toggleChosen, lightingUpdate, readAuraScope, readForcedFog, readSceneLight, RING_STYLE, SCENE_LIGHT_TEXT,
   type AuraScope, type RingKind, type SceneLight,
 } from "../core/vision";
 import { h, store, type Child } from "./dom";
@@ -21,6 +21,9 @@ export async function initVisionPanel(onChange: () => void) {
   try { const m = await OBR.scene.getMetadata(); scene = readSceneLight(m); forced = readForcedFog(m); } catch { scene = "bright"; }
   if (subscribed) return;
   subscribed = true;
+  // The token's right-click "Show / hide vision aura" changes the choice from the background page.
+  OBR.broadcast.onMessage(AURA_CHANNEL, () => onChange());
+  window.addEventListener("storage", (e) => { if (e.key === AURA_CHOSEN_KEY || e.key === AURA_SCOPE_KEY || e.key === HUD_KEY) onChange(); });
   OBR.scene.onMetadataChange((m) => {
     const next = readSceneLight(m), nextForced = readForcedFog(m);
     if (next !== scene || nextForced !== forced) { scene = next; forced = nextForced; onChange(); }
@@ -65,8 +68,32 @@ function forceFogControl(): Child {
     "Force the darkness fog on players in this scene (even with their Vision HUD off), so creatures in the dark stay hidden");
 }
 
-/** The panel. `rerender` redraws the page it's on. */
-export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child {
+/** A unit the HUD can show: `mine` = controlled by this viewer. Players are only offered their own units and the party. */
+export interface VisionUnit { id: string; name: string; party: boolean; mine?: boolean }
+
+/** Pick units by hand: any party member or creature (the GM), one by one or all at once. */
+function chooser(role: "GM" | "PLAYER", units: VisionUnit[], rerender: () => void): Child {
+  const chosen = readChosen(store.get(AURA_CHOSEN_KEY));
+  const save = (ids: string[]) => setPref(AURA_CHOSEN_KEY, JSON.stringify(ids), rerender);
+  const box = (u: VisionUnit) => h("label", { className: "small" },
+    h("input", { type: "checkbox", checked: chosen.includes(u.id), onchange: () => save(toggleChosen(chosen, [u.id])) }),
+    u.name, u.mine ? h("span", { className: "muted" }, " (you)") : null);
+  const party = units.filter((u) => u.party || u.mine);
+  const creatures = role === "GM" ? units.filter((u) => !u.party) : [];
+  const group = (title: string, list: VisionUnit[]) => list.length ? h("div", { className: "stack tight" },
+    h("div", { className: "row between small" }, h("strong", {}, title),
+      h("span", { className: "row" },
+        h("button", { className: "secondary small", onclick: () => save([...new Set([...chosen, ...list.map((u) => u.id)])]) }, "All"),
+        h("button", { className: "secondary small", onclick: () => save(chosen.filter((id) => !list.some((u) => u.id === id))) }, "None"))),
+    ...list.map(box)) : null;
+  return h("div", { className: "stack tight", style: "margin-left:4px" },
+    group("Party", party), group("Creatures", creatures),
+    !party.length && !creatures.length ? h("div", { className: "small muted" }, "No units in this scene.") : null,
+    h("div", { className: "small muted" }, "Or right-click tokens → Show / hide vision aura."));
+}
+
+/** The panel. `rerender` redraws the page it's on; `units` are the scene's units this viewer may pick. */
+export function visionPanel(role: "GM" | "PLAYER", rerender: () => void, units: VisionUnit[] = []): Child {
   const on = hudOn(store.get(HUD_KEY));
   const scope = readAuraScope(store.get(AURA_SCOPE_KEY));
   if (role !== "GM" && scene === "bright") return null;
@@ -75,10 +102,10 @@ export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child 
     onclick: async () => OBR.scene.setMetadata(lightingUpdate(await OBR.scene.getMetadata(), { level: l })).catch((e) => console.error("[Butler] scene light failed", e)),
   }, label);
   const scopes: [AuraScope, string][] = role === "GM"
-    ? [["selected", "Selected tokens"], ["party", "Party"], ["all", "All units"]]
-    : [["selected", "My selected token"], ["party", "Party & my units"]];
+    ? [["selected", "Selected tokens"], ["party", "The whole party"], ["all", "Everyone (party and creatures)"], ["chosen", "Choose units…"]]
+    : [["selected", "My selected token"], ["party", "Party & my units"], ["chosen", "Choose units…"]];
   const fogText = role === "GM"
-    ? "Darkness fog, see-through: what the party sees (black = heavily obscured, haze = lightly obscured)."
+    ? "Darkness fog, see-through: what the units with circles see together (the party when none). Black = heavily obscured, haze = lightly obscured."
     : "Darkness fog: you see only what your units can (their senses and any light). Black = heavily obscured, haze = lightly obscured.";
   return h("details", { className: "panel", open: scene !== "bright" },
     h("summary", {}, `Light & vision${scene === "bright" ? "" : scene === "dim" ? " · dim light" : " · darkness"}${on && scene !== "bright" ? " · HUD on" : ""}`),
@@ -99,6 +126,7 @@ export function visionPanel(role: "GM" | "PLAYER", rerender: () => void): Child 
         on ? h("label", { className: "small row" }, "Circles for",
           h("select", { onchange: (e: Event) => setPref(AURA_SCOPE_KEY, (e.target as HTMLSelectElement).value, rerender) },
             ...scopes.map(([v, label]) => h("option", { value: v, selected: v === scope || (role !== "GM" && scope === "all" && v === "party") }, label)))) : null,
+        on && scope === "chosen" ? chooser(role, units, rerender) : null,
         on ? h("div", { className: "small muted" }, "Lights carried by any unit you can see are always drawn. Light a torch from a unit's card.") : null,
         role === "GM" ? forceFogControl() : null,
         on ? legend() : null));

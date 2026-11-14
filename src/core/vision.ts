@@ -245,11 +245,40 @@ export function visionSummary(sheet: Pick<UnitSheet, "senses" | "traits">, state
 
 // ------------------------------------------------------------------ who sees which auras (per browser)
 
-export type AuraScope = "selected" | "party" | "all";
+/** Whose senses the HUD draws: the selected tokens, the party, every unit, or units picked by hand. */
+export type AuraScope = "selected" | "party" | "all" | "chosen";
 /** Per browser: the Vision HUD (vision circles + darkness fog). Nothing is drawn while it's off. */
 export const HUD_KEY = "butler.visionHud";
 export const hudOn = (v: string | null) => v === "1";
 export const AURA_SCOPE_KEY = "butler.visionScope";
 /** Local broadcast (this browser only) telling the background page the aura choice changed. */
 export const AURA_CHANNEL = `${BUTLER_NS}/vision-prefs`;
-export const readAuraScope = (v: string | null): AuraScope => (v === "party" || v === "all" ? v : "selected");
+export const readAuraScope = (v: string | null): AuraScope => (v === "party" || v === "all" || v === "chosen" ? v : "selected");
+/** Per browser: the units picked by hand (scope "chosen"), as a JSON list of item ids. */
+export const AURA_CHOSEN_KEY = "butler.visionChosen";
+
+export function readChosen(v: string | null): string[] {
+  try {
+    const x = JSON.parse(v ?? "[]");
+    return Array.isArray(x) ? x.filter((i): i is string => typeof i === "string") : [];
+  } catch { return []; }
+}
+
+/** Adds the ids, or removes them when every one is already picked (one right-click toggles a group). */
+export function toggleChosen(chosen: string[], ids: string[]): string[] {
+  return ids.every((id) => chosen.includes(id)) ? chosen.filter((id) => !ids.includes(id)) : [...chosen, ...ids.filter((id) => !chosen.includes(id))];
+}
+
+/**
+ * Whether the HUD draws this unit's senses. `mine`: the viewer controls it. Players only ever get their own units and
+ * party members (a monster's darkvision is the GM's business); dead units see nothing.
+ */
+export function showsSenses(scope: AuraScope, u: { id: string; party: boolean; mine: boolean; dead: boolean },
+  viewer: { role: "GM" | "PLAYER"; selection: string[]; chosen: string[] }): boolean {
+  if (u.dead) return false;
+  if (viewer.role !== "GM" && !u.party && !u.mine) return false;
+  if (scope === "all") return true;
+  if (scope === "party") return u.party || (viewer.role !== "GM" && u.mine);
+  if (scope === "chosen") return viewer.chosen.includes(u.id);
+  return viewer.selection.includes(u.id);
+}

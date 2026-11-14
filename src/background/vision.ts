@@ -11,7 +11,7 @@ import { controls } from "../core/card";
 import { BUTLER_NS } from "../core/constants";
 import type { TrackerUnit } from "../core/tracker";
 import {
-  lightRings, readAuraScope, readSceneLight, resolveLight, RING_STYLE, senseRings, sensesOf, HUD_KEY, hudOn, AURA_SCOPE_KEY, type Ring,
+  lightRings, readAuraScope, readChosen, readSceneLight, showsSenses, AURA_CHOSEN_KEY, resolveLight, RING_STYLE, senseRings, sensesOf, HUD_KEY, hudOn, AURA_SCOPE_KEY, type Ring,
 } from "../core/vision";
 import { store } from "../extension/dom";
 
@@ -25,6 +25,7 @@ export async function updateVision(units: TrackerUnit[], items: Item[], role: "G
   const scene = readSceneLight(sceneMeta);
   const on = hudOn(store.get(HUD_KEY)) && scene !== "bright";
   const scope = readAuraScope(store.get(AURA_SCOPE_KEY));
+  const chosen = readChosen(store.get(AURA_CHOSEN_KEY));
   const byId = new Map(items.map((i) => [i.id, i]));
   const me = { id: OBR.player.id, role };
   const want: Want[] = [];
@@ -33,9 +34,7 @@ export async function updateVision(units: TrackerUnit[], items: Item[], role: "G
       const it = byId.get(u.id);
       if (!it || (role !== "GM" && !it.visible)) continue;
       for (const ring of lightRings(resolveLight(u.state.light, rules), scene)) want.push({ id: `${PREFIX}${u.id}/${ring.kind}`, unit: u.id, ring });
-      const allowed = role === "GM" || u.state.party || controls(me, it, u.state);
-      const inScope = scope === "all" || (scope === "party" ? u.state.party || (role !== "GM" && controls(me, it, u.state)) : selection.includes(u.id));
-      if (!allowed || !inScope || u.dead) continue;
+      if (!showsSenses(scope, { id: u.id, party: u.state.party, mine: controls(me, it, u.state), dead: u.dead }, { role, selection, chosen })) continue;
       for (const ring of senseRings(sensesOf(u.sheet), scene)) want.push({ id: `${PREFIX}${u.id}/${ring.kind}`, unit: u.id, ring });
     }
   }

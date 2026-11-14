@@ -171,13 +171,22 @@ function myUnitsPanel(): Child {
       : null);
 }
 
+/** The units a player can pick for the Vision HUD: their own and the party's, as they see them. */
+function visionUnits() {
+  const v = trackerView(lite, sceneMeta);
+  return [...v.order, ...v.waiting, ...v.outside].filter((u) => !u.hidden && (u.party || mine(u))).map((u) => ({
+    id: u.id, party: u.party, mine: mine(u),
+    name: shownName(mine(u) ? "full" : "limited", me(), { label: u.name, name: u.name }, u.sheet, u.state),
+  }));
+}
+
 export function renderPlayerView(): Child[] {
   return [
     turnPanel(),
     note ? h("div", { className: "panel small" }, note, " ", h("button", { className: "icon tiny", onclick: () => { note = ""; renderAgain(); } }, "OK")) : null,
     orderPanel(),
     myUnitsPanel(),
-    visionPanel("PLAYER", renderAgain),
+    visionPanel("PLAYER", renderAgain, visionUnits()),
     renderRollLog(),
   ];
 }

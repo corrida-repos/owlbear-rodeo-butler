@@ -3,7 +3,7 @@ import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet } from "..
 import { EDIT_REQUESTS, isPlayerRequest } from "../src/core/turns";
 import { readUnit } from "../src/core/unit";
 import {
-  isUnitLight, lightAt, readForcedFog, lightingUpdate, lightRings, lightsOnSheet, LIGHTING_KEY, readSceneLight, resolveLight, seenAs, senseRings, sensesOf,
+  isUnitLight, lightAt, readChosen, showsSenses, toggleChosen, readForcedFog, lightingUpdate, lightRings, lightsOnSheet, LIGHTING_KEY, readSceneLight, resolveLight, seenAs, senseRings, sensesOf,
   setUnitLight, visionSummary,
 } from "../src/core/vision";
 import { FakeScene } from "./fakeGateway";
@@ -119,5 +119,36 @@ describe("what a creature sees", () => {
     expect(lines[1]).toMatch(/Darkvision 60 ft/);
     expect(visionSummary(sheet(), {}, "bright")).toEqual([]);
     expect(visionSummary(sheet(), {}, "dark")[0]).toMatch(/No darkvision/);
+  });
+});
+
+describe("whose vision the HUD shows", () => {
+  const pc = { id: "pc", party: true, mine: true, dead: false };
+  const ally = { id: "ally", party: true, mine: false, dead: false };
+  const gob = { id: "gob", party: false, mine: false, dead: false };
+  const gm = (scope: Parameters<typeof showsSenses>[0], chosen: string[] = [], selection: string[] = []) =>
+    [pc, ally, gob].filter((u) => showsSenses(scope, { ...u, mine: false }, { role: "GM", selection, chosen })).map((u) => u.id);
+  it("the GM can show any unit, the party, everyone, or the selection", () => {
+    expect(gm("chosen", ["gob"])).toEqual(["gob"]);
+    expect(gm("chosen", ["ally", "gob"])).toEqual(["ally", "gob"]);
+    expect(gm("party")).toEqual(["pc", "ally"]);
+    expect(gm("all")).toEqual(["pc", "ally", "gob"]);
+    expect(gm("selected", [], ["pc"])).toEqual(["pc"]);
+    expect(showsSenses("all", { ...gob, dead: true }, { role: "GM", selection: [], chosen: [] })).toBe(false);
+  });
+  it("players never get a creature's senses, even when they pick it", () => {
+    const player = (scope: Parameters<typeof showsSenses>[0], chosen: string[] = []) =>
+      [pc, ally, gob].filter((u) => showsSenses(scope, u, { role: "PLAYER", selection: [], chosen })).map((u) => u.id);
+    expect(player("chosen", ["gob", "ally"])).toEqual(["ally"]);
+    expect(player("all")).toEqual(["pc", "ally"]);
+  });
+  it("toggles a pick, or a group of picks, and reads the stored list safely", () => {
+    expect(toggleChosen([], ["a"])).toEqual(["a"]);
+    expect(toggleChosen(["a"], ["a"])).toEqual([]);
+    expect(toggleChosen(["a"], ["a", "b"])).toEqual(["a", "b"]);
+    expect(toggleChosen(["a", "b", "c"], ["a", "b"])).toEqual(["c"]);
+    expect(readChosen('["a",3,"b"]')).toEqual(["a", "b"]);
+    expect(readChosen("not json")).toEqual([]);
+    expect(readChosen(null)).toEqual([]);
   });
 });

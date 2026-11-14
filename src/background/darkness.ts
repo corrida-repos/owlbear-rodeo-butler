@@ -8,7 +8,7 @@ import OBR, { buildPath, type Item } from "@owlbear-rodeo/sdk";
 import { controls } from "../core/card";
 import { darknessGrid, DARKNESS_ID, fogRects, rectCommands, type Area, type Emitter, type Viewer } from "../core/darkness";
 import type { TrackerUnit } from "../core/tracker";
-import { HUD_KEY, hudOn, readForcedFog, readSceneLight, resolveLight, sensesOf } from "../core/vision";
+import { AURA_CHOSEN_KEY, AURA_SCOPE_KEY, HUD_KEY, hudOn, readAuraScope, readChosen, readForcedFog, readSceneLight, showsSenses, resolveLight, sensesOf } from "../core/vision";
 import { store } from "../extension/dom";
 
 const LAYERS = [{ id: `${DARKNESS_ID}/heavy`, level: 2 as const }, { id: `${DARKNESS_ID}/light`, level: 1 as const }];
@@ -20,7 +20,8 @@ async function clear() {
   shown.clear();
 }
 
-export async function updateDarkness(units: TrackerUnit[], items: Item[], role: "GM" | "PLAYER", sceneMeta: Record<string, unknown>, rules: "2024" | "2014") {
+export async function updateDarkness(units: TrackerUnit[], items: Item[], role: "GM" | "PLAYER", sceneMeta: Record<string, unknown>,
+  selection: string[], rules: "2024" | "2014") {
   const scene = readSceneLight(sceneMeta);
   // Only with the Vision HUD on (or, for players, when the GM forces it in this scene). The GM's is see-through.
   const hud = hudOn(store.get(HUD_KEY));
@@ -31,7 +32,12 @@ export async function updateDarkness(units: TrackerUnit[], items: Item[], role: 
   // Only what players can see: hidden tokens neither look nor shed light.
   const seen = units.filter((u) => byId.get(u.id)?.visible);
   const me = { id: OBR.player.id, role };
-  const mine = role === "PLAYER" ? seen.filter((u) => !u.dead && controls(me, byId.get(u.id)!, u.state)) : [];
+  // Players look through their own units (the party if they have none). The GM looks through the units whose circles
+  // the HUD shows, hidden ones included, so picking a goblin shows what the goblin sees; with none, the party.
+  const scope = readAuraScope(store.get(AURA_SCOPE_KEY)), chosen = readChosen(store.get(AURA_CHOSEN_KEY));
+  const mine = role === "PLAYER"
+    ? seen.filter((u) => !u.dead && controls(me, byId.get(u.id)!, u.state))
+    : units.filter((u) => byId.has(u.id) && showsSenses(scope, { id: u.id, party: u.state.party, mine: false, dead: u.dead }, { role, selection, chosen }));
   const lookers = mine.length ? mine : seen.filter((u) => !u.dead && u.state.party);
   const shining = seen.flatMap((u) => { const l = resolveLight(u.state.light, rules); return l ? [{ u, l }] : []; });
 

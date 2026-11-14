@@ -153,6 +153,6 @@ export function renderTrackerTab(): Child[] {
         h("span", {}, "☠ ", h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name)),
         h("button", { className: "secondary small", onclick: action(() => reviveUnits(obrGateway, [u.id])) }, "Revive")))));
   }
-  out.push(visionPanel("GM", rerender));
+  out.push(visionPanel("GM", rerender, [...v.order, ...v.waiting, ...v.outside].map((u) => ({ id: u.id, name: u.name, party: u.party }))));
   return out;
 }
