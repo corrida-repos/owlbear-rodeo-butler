@@ -253,3 +253,15 @@ button.status-chip:disabled { cursor: default; }
 .pstat .v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .psaves { display: flex; flex-wrap: wrap; gap: 2px 8px; }
 .psaves .prof { font-weight: 700; color: var(--accent); }
+
+/* ---- Action bar rolls: every modifier and dice value rolls on click ---- */
+.rollchip { display: inline-block; font-weight: 700; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 5px; padding: 0 4px; margin: 0 1px; line-height: 1.4; font-variant-numeric: tabular-nums; cursor: pointer; font-size: inherit; }
+.rollchip:hover, .rollchip:focus-visible { background: var(--accent); color: #fff; outline: none; }
+.rollchip.dice-damage { color: var(--bad); border-color: var(--bad); }
+.rollchip.dice-damage:hover, .rollchip.dice-damage:focus-visible { background: var(--bad); color: #fff; }
+.tile .tsum .rollchip { padding: 0 3px; line-height: 1.3; }
+.ab-rolls { gap: 4px 10px; margin: 4px 0; }
+.ab-roll { white-space: nowrap; }
+.ab-last { margin: 2px 0 4px; }
+.ab-vis { flex: none; }
+.ab-vis button { padding: 2px 8px; font-size: 11px; }

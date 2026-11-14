@@ -7,7 +7,7 @@
  * only tracks HP): it's for players to consult. Built from the unit's sheet (for party members: the D&D Beyond sync),
  * so a re-sync updates it. Pure, so the parsing and explanations are unit-tested; the actions page renders it.
  */
-import { parseChips, rollSegments } from "./chips";
+import { parseChips, rollSegments, type RollSegment } from "./chips";
 import { combatOptions, type OptionGroup } from "./combatOptions";
 import type { HomebrewAction } from "./homebrew";
 import { baseName, itemInfo, LIGHT_WEAPONS, lightWeaponCount, weaponIn } from "./items";
@@ -130,30 +130,38 @@ export function saveOf(text: string): { dc: number; ability: string } | null {
 const DAMAGE_TYPES = "Acid|Bludgeoning|Cold|Fire|Force|Lightning|Necrotic|Piercing|Poison|Psychic|Radiant|Slashing|Thunder";
 
 /** Damage dice: "damage" chips, or (D&D Beyond spells: "1d10 [1d10] Fire") dice followed by a damage type. */
-export function damageOf(text: string): string[] {
+function damageRolls(text: string): { seg: RollSegment; type?: string }[] {
   const segs = parseChips(text);
-  const out = rollSegments(segs).filter((r) => r.kind === "damage").map((d) => `${d.display}${d.damageType ? ` ${d.damageType}` : ""}`);
+  const out = rollSegments(segs).filter((r) => r.kind === "damage").map((seg) => ({ seg, type: seg.damageType }));
   if (out.length) return out;
   segs.forEach((sg, i) => {
     const next = segs[i + 1];
     const type = next?.t === "text" ? new RegExp(`^\\s*(${DAMAGE_TYPES})\\b`, "i").exec(next.text)?.[1] : undefined;
-    if (sg.t === "roll" && sg.kind === "dice" && type) out.push(`${sg.display} ${type[0]!.toUpperCase()}${type.slice(1).toLowerCase()}`);
+    if (sg.t === "roll" && sg.kind === "dice" && type) out.push({ seg: sg, type: `${type[0]!.toUpperCase()}${type.slice(1).toLowerCase()}` });
   });
   return out;
 }
 
-/** "+5 · 1d8+3 Slashing · DC 13 Dex" from the entry's dice. */
-export function summaryOf(text: string): string {
+/** A roll as text: its printed form, or with `chips` the "[formula]" that makes it a button again. */
+const rollText = (seg: RollSegment, chips: boolean) => chips ? `${seg.display} [${seg.formula}]` : seg.display;
+
+export function damageOf(text: string, chips = false): string[] {
+  return damageRolls(text).map((d) => `${rollText(d.seg, chips)}${d.type ? ` ${d.type}` : ""}`);
+}
+
+/** "+5 · 1d8+3 Slashing · DC 13 Dex" from the entry's dice. With `chips`, each roll keeps its "[formula]" so the
+ *  tile can roll it ("+5 [1d20+5] · 1d8+3 [1d8+3] Slashing · DC 13 Dex"). */
+export function summaryOf(text: string, chips = false): string {
   const rolls = rollSegments(parseChips(text));
   const parts: string[] = [];
   const atk = rolls.find((r) => r.kind === "attack");
-  if (atk) parts.push(atk.display);
-  parts.push(...damageOf(text).slice(0, 2));
+  if (atk) parts.push(rollText(atk, chips));
+  parts.push(...damageOf(text, chips).slice(0, 2));
   const save = saveOf(text);
   if (save) parts.push(`DC ${save.dc} ${save.ability.slice(0, 3)}`);
   if (!parts.length) {
     const other = rolls.find((r) => r.kind === "dice" || r.kind === "check" || r.kind === "save");
-    if (other) parts.push(other.display);
+    if (other) parts.push(rollText(other, chips));
   }
   return parts.join(" · ");
 }
@@ -189,7 +197,7 @@ function itemOf(entry: SheetEntry, section: SheetSection): ActionItem | null {
     ...(spellLevel !== undefined ? { spellLevel } : {}),
     ...(tags.some((t) => /^Concentration$/i.test(t)) ? { concentration: true } : {}),
     ...(tags.some((t) => /^Ritual$/i.test(t)) ? { ritual: true } : {}),
-    summary: summaryOf(entry.text),
+    summary: summaryOf(entry.text, true),
   };
 }
 
@@ -261,7 +269,7 @@ export function itemActions(sheet: Pick<UnitSheet, "inventory">, rules: "2024" |
     const name = info.quantity && info.quantity > 1 ? `${base} ×${info.quantity}` : base;
     const make = (cost: Cost, under?: string, costNote?: string): ActionItem => ({
       key: `inventory:${base}`, name, text: e.text, section: "inventory", category: "item", cost,
-      ...(under ? { under } : {}), ...(costNote ? { costNote } : {}), summary: summaryOf(e.text),
+      ...(under ? { under } : {}), ...(costNote ? { costNote } : {}), summary: summaryOf(e.text, true),
     });
     let it: ActionItem | null = null;
     if (info.kind === "potion") it = make(o2024 ? "bonus" : "action", keys.potion);

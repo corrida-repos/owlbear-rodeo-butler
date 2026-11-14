@@ -25,9 +25,10 @@ const CHIP = /\[([^\[\]]{1,500})\]/g;
 /** The printed form of `formula` at the end of `before` (e.g. "+4 " or "1d6 + 2 "), as [start index, display]. */
 function printedBefore(before: string, formula: string): [number, string] | null {
   const tail = before.replace(/\s+$/, "");
-  const d20 = /^1d20([+-]\d+)$/i.exec(formula);
+  const d20 = /^(1d20|2d20k([hl])1)([+-]\d+)$/i.exec(formula);
   if (d20) {
-    const mod = fmtMod(Number(d20[1]));
+    // "+5 [1d20+5]", or with advantage / disadvantage written out: "+5 adv [2d20kh1+5]", "+5 dis [2d20kl1+5]".
+    const mod = `${fmtMod(Number(d20[3]))}${d20[2] ? ` ${d20[2].toLowerCase() === "h" ? "adv" : "dis"}` : ""}`;
     if (tail.endsWith(mod) && (tail.length === mod.length || /[\s(:]/.test(tail[tail.length - mod.length - 1]!))) {
       return [tail.length - mod.length, mod];
     }

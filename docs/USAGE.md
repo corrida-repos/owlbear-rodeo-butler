@@ -84,7 +84,7 @@ The **Players** tab (GM only) has a card for each party member in the scene: HP 
   - **1 round**, **1 minute (10 rounds)** or **N rounds**: ends when the order comes back round to the turn it was added on.
   - **Until the start of *X*'s turn**, or **until the end of *X*'s next turn**.
 
-  Durations need combat to be running. When one ends, the GM gets a notice ("Poisoned ended on Wolf 2"). Conditions show on the card, in the tracker and as a small badge under the token; remove one with its **✕** on the card. In 5.5E, Exhaustion takes 2 off every d20 roll made from the card and 5 ft off speed per level.
+  Durations need combat to be running. When one ends, the GM gets a notice ("Poisoned ended on Wolf 2"). Conditions show on the card, in the tracker and as a small badge under the token; remove one with its **✕** on the card. In 5.5E, Exhaustion takes 2 off every d20 roll made from the card or the action bar and 5 ft off speed per level.
 - **Concentration:** when a unit with the Concentration condition takes damage, its card shows a **Concentration check** with the DC. **Roll Con save** rolls it and keeps or ends Concentration; the GM can also **Dismiss** it. A player rolls it from their own card. Dropping to 0 HP ends Concentration.
 - **Movement:** during a unit's turn, its token shows how far it has moved since the turn started against its speed, e.g. **25/40 ft**. It turns red past the limit. **Dash** doubles the limit for the turn. **Rewind** moves the token back to the last 5 ft point of its path (from 13 ft back to 10; pressing again goes back another 5 ft). The GM has these on the active row in **Tracker**, and the unit's player has them under the turn in their Encounter Butler panel.
 
@@ -131,7 +131,7 @@ Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Sh
 
 ## Action bar (what can I do?)
 
-A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. It's only for reading. Nothing is spent or counted (Butler only tracks HP), and rolls stay on the unit card.
+A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. Nothing is spent or counted (Butler only tracks HP), but every roll is right there: each option shows its attack bonus, check or save modifier, or damage dice, on the tile and in the detail, and clicking one rolls it (Shift for advantage, Ctrl/⌘ for disadvantage). Rolls are public or private like the card's (the switch at the bottom is shared with the card); exhaustion is applied, and after a natural 20 that option's damage rolls as a critical hit. Options that list several skills (Influence, Search, Study) show the best one on the tile and all of them in the detail.
 
 Open it from the token's right-click menu (**Actions**), the **⚔ Actions** button on the unit card, or, for players, **⚔ Actions** under **My units** and **⚔ My actions** on their turn. It opens at the bottom of the screen. Players can tick **Open my action bar on my turn** to have it open by itself when their turn starts (each browser remembers its own choice).
 

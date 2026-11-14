@@ -4,6 +4,7 @@ import { actionBar, attacksPerAction, barLayout, explain, filterCount, isAttackO
 import { ddbItemInfo, itemInfo, lightWeaponCount } from "../src/core/items";
 import { HOMEBREW_KEY, readHomebrew, removeHomebrew, upsertHomebrew } from "../src/core/homebrew";
 import { combatOptions, skillBonus } from "../src/core/combatOptions";
+import { parseChips, rollSegments } from "../src/core/chips";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { EDIT_REQUESTS } from "../src/core/turns";
 import type { UnitSheet } from "../src/core/sheet";
@@ -120,7 +121,7 @@ describe("action bar from a creature", () => {
   it("legendary actions, recharges, spell lists and limited traits", () => {
     expect(legendaryPerRound(dragon)).toBe(3);
     expect(bar.items.find((i) => i.name === "Wing Attack")).toMatchObject({ cost: "legendary", legendaryCost: 2 });
-    expect(bar.items.find((i) => i.name === "Fire Breath")).toMatchObject({ cost: "action", recharge: 5, summary: "16d6 Fire · DC 17 Dex" });
+    expect(bar.items.find((i) => i.name === "Fire Breath")).toMatchObject({ cost: "action", recharge: 5, summary: "16d6 [16d6] Fire · DC 17 Dex" });
     expect(bar.items.find((i) => i.name.startsWith("Legendary Resistance"))).toMatchObject({ category: "feature", limit: { max: 3 } });
     expect(bar.items.some((i) => i.name === "Amphibious")).toBe(false);
     expect(bar.items.some((i) => i.name === "Legendary Actions")).toBe(false);
@@ -143,11 +144,11 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
   const opts = combatOptions(sheet, "2024");
   const by = (n: string) => opts.find((o) => o.name === n)!;
   it("works out this character's numbers", () => {
-    expect(by("Unarmed Strike")).toMatchObject({ cost: "attack", summary: "+5 · 4 Bludgeoning" });
+    expect(by("Unarmed Strike")).toMatchObject({ cost: "attack", summary: "+5 [1d20+5] · 4 Bludgeoning" });
     expect(by("Grapple")).toMatchObject({ cost: "attack", summary: "DC 13 Str/Dex" });
     expect(by("Grapple").text).toContain("against DC 13 (8 + Strength + proficiency)");
     expect(by("Shove").text).toContain("push it 5 ft. away or knock it Prone");
-    expect(by("Escape a Grapple").summary).toBe("Athletics +5 or Acrobatics +2");
+    expect(by("Escape a Grapple").summary).toBe("Athletics +5 [1d20+5] or Acrobatics +2 [1d20+2]");
     expect(by("Jump").summary).toBe("16 ft. / 6 ft.");
     expect(by("Stand Up").summary).toBe("15 ft.");
     expect(by("Dash").summary).toBe("+30 ft.");
@@ -161,6 +162,26 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(opts.filter((o) => o.source === "DMG").map((o) => o.name)).toEqual(["Disarm", "Mark", "Overrun", "Shove Aside", "Tumble", "Climb onto a Bigger Creature"]);
     expect(combatOptions(sheet, "2024", { dmg: false }).some((o) => o.source === "DMG")).toBe(false);
     expect(by("Drink or Administer a Potion").cost).toBe("bonus");
+  });
+  it("gives every option with a roll its modifier or dice, as a rollable chip", () => {
+    const rolls = (n: string) => rollSegments(parseChips(by(n).summary ?? "")).map((r) => `${r.display}=${r.formula}`);
+    expect(rolls("Hide")).toEqual(["+2=1d20+2"]);
+    expect(rolls("Unarmed Strike")).toEqual(["+5=1d20+5"]);
+    expect(rolls("Improvised Weapon")).toEqual(["+3=1d20+3", "1d4 + 3=1d4+3"]);
+    expect(rolls("Escape a Grapple")).toEqual(["+5=1d20+5", "+2=1d20+2"]);
+    expect(rolls("Shove Aside")).toEqual(["+5 dis=2d20kl1+5"]);
+    for (const n of ["Influence", "Search", "Study", "Stabilize", "Climb", "Swim", "Disarm", "Overrun", "Tumble", "Climb onto a Bigger Creature", "Dismount"]) {
+      expect(rolls(n).length, n).toBeGreaterThan(0);
+    }
+    // Every roll in a rule's text is a chip too, with its kind from the wording.
+    const kinds = (n: string) => rollSegments(parseChips(by(n).text)).map((r) => r.kind);
+    expect(kinds("Unarmed Strike")).toEqual(["attack"]);
+    expect(kinds("Influence")).toEqual(["check", "check", "check", "check", "check"]);
+    expect(kinds("Dismount")).toEqual(["save"]);
+    expect(kinds("Improvised Weapon")).toEqual(["attack", "attack", "damage"]);
+  });
+  it("keeps a sheet entry's dice rollable on its tile", () => {
+    expect(summaryOf("Melee Attack Roll: +5 [1d20+5], reach 5 ft. Hit: 1d8+3 [1d8+3] Slashing damage.", true)).toBe("+5 [1d20+5] · 1d8+3 [1d8+3] Slashing");
   });
   it("2024: equipping or unequipping a weapon goes with an attack, not the free object interaction", () => {
     expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", withAttack: true });
@@ -198,7 +219,7 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(names).toContain("Cast a Spell");
     expect(names).toContain("Use an Object");
     expect(names).not.toContain("Influence");
-    expect(old.find((o) => o.name === "Grapple")!.summary).toBe("Athletics +5");
+    expect(old.find((o) => o.name === "Grapple")!.summary).toBe("Athletics +5 [1d20+5]");
     expect(old.find((o) => o.name === "Drink a Potion")!.cost).toBe("action");
   });
   it("doesn't repeat an Unarmed Strike the sheet already has, and explains the DMG ones as optional", () => {

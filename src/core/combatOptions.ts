@@ -32,6 +32,20 @@ export interface CombatOption {
   unlessCondition?: string;
 }
 
+/** A d20 roll written the way sheet text carries one: "+5 [1d20+5]", or "+5 dis [2d20kl1+5]" with Disadvantage.
+ *  The action bar and card turn it into a button that rolls. */
+export const d20Chip = (bonus: number, mode?: "dis" | "adv") =>
+  `${fmtMod(bonus)}${mode ? ` ${mode}` : ""} [${mode === "dis" ? "2d20kl1" : mode === "adv" ? "2d20kh1" : "1d20"}${fmtMod(bonus)}]`;
+
+/** The best of several skills: "Persuasion", its bonus. */
+function bestSkill(sheet: Pick<UnitSheet, "skills" | "abilities">, list: [string, keyof UnitSheet["abilities"]][]) {
+  return list.map(([n, a]) => ({ name: n, bonus: skillBonus(sheet, n, a) })).sort((a, b) => b.bonus - a.bonus)[0]!;
+}
+/** "Persuasion +5 [1d20+5], Deception +3 [1d20+3]…", best first. */
+function skillChips(sheet: Pick<UnitSheet, "skills" | "abilities">, list: [string, keyof UnitSheet["abilities"]][]) {
+  return list.map(([n, a]) => ({ name: n, bonus: skillBonus(sheet, n, a) })).sort((a, b) => b.bonus - a.bonus).map((x) => `${x.name} ${d20Chip(x.bonus)}`).join(", ");
+}
+
 /** A skill's bonus from the sheet ("Athletics" or "Athletics (expertise)"), else the plain ability modifier. */
 export function skillBonus(sheet: Pick<UnitSheet, "skills" | "abilities">, skill: string, ability: keyof UnitSheet["abilities"]): number {
   const s = sheet.skills.find((x) => x.name.replace(/\s*\(.*\)$/, "").toLowerCase() === skill.toLowerCase());
@@ -45,7 +59,16 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const acro = skillBonus(sheet, "Acrobatics", "dex");
   const stealth = skillBonus(sheet, "Stealth", "dex");
   const medicine = skillBonus(sheet, "Medicine", "wis");
-  const best = `Athletics ${fmtMod(ath)} or Acrobatics ${fmtMod(acro)}`;
+  const best = `Athletics ${d20Chip(ath)} or Acrobatics ${d20Chip(acro)}`;
+  const strMod = str;
+  const dexSave = sheet.saves.dex ?? abilityMod(sheet.abilities.dex);
+  // Disarm uses a weapon attack: the sheet's best to-hit, else an Unarmed Strike's.
+  const weaponHit = Math.max(...[...sheet.actions].flatMap((a) => [...a.text.matchAll(/\[1d20([+-]\d+)\]/g)].map((m) => Number(m[1]))), str + pb);
+  const influence: [string, keyof UnitSheet["abilities"]][] = [["Persuasion", "cha"], ["Deception", "cha"], ["Intimidation", "cha"], ["Performance", "cha"], ["Animal Handling", "wis"]];
+  const search: [string, keyof UnitSheet["abilities"]][] = rules === "2024"
+    ? [["Perception", "wis"], ["Insight", "wis"], ["Medicine", "wis"], ["Survival", "wis"]] : [["Perception", "wis"], ["Investigation", "int"]];
+  const study: [string, keyof UnitSheet["abilities"]][] = [["Arcana", "int"], ["History", "int"], ["Investigation", "int"], ["Nature", "int"], ["Religion", "int"]];
+  const top = (list: [string, keyof UnitSheet["abilities"]][]) => { const b = bestSkill(sheet, list); return `${b.name} ${d20Chip(b.bonus)}`; };
   const unarmedHit = str + pb;
   const unarmedDmg = Math.max(1, 1 + str);
   const dc = 8 + str + pb;
@@ -56,6 +79,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const swim = sheet.speed.swim ? `You have a Swim speed (${sheet.speed.swim} ft.), so swimming costs no extra movement.` : `Each foot swum costs 1 extra foot of movement (2 extra in difficult terrain).`;
   const hasUnarmed = sheet.actions.some((a) => /^Unarmed Strike\b/i.test(a.name));
   const o2024 = rules === "2024";
+  const impDmg = `${str ? `1d4 ${str > 0 ? "+" : "-"} ${Math.abs(str)}` : "1d4"} [1d4${str ? fmtMod(str) : ""}]`;
 
   const list: CombatOption[] = [
     // ---- actions (PHB)
@@ -71,50 +95,50 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Help", cost: "action", group: "Actions", source: "PHB", text: o2024
       ? "Help an ally with an ability check you could make: their next check for that task has Advantage. Or distract an enemy within 5 ft. of you: the next attack roll an ally makes against it has Advantage. You can also use Help to stabilize a creature at 0 Hit Points (see Stabilize)."
       : "Give an ally advantage on their next ability check for a task you're helping with, or distract a creature within 5 ft. of you so an ally's next attack roll against it has advantage." },
-    { name: "Hide", cost: "action", group: "Actions", source: "PHB", summary: `Stealth ${fmtMod(stealth)}`, text: o2024
-      ? `While Heavily Obscured or behind Three-Quarters or Total Cover, out of any enemy's line of sight, make a DC 15 Dexterity (Stealth) check (you: ${fmtMod(stealth)}). On a success you have the Invisible condition until you make noise louder than a whisper, attack, cast a spell with a Verbal component, or an enemy finds you.`
-      : `Make a Dexterity (Stealth) check (you: ${fmtMod(stealth)}) while creatures can't clearly see you. Creatures searching for you compare it with their Wisdom (Perception). You're found if you attack or make noise.` },
+    { name: "Hide", cost: "action", group: "Actions", source: "PHB", summary: `Stealth ${d20Chip(stealth)}`, text: o2024
+      ? `While Heavily Obscured or behind Three-Quarters or Total Cover, out of any enemy's line of sight, make a DC 15 Dexterity (Stealth) check (you: ${d20Chip(stealth)}). On a success you have the Invisible condition until you make noise louder than a whisper, attack, cast a spell with a Verbal component, or an enemy finds you.`
+      : `Make a Dexterity (Stealth) check (you: ${d20Chip(stealth)}) while creatures can't clearly see you. Creatures searching for you compare it with their Wisdom (Perception). You're found if you attack or make noise.` },
     ...(o2024 ? [
-      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher." },
+      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(influence), text: `Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher. You: ${skillChips(sheet, influence)}.` },
       { name: "Magic", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Cast a spell with a casting time of an action, or use a magic item or magical feature that takes an action. If you cast a spell with a Bonus Action, you can't cast another spell with a spell slot that turn. Somatic and Material components need a free hand (the same hand can do both, or hold the focus). Without the Attack action there's no free weapon swap, so sheathing a weapon to free a hand uses your free object interaction. A holy symbol on your shield, or the War Caster feat, means you don't need to free a hand." },
     ] : []),
     { name: "Ready", cost: "action", group: "Actions", source: "PHB", text: "Choose a trigger you can see (\"if the orc steps through the door\") and an action, or movement up to your Speed. When it happens, you can use your Reaction to do it, or ignore it. A readied spell is cast now and held with Concentration until it's released; it's lost if you don't use it before your next turn." },
-    { name: "Search", cost: "action", group: "Actions", source: "PHB", text: o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check." },
-    ...(o2024 ? [{ name: "Study", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: "Recall or work something out: an Intelligence check (Arcana, History, Investigation, Nature or Religion)." }] : []),
+    { name: "Search", cost: "action", group: "Actions", source: "PHB", summary: top(search), text: `${o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check."} You: ${skillChips(sheet, search)}.` },
+    ...(o2024 ? [{ name: "Study", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(study), text: `Recall or work something out: an Intelligence check (Arcana, History, Investigation, Nature or Religion). You: ${skillChips(sheet, study)}.` }] : []),
     { name: o2024 ? "Utilize" : "Use an Object", cost: "action", group: "Actions", source: "PHB", text: o2024
       ? "Use a nonmagical object that needs your action (pull a stuck lever, light a lantern, pick up a fallen ally's weapon if it's a second object this turn)."
       : "Use an object that needs your action, or interact with a second object this turn." },
     { name: "Escape a Grapple", cost: "action", ifCondition: "grappled", group: "Actions", source: "PHB", summary: best, text: o2024
       ? `While Grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) against the grapple's escape DC. On a success you're no longer Grappled.`
       : `While grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by the grappler's Strength (Athletics). On a success you escape.` },
-    { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, ...(o2024 ? { under: "Help" as const } : {}), group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${fmtMod(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${fmtMod(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
+    { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, ...(o2024 ? { under: "Help" as const } : {}), group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${d20Chip(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${d20Chip(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
 
     // ---- attack options
-    ...(hasUnarmed ? [] : [{ name: "Unarmed Strike", cost: "attack" as const, costNote: "One attack of the Attack action", group: "Attack options" as const, source: "PHB" as const, summary: `${fmtMod(unarmedHit)} · ${unarmedDmg} Bludgeoning`,
-      text: `A punch, kick or headbutt: attack roll ${fmtMod(unarmedHit)} (Strength + proficiency). On a hit, ${unarmedDmg} Bludgeoning damage (1 + Strength modifier).${o2024 ? " An Unarmed Strike can instead Grapple or Shove." : ""}` }]),
-    { name: "Grapple", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "PHB", summary: o2024 ? `DC ${dc} Str/Dex` : `Athletics ${fmtMod(ath)}`, text: o2024
+    ...(hasUnarmed ? [] : [{ name: "Unarmed Strike", cost: "attack" as const, costNote: "One attack of the Attack action", group: "Attack options" as const, source: "PHB" as const, summary: `${d20Chip(unarmedHit)} · ${unarmedDmg} Bludgeoning`,
+      text: `A punch, kick or headbutt: attack roll ${d20Chip(unarmedHit)} (Strength + proficiency). On a hit, ${unarmedDmg} Bludgeoning damage (1 + Strength modifier).${o2024 ? " An Unarmed Strike can instead Grapple or Shove." : ""}` }]),
+    { name: "Grapple", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "PHB", summary: o2024 ? `DC ${dc} Str/Dex` : `Athletics ${d20Chip(ath)}`, text: o2024
       ? `Grab a creature no more than one size larger than you, with a hand free and within reach. It makes a Strength or Dexterity saving throw (its choice) against DC ${dc} (8 + Strength + proficiency). On a failure it's Grappled: Speed 0, Disadvantage on attacks against anyone but you. You can move it with you, but each foot costs 1 extra unless it's Tiny or two sizes smaller. It escapes with an action (DC ${dc}), or if you're Incapacitated or it ends up out of reach. You can let go any time.`
-      : `Grab a creature no more than one size larger than you, with a hand free. Make a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics). On a success it's grappled: speed 0. You can drag or carry it at half speed. It escapes with an action, or if you're incapacitated.` },
-    { name: "Shove", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "PHB", summary: o2024 ? `DC ${dc} Str/Dex` : `Athletics ${fmtMod(ath)}`, text: o2024
+      : `Grab a creature no more than one size larger than you, with a hand free. Make a Strength (Athletics) check (you: ${d20Chip(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics). On a success it's grappled: speed 0. You can drag or carry it at half speed. It escapes with an action, or if you're incapacitated.` },
+    { name: "Shove", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "PHB", summary: o2024 ? `DC ${dc} Str/Dex` : `Athletics ${d20Chip(ath)}`, text: o2024
       ? `Push a creature no more than one size larger than you, within reach. It makes a Strength or Dexterity saving throw (its choice) against DC ${dc}. On a failure you either push it 5 ft. away or knock it Prone (attacks against a Prone creature within 5 ft. have Advantage; from farther, Disadvantage).`
-      : `Push a creature no more than one size larger than you, within reach. Make a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics). On a success you knock it prone or push it 5 ft. away.` },
+      : `Push a creature no more than one size larger than you, within reach. Make a Strength (Athletics) check (you: ${d20Chip(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics). On a success you knock it prone or push it 5 ft. away.` },
     { name: "Two-Weapon Fighting", cost: "bonus", group: "Attack options", source: "PHB", text: o2024
       ? "After you attack with a Light weapon as part of the Attack action, you can make one extra attack as a Bonus Action with a different Light weapon. Don't add your ability modifier to that attack's damage unless it's negative."
       : "When you attack with a light melee weapon in one hand, you can use your bonus action to attack with a different light melee weapon in the other. Don't add your ability modifier to that attack's damage unless it's negative." },
     { name: "Opportunity Attack", cost: "reaction", group: "Attack options", source: "PHB", text: "When a creature you can see leaves your reach (by its own movement), you can make one melee attack against it just before it leaves. Disengage, teleporting, or being moved by someone else don't provoke it." },
     ...(o2024 ? [{ name: "Equip or Unequip a Weapon", cost: "free" as const, costNote: "With an attack of the Attack action", withAttack: true, group: "Attack options" as const, source: "PHB" as const,
       text: "When you make an attack as part of the Attack action, you can equip or unequip one weapon, before or after that attack. Equipping means drawing it from a sheath, picking it up or taking it from someone; unequipping means sheathing, stowing or dropping it. It's one swap per attack, so with Extra Attack you can swap before or after each of them. An attack replaced by something else still gets its swap: the Eldritch Knight's War Magic cantrip, a Grapple or a Shove. Weapons only: a spellcasting focus isn't one, unless it's a staff that also counts as a Quarterstaff. If you equip a weapon before an attack, you don't have to attack with it. This doesn't use your free object interaction." }] : []),
-    { name: "Improvised Weapon", cost: "attack", costNote: "One attack of the Attack action", group: "Attack options", source: "PHB", summary: "1d4", text: "Swing or throw something that isn't a weapon (a chair, a bottle, a torch): 1d4 damage, and you don't add proficiency unless it's like a weapon you're proficient with (a table leg as a club). Thrown: range 20/60 ft." },
+    { name: "Improvised Weapon", cost: "attack", costNote: "One attack of the Attack action", group: "Attack options", source: "PHB", summary: `${d20Chip(strMod)} · ${impDmg}`, text: `Swing or throw something that isn't a weapon (a chair, a bottle, a torch): attack roll ${d20Chip(strMod)} (Strength, without proficiency; if it's like a weapon you're proficient with, such as a table leg as a club, attack roll ${d20Chip(strMod + pb)}). On a hit, ${impDmg} damage. Thrown: range 20/60 ft.` },
 
     // ---- movement
     { name: "Move", cost: "move", group: "Movement", source: "PHB", summary: `${speed} ft.`, text: `Move up to your Speed (${speed} ft.) on your turn, before, after or between your actions and attacks. Difficult terrain costs 1 extra foot per foot. You can move through an ally's space, but not end there; an enemy's space only if it's two sizes bigger or smaller than you.` },
     { name: "Drop Prone", cost: "free", unlessCondition: "prone", group: "Movement", source: "PHB", text: "Drop to the ground without using movement. While Prone you crawl (1 extra foot per foot), have Disadvantage on attacks, attacks against you within 5 ft. have Advantage, and attacks from farther away have Disadvantage." },
     { name: "Stand Up", cost: "move", ifCondition: "prone", costNote: "Half your Speed", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting up from Prone costs half your Speed (${Math.floor(speed / 2)} ft.). You can't if your Speed is 0.` },
     { name: "Jump", cost: "move", group: "Movement", source: "PHB", summary: `${longJump} ft. / ${highJump} ft.`, text: `Long jump: up to ${longJump} ft. (your Strength score) after a 10 ft. run-up, half that from standing. High jump: ${highJump} ft. (3 + Strength modifier) after a run-up, half from standing. Jumped distance costs movement as usual.` },
-    { name: "Climb", cost: "move", group: "Movement", source: "PHB", text: `${climb} A slippery or sheer surface may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
-    { name: "Swim", cost: "move", group: "Movement", source: "PHB", text: `${swim} Rough water may need a Strength (Athletics) check (you: ${fmtMod(ath)}).` },
+    { name: "Climb", cost: "move", group: "Movement", source: "PHB", summary: `Athletics ${d20Chip(ath)}`, text: `${climb} A slippery or sheer surface may need a Strength (Athletics) check (you: ${d20Chip(ath)}).` },
+    { name: "Swim", cost: "move", group: "Movement", source: "PHB", summary: `Athletics ${d20Chip(ath)}`, text: `${swim} Rough water may need a Strength (Athletics) check (you: ${d20Chip(ath)}).` },
     { name: "Mount", cost: "move", costNote: "Half your Speed", unlessCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Climbing onto a willing creature at least one size larger than you, within 5 ft., costs half your Speed (${Math.floor(speed / 2)} ft.). A controlled mount moves on your turn and can only Dash, Disengage or Dodge. Mark the rider Mounted (Change status) to see Dismount here instead.` },
-    { name: "Dismount", cost: "move", costNote: "Half your Speed", ifCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft.`, text: `Getting off your mount costs half your Speed (${Math.floor(speed / 2)} ft.). If the mount is moved against its will while you're on it, or you're knocked Prone, you make a DC 10 Dexterity saving throw or fall off, landing Prone within 5 ft. of it.` },
+    { name: "Dismount", cost: "move", costNote: "Half your Speed", ifCondition: "mounted", group: "Movement", source: "PHB", summary: `${Math.floor(speed / 2)} ft. · Dex save ${d20Chip(dexSave)}`, text: `Getting off your mount costs half your Speed (${Math.floor(speed / 2)} ft.). If the mount is moved against its will while you're on it, or you're knocked Prone, you make a DC 10 Dexterity saving throw (you: ${d20Chip(dexSave)}) or fall off, landing Prone within 5 ft. of it.` },
 
     // ---- other
     { name: "Interact with an Object", cost: "free", costNote: "One per turn", group: "Other", source: "PHB", text: o2024
@@ -124,11 +148,11 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Speak", cost: "free", group: "Other", source: "PHB", text: "Short sentences, a shout or a gesture are free during your turn (and on others' turns, within reason). A long speech is up to the GM." },
 
     // ---- DMG optional action options (with the rest; the room setting can leave them out)
-    { name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", text: "Knock a weapon or item out of a creature's grasp: make a weapon attack roll contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller." },
+    { name: "Disarm", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", summary: `Attack ${d20Chip(weaponHit)}`, text: `Knock a weapon or item out of a creature's grasp: make a weapon attack roll (your best: ${d20Chip(weaponHit)}) contested by its Strength (Athletics) or Dexterity (Acrobatics) check. If you win, it drops the item. You have Disadvantage if it holds the item with two or more hands. It has Advantage if it's larger than you, Disadvantage if smaller.` },
     { name: "Mark", cost: "free", costNote: "With a melee attack", group: "Attack options", source: "DMG", text: "When you make a melee attack, mark the target. Until the end of your next turn, your Opportunity Attacks against it have Advantage and don't use your Reaction (still only one per turn, and not while something stops you taking reactions)." },
-    { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${fmtMod(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
-    { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", summary: `Athletics ${fmtMod(ath)}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${fmtMod(ath)}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
-    { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Acrobatics ${fmtMod(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${fmtMod(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
+    { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Athletics ${d20Chip(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${d20Chip(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
+    { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", summary: `Athletics ${d20Chip(ath, "dis")}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${d20Chip(ath, "dis")}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
+    { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Acrobatics ${d20Chip(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${d20Chip(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
     { name: "Climb onto a Bigger Creature", cost: "action", group: "Other", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
   return opts.dmg === false ? list.filter((o) => o.source !== "DMG") : list;

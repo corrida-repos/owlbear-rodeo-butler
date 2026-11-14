@@ -7,7 +7,9 @@
  *    Hovering Magic (Cast a Spell in 5E) reveals the sheet's spells cast with an action and its Magic actions.
  *    A creature's Multiattack is the first Action.
  *  - A tile opens "how it works" in plain words and the sheet's text.
- * Read-only: nothing is spent or counted here (Butler only tracks HP); rolls are made from the unit card.
+ *  - Every roll shows its modifier or dice, on the tile and in the detail, and rolls on click (Shift: advantage,
+ *    Ctrl/Cmd: disadvantage), public or private like the card's rolls.
+ * Nothing is spent or counted here (Butler only tracks HP).
  * Built from the unit's sheet: for a party member that's their D&D Beyond sync, so re-syncing updates it.
  */
 import "../extension/devlog";
@@ -16,7 +18,12 @@ import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { actionBar, ATTACK_KEY, barLayout, HELP_KEY, MAGIC_KEYS, TWF_KEY, COST_EXPLAINED, explain, filterCount, type ActionBar, type ActionItem, type BarFilter, type Cost } from "../core/actions";
 import { HOMEBREW_COSTS, HOMEBREW_LIMITS, type HomebrewCost } from "../core/homebrew";
 import { cardAccess, controls, editionText, portraitUrl, unitName } from "../core/card";
-import { parseChips } from "../core/chips";
+import { parseChips, rollLabel, rollSegments, type RollSegment } from "../core/chips";
+import { combineModes } from "../core/card";
+import { d20Penalty } from "../core/conditions";
+import { cryptoRng, fmtMod } from "../core/dice";
+import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type RollMessage, type RollVisibility } from "../core/rolls";
+import type { RollMode } from "../core/schema";
 import { BUTLER_ITEM_KEY } from "../core/constants";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import type { UnitSheet, UnitState } from "../core/sheet";
@@ -49,6 +56,11 @@ const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Actio
 let item: Item | null = null;
 let role: "GM" | "PLAYER" = "PLAYER";
 let meId = "";
+let meName = "";
+/** Shared with the unit card (same browser storage). */
+let visibility: RollVisibility = store.get("butler.rollVisibility") === "private" ? "private" : "public";
+/** The last roll made here, and the tile it came from (a natural 20 offers crit damage on that tile). */
+let lastRoll: { msg: RollMessage; key: string } | null = null;
 const savedTab = store.get("butler.actionsTab") as Tab | null;
 let tab: Tab = savedTab && TAB_IDS.has(savedTab) ? savedTab : "all";
 let selected: string | null = null;
@@ -122,6 +134,82 @@ function reveal(it: ActionItem, options: ActionItem[], bar: ActionBar): Child {
     h("div", { className: "ab-reveal-grid" }, ...options.map((o, i) => [key === ATTACK_KEY && i === sheetCount && sheetCount && sheetCount < options.length ? h("span", { className: "ab-reveal-sep" }) : null, tile(o)]).flat()));
 }
 
+// ------------------------------------------------------------------ rolling
+
+/** "Athletics", "Stealth", "Dexterity"… written right before a roll ("(you: Athletics +5"), to name the roll. */
+const SKILLISH = /\b(Acrobatics|Animal Handling|Arcana|Athletics|Deception|History|Insight|Intimidation|Investigation|Medicine|Nature|Perception|Performance|Persuasion|Religion|Sleight of Hand|Stealth|Survival|Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\b/gi;
+/** The last skill or ability named shortly before a roll: "(Stealth) check (you: " → Stealth. */
+const skillBefore = (text: string) => [...text.slice(-45).matchAll(SKILLISH)].at(-1)?.[1];
+
+/** The item's rolls in order, each with a label ("Athletics check", "to hit", "Fire damage"). */
+function rollsOf(it: ActionItem): { seg: RollSegment; label: string }[] {
+  const segs = parseChips(editionText(it.text, roomSystem().rules));
+  const out: { seg: RollSegment; label: string }[] = [];
+  const seen = new Set<string>();
+  segs.forEach((sg, i) => {
+    if (sg.t !== "roll") return;
+    const prev = segs[i - 1];
+    const skill = prev?.t === "text" && sg.kind !== "attack" && sg.kind !== "damage" ? skillBefore(prev.text) : undefined;
+    const label = skill ? `${skill} ${sg.kind === "save" ? "save" : "check"}` : rollLabel("", sg).replace(/^ · /, "");
+    const id = `${sg.formula}|${label}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push({ seg: sg, label });
+  });
+  return out;
+}
+
+async function rollIt(it: ActionItem, seg: RollSegment, label: string, ev: MouseEvent) {
+  ev.stopPropagation();
+  ev.preventDefault();
+  const u = item && readUnit(item.metadata);
+  if (!item || !u) return;
+  let formula = seg.formula.replace(/\s+/g, "");
+  // A roll written with advantage / disadvantage ("2d20kl1+5") combines with Shift / Ctrl like the card's.
+  let builtIn: RollMode | undefined;
+  const m = /^2d20k([hl])1/i.exec(formula);
+  if (m) { builtIn = m[1]!.toLowerCase() === "h" ? "advantage" : "disadvantage"; formula = formula.replace(/^2d20k[hl]1/i, "1d20"); }
+  const clicked: RollMode = ev.shiftKey ? "advantage" : ev.ctrlKey || ev.metaKey ? "disadvantage" : "normal";
+  const kind = seg.kind;
+  let fullLabel = `${it.name} · ${label}`;
+  const penalty = kind === "attack" || kind === "save" || kind === "check" ? d20Penalty(roomSystem(), u.state) : 0;
+  if (penalty) { formula = `${formula}${fmtMod(penalty)}`; fullLabel += ` (exhaustion ${fmtMod(penalty)})`; }
+  const crit = kind === "damage" && lastRoll?.key === it.key && lastRoll.msg.kind === "attack" && lastRoll.msg.natural === 20;
+  const name = visibility === "public" && u.state.alias?.trim() ? u.state.alias.trim() : unitName(itemInfo(item), u.sheet, u.state);
+  try {
+    const msg = makeRoll(formula, fullLabel, { id: meId, name: meName, role }, visibility,
+      { rng: cryptoRng, unit: { id: item.id, name }, kind, mode: combineModes(clicked, builtIn), crit });
+    await OBR.broadcast.sendMessage(ROLL_CHANNEL, msg, { destination: rollDestination(msg) });
+    lastRoll = { msg, key: it.key };
+    selected = it.key;
+  } catch (e) { note = `Roll failed: ${e instanceof Error ? e.message : String(e)}`; }
+  render();
+}
+
+/** A value that rolls when clicked. On a tile it's a span (a button can't hold a button), keyboard-reachable. */
+function rollChip(it: ActionItem, seg: RollSegment, label: string, inTile = false): HTMLElement {
+  const props = {
+    className: `rollchip dice-${seg.kind}`,
+    title: `Roll ${label}: ${seg.formula} · Shift: advantage · Ctrl/⌘: disadvantage`,
+    onclick: (ev: MouseEvent) => void rollIt(it, seg, label, ev),
+  };
+  return inTile
+    ? h("span", { ...props, role: "button", tabindex: "0", onkeydown: (ev: KeyboardEvent) => { if (ev.key === "Enter" || ev.key === " ") { ev.stopPropagation(); ev.preventDefault(); void rollIt(it, seg, label, new MouseEvent("click", { shiftKey: ev.shiftKey, ctrlKey: ev.ctrlKey, metaKey: ev.metaKey })); } } }, seg.display)
+    : h("button", props, seg.display);
+}
+
+/** Text with its "[formula]" rolls as chips; each chip takes its kind and label from the item's own text. */
+function withChips(it: ActionItem, text: string, inTile = false): Child[] {
+  const known = rollsOf(it);
+  const out: Child[] = [];
+  for (const s of parseChips(editionText(text, roomSystem().rules))) {
+    if (s.t === "text") { s.text.split("\n").forEach((line, i) => { if (i) out.push(h("br")); out.push(line); }); continue; }
+    const match = known.find((k) => k.seg.formula === s.formula);
+    out.push(rollChip(it, match?.seg ?? s, match?.label ?? rollLabel("", s).replace(/^ · /, ""), inTile));
+  }
+  return out;
+}
+
 function tile(it: ActionItem): HTMLElement {
   const icon = it.category === "item" ? "⚱" : it.category === "spell" || MAGIC_KEYS.includes(it.key) ? "✦" : it.key === ATTACK_KEY ? "⚔" : it.category === "common" ? "⬡" : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
   const badge = it.source === "DMG" ? "DMG" : it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
@@ -140,31 +228,35 @@ function tile(it: ActionItem): HTMLElement {
   badge ? h("span", { className: "tbadge" }, badge) : null,
   h("span", { className: "ticon", "aria-hidden": "true" }, commonActionIcon(it) ?? icon),
   h("span", { className: "tname" }, it.name),
-  it.summary ? h("span", { className: "tsum" }, it.summary) : null,
+  it.summary ? h("span", { className: "tsum" }, ...withChips(it, it.summary, true)) : null,
   it.concentration ? h("span", { className: "tconc", title: "Concentration" }, "◎") : null);
 }
 
-/** The sheet's text, dice shown as plain values (rolls are made from the card). */
-function sheetText(text: string): Child[] {
-  const out: Child[] = [];
-  for (const s of parseChips(editionText(text, roomSystem().rules))) {
-    if (s.t === "text") s.text.split("\n").forEach((line, i) => { if (i) out.push(h("br")); out.push(line); });
-    else out.push(h("span", { className: `dice dice-${s.kind}` }, s.display));
-  }
-  return out;
+function lastRollLine(it: ActionItem): Child {
+  if (!lastRoll || lastRoll.key !== it.key) return null;
+  const m = lastRoll.msg;
+  const nat = m.natural === 20 ? " Natural 20!" : m.natural === 1 ? " Natural 1." : "";
+  return h("div", { className: `ab-last small${m.natural === 20 ? " ok" : m.natural === 1 ? " bad" : ""}` },
+    h("strong", {}, `${m.label.replace(`${it.name} · `, "")}${m.crit ? " (critical)" : ""}: ${m.total}`), ` ${nat} `, h("span", { className: "muted" }, rollDetail(m)),
+    m.visibility === "private" ? h("span", { className: "muted" }, " · private") : null,
+    m.kind === "attack" && m.natural === 20 ? h("span", { className: "muted" }, " · damage rolls now roll as a critical hit") : null);
 }
 
 function detail(it: ActionItem, bar: ActionBar): Child {
   const how = explain(it, bar.legendary);
+  const rolls = rollsOf(it);
   return h("div", { className: "panel ab-detail" },
     h("div", { className: "row between" },
       h("span", {}, h("strong", {}, it.name),
         it.cost !== "none" ? h("span", { className: `small cost-text cost-${it.cost}` }, ` ${COST_GLYPH[it.cost]} ${COST_LABEL[it.cost]}`) : null),
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
+    rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
+      ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
+    lastRollLine(it),
     how.length ? h("div", { className: "ab-how" }, h("div", { className: "small muted" }, "How it works"),
-      h("ul", { className: "small" }, ...how.map((line) => h("li", {}, line)))) : null,
+      h("ul", { className: "small" }, ...how.map((line) => h("li", {}, ...withChips(it, line))))) : null,
     it.category !== "common" ? h("details", { className: "small", open: !how.length },
-      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...sheetText(it.text))) : null,
+      h("summary", {}, "From the sheet"), h("p", { className: "entry-text" }, ...withChips(it, it.text))) : null,
     it.source === "Homebrew" && role === "GM" ? h("div", { className: "row" },
       h("button", { className: "secondary small", onclick: () => { const hb = homebrewActions().find((x) => x.id === it.homebrewId); if (hb) { hbForm = { id: hb.id, name: hb.name, cost: hb.cost, summary: hb.summary ?? "", text: hb.text }; render(); } } }, "Edit"),
       h("button", { className: "secondary small", onclick: () => { if (confirm(`Remove the homebrew action ${it.name} from the room?`)) { selected = null; void deleteHomebrew(it.homebrewId!).catch(showErr); } } }, "Remove")) : null);
@@ -202,12 +294,17 @@ function footer(sheet: UnitSheet, state: UnitState): Child {
   const record = item?.metadata[BUTLER_ITEM_KEY] as PartyRecord | undefined;
   const mine = !!item && role === "PLAYER" && controls({ id: meId, role }, itemInfo(item), state);
   return h("div", { className: "ab-footer small muted" },
-    h("span", { className: "grow" }, "To roll, open the unit card."),
+    h("span", { className: "grow" }, "Click a value to roll · Shift: advantage · Ctrl/⌘: disadvantage"),
+    h("div", { className: "seg ab-vis" },
+      h("button", { className: visibility === "public" ? "on" : "", title: "Everyone sees the roll", onclick: () => setVisibility("public") }, "Public"),
+      h("button", { className: visibility === "private" ? "on" : "", title: role === "GM" ? "Only you see it" : "Only you and the GM see it", onclick: () => setVisibility("private") }, "Private")),
     record?.ddbId ? h("span", {},
       `From D&D Beyond · synced ${record.syncedAt ? new Date(record.syncedAt).toLocaleDateString() : ""}`,
       mine && sheet.kind === "character" && roomSettings().playerEdits
         ? h("button", { className: "icon tiny", title: "Re-sync from your D&D Beyond sheet (needs the bookmark set up in the Encounter Butler panel)", onclick: () => startDdbSync(record.ddbId) }, "⟳") : null) : null);
 }
+
+function setVisibility(v: RollVisibility) { visibility = v; store.set("butler.rollVisibility", v); render(); }
 
 // ------------------------------------------------------------------ D&D Beyond re-sync (players)
 
@@ -271,6 +368,7 @@ function render() {
 OBR.onReady(async () => {
   role = await OBR.player.getRole();
   meId = OBR.player.id;
+  meName = await OBR.player.getName();
   await Promise.all([initRoomSettings(), initHomebrew()]);
   onRoomSettings(() => render());
   onHomebrew(() => render());
