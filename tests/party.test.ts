@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import fighter from "./fixtures/ddb-synthetic-fighter.json";
 import { BUTLER_ITEM_KEY } from "../src/core/constants";
 import { convertDdbCharacter, htmlToText, renderTemplate } from "../src/core/ddb";
-import { makePartyPackage, matchParty, previewParty, syncParty, validateParty } from "../src/core/party";
+import { makePartyPackage, matchParty, previewParty, syncedState, syncParty, validateParty } from "../src/core/party";
 import { SHEET_KEY, STATE_KEY, validateSheet, type UnitState } from "../src/core/sheet";
 import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
@@ -178,5 +178,17 @@ describe("party sync", () => {
     const r = await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);
     expect(r.ok).toBe(false);
     expect(scene.items.find((i) => i.id === "tok-brann")!.metadata[SHEET_KEY]).toBeUndefined();
+  });
+});
+
+describe("D&D Beyond HP follows the 0-HP rules", () => {
+  const at = (current: number) => ({ ...brann, hp: { ...brann.hp, current } });
+  const prev = (over: Partial<UnitState>): UnitState => ({ hp: 10, tempHp: 0, initiative: null, inEncounter: true, party: true, conditions: [], ...over });
+  it("a sync to 0 HP starts death saves and the 0 HP prompt; back above 0 ends them", () => {
+    expect(syncedState(at(0), prev({ hp: 10 }), "ddb")).toMatchObject({ hp: 0, zeroHpPending: true, deathSaves: { successes: 0, failures: 0 } });
+    const up = syncedState(at(5), prev({ hp: 0, zeroHpPending: true, deathSaves: { successes: 1, failures: 1 } }), "ddb");
+    expect(up.hp).toBe(5);
+    expect("deathSaves" in up || "zeroHpPending" in up).toBe(false);
+    expect(syncedState(at(0), prev({ hp: 10 }), "keep").zeroHpPending).toBeUndefined();
   });
 });

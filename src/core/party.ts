@@ -3,6 +3,7 @@
  * Never moves, replaces or deletes tokens; only writes Butler's unit keys (and an optional new token for
  * characters that have none, if asked). A token's live state (conditions, initiative…) is kept.
  */
+import { applyHp } from "./hp";
 import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
 import { convertDdbCharacter, type PartyMember } from "./ddb";
 import { SHEET_KEY, validateSheet, type UnitState } from "./sheet";
@@ -152,6 +153,13 @@ export function syncedState(m: PartyMember, prev: UnitState | undefined, hp: Par
     inEncounter: prev?.inEncounter ?? true,
   };
   delete state.maxHpOverride; // the sheet's max HP is the character's real max
+  // HP taken from D&D Beyond follows the 0-HP rules like any HP change: dropping to 0 starts death saves and the 0 HP
+  // prompt; coming back above 0 ends them (and Stable).
+  if (prev && !keepHp && state.hp !== prev.hp) {
+    const { patch } = applyHp(m.sheet, { ...state, hp: prev.hp }, { kind: "set", amount: state.hp });
+    Object.assign(state, patch);
+    for (const k of Object.keys(patch) as (keyof UnitState)[]) if (patch[k] === undefined) delete state[k];
+  }
   return state;
 }
 
