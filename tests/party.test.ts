@@ -109,6 +109,23 @@ describe("party sync", () => {
     expect(matchParty(pkg.members, await scene.getItems())[0]).toMatchObject({ by: "D&D Beyond id" });
   });
 
+  it("a re-sync with nothing new on the sheet writes only the small party record", async () => {
+    await syncParty(pkg, { hp: "ddb", createMissing: false, newId }, scene);
+    const writes: Record<string, unknown>[] = [];
+    const orig = scene.updateMetadata.bind(scene);
+    scene.updateMetadata = async (u) => { writes.push(...u.map((x) => x.metadata)); return orig(u); };
+    const r = await syncParty(pkg, { hp: "ddb", createMissing: false, newId, now: () => new Date("2030-01-01T00:00:00Z") }, scene);
+    expect(r.ok).toBe(true);
+    expect(writes.map((w) => Object.keys(w))).toEqual([[BUTLER_ITEM_KEY]]);
+    expect((scene.items.find((i) => i.id === "tok-brann")!.metadata[BUTLER_ITEM_KEY] as any).syncedAt).toBe("2030-01-01T00:00:00.000Z");
+    expect(unitOf("tok-brann").sheet.ac).toBe(20);
+    // a changed sheet is written again
+    writes.length = 0;
+    await syncParty(makePartyPackage("t", { name: "T" }, "x", [{ ...pkg.members[0]!, sheet: { ...pkg.members[0]!.sheet, ac: 21 } }]), { hp: "ddb", createMissing: false, newId }, scene);
+    expect(Object.keys(writes[0]!)).toContain(SHEET_KEY);
+    expect(unitOf("tok-brann").sheet.ac).toBe(21);
+  });
+
   it("creates a token for an unmatched character only with a usable public image", async () => {
     const noImg = await syncParty(pkg, { hp: "ddb", createMissing: true, newId }, scene);
     expect(noImg.skipped[0]).toMatch(/no usable avatar/);

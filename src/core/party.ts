@@ -5,7 +5,7 @@
  */
 import { BUTLER_ITEM_KEY, SIZE_CELLS } from "./constants";
 import { convertDdbCharacter, type PartyMember } from "./ddb";
-import { validateSheet, type UnitState } from "./sheet";
+import { SHEET_KEY, validateSheet, type UnitState } from "./sheet";
 import { readUnit, unitMetadata, unitState } from "./unit";
 import { checkAssetUrl, type ImageItemSpec, type ResolvedImage, type SceneGateway, type InitiativeSetup, type SceneItemLite, type StepResult } from "./importer";
 import { tokenImageGrid } from "./layout";
@@ -155,6 +155,19 @@ export function syncedState(m: PartyMember, prev: UnitState | undefined, hp: Par
   return state;
 }
 
+/** JSON equality for metadata values (they are plain JSON). Key order matters, so a reordered object just counts as changed. */
+const sameJson = (a: unknown, b: unknown) => a === b || (a !== undefined && b !== undefined && JSON.stringify(a) === JSON.stringify(b));
+
+/**
+ * Only the keys of `next` whose value differs from the token's current metadata. A re-sync usually leaves the 15–19 kB
+ * sheet unchanged, and every metadata write is sent to everyone in the room, so unchanged keys aren't written again.
+ */
+export function changedMetadata(prev: Record<string, unknown>, next: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(next)) if (!sameJson(prev[k], v)) out[k] = v;
+  return out;
+}
+
 /**
  * A player's own re-sync from D&D Beyond (F15), applied by the GM's client: only the sheet (and HP, by `hp`) of the
  * one unit changes. The character must be the unit's (same D&D Beyond id once synced, else the same name).
@@ -174,7 +187,7 @@ export async function applySelfSync(gw: SceneGateway, unitId: string, m: PartyMe
   const state = syncedState(m, readUnit(item.metadata)?.state, hp);
   const record: PartyRecord = { ...(prevRecord ?? {}), role: "party", ddbId: m.ddbId, partyId: prevRecord?.partyId ?? "self-sync", syncedAt: now().toISOString(),
     initiativeSetup: { modifier: m.initiative.modifier, advantage: m.initiative.advantage, disadvantage: false } };
-  await gw.updateMetadata([{ id: unitId, metadata: { ...unitMetadata(m.sheet, state), [BUTLER_ITEM_KEY]: record } }]);
+  await gw.updateMetadata([{ id: unitId, metadata: changedMetadata(item.metadata, { ...unitMetadata(m.sheet, state), [BUTLER_ITEM_KEY]: record }) }]);
   return m.name;
 }
 
@@ -217,7 +230,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
           state.initiativeRoll = rolled;
         }
         const meta = { ...unitMetadata(m.sheet, state), [BUTLER_ITEM_KEY]: record };
-        updates.push({ id: r.item.id, metadata: meta });
+        // the record always changes (syncedAt), so every matched token gets a (small) write the Verify step can check
+        updates.push({ id: r.item.id, metadata: changedMetadata(r.item.metadata, meta) });
         report.updated.push(`${m.name} → token "${r.item.label ?? r.item.name}" (matched by ${r.by})`);
       } else if (opts.createMissing) {
         const img = opts.avatars?.[m.ddbId];
@@ -244,7 +258,8 @@ export async function syncParty(pkg: PartyPackage, opts: PartySyncOptions, gw: S
 
     if (updates.length) {
       await gw.updateMetadata(updates);
-      steps.push({ step: "Update tokens", ok: true, detail: `stat blocks written to ${updates.length} existing token(s); position, image, ownership and conditions untouched` });
+      const sheets = updates.filter((u) => SHEET_KEY in u.metadata).length;
+      steps.push({ step: "Update tokens", ok: true, detail: `${updates.length} existing token(s) updated (${sheets} with a changed stat block); position, image, ownership and conditions untouched` });
     }
     if (opts.replaceWith) {
       const imgUpdates: { id: string; image: ResolvedImage; grid: { dpi: number; offset: { x: number; y: number } } }[] = [];

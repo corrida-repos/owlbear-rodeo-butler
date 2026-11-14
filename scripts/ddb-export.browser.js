@@ -46,24 +46,33 @@ async function ddbExport(campaignId, { mode = "clipboard", targetOrigin } = {}) 
     campaignId = campaignId ?? Number((location.pathname.match(/\/campaigns\/(\d+)/) ?? [])[1]);
     if (!campaignId) throw new Error("Open your campaign page (or your character's page) on D&D Beyond first.");
     toast("Encounter Butler: reading your party from D&D Beyond…");
-    const html = await fetch(`/campaigns/${campaignId}`, { credentials: "include" }).then((r) => r.text());
-    const doc = new DOMParser().parseFromString(html, "text/html");
+    // The auth token and the campaign page don't depend on each other: fetch both at once. On the campaign page
+    // itself (the usual case) the page is already loaded, so it isn't downloaded again.
+    const tokP = tokenFor();
+    tokP.catch(() => {}); // awaited below; don't report it unhandled if the page read fails first
+    const onPage = Number((location.pathname.match(/\/campaigns\/(\d+)/) ?? [])[1]) === campaignId
+      && document.querySelector(".ddb-campaigns-character-card");
+    const doc = onPage ? document
+      : new DOMParser().parseFromString(await fetch(`/campaigns/${campaignId}`, { credentials: "include" }).then((r) => r.text()), "text/html");
     const campaignName = (doc.querySelector(".page-title, h1")?.textContent ?? "").trim() || `campaign-${campaignId}`;
     const ids = [...new Set([...doc.querySelectorAll(".ddb-campaigns-character-card a[href*='/characters/']")]
       .map((a) => (a.getAttribute("href").match(/characters\/(\d+)/) ?? [])[1]).filter(Boolean))];
     if (!ids.length) throw new Error("No characters found on this campaign page (are you its DM?).");
 
-    const tok = await tokenFor();
+    const tok = await tokP;
     const get = async (u) => {
       const r = await fetch(u, { headers: { Authorization: `Bearer ${tok}` } });
       if (!r.ok) throw new Error(`${u.split("?")[0]}: HTTP ${r.status}`);
       const j = await r.json();
       return j.data ?? j;
     };
-    const characters = [];
-    for (const id of ids) characters.push(await get(`https://character-service.dndbeyond.com/character/v5/character/${id}?includeCustomItems=true`));
+    // All sheets and the shared inventory at once (they were fetched one after another): a party of 5 arrives in
+    // roughly the time of one sheet. Order is kept.
+    const [characters, party] = await Promise.all([
+      Promise.all(ids.map((id) => get(`https://character-service.dndbeyond.com/character/v5/character/${id}?includeCustomItems=true`))),
+      get(`https://character-service.dndbeyond.com/character/v5/party/inventory/${campaignId}`).catch(() => null),
+    ]);
     // Only equipped shared items affect stats; keep the payload small.
-    const party = await get(`https://character-service.dndbeyond.com/character/v5/party/inventory/${campaignId}`).catch(() => null);
     const equipped = (party?.partyItems ?? []).filter((i) => i.equipped);
     const defIds = new Set(equipped.map((i) => i.definition && i.definition.id));
     const partyInventory = party ? { partyItems: equipped, modifiers: { item: ((party.modifiers && party.modifiers.item) || []).filter((m) => defIds.has(m.componentId)) } } : null;

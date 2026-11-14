@@ -76,7 +76,11 @@ function canSync(pv: PartyPreview) {
 async function receive(bundle: unknown) {
   waiting = false;
   const p = await loadParty(bundle);
-  await Promise.race([loadPortraits(p), new Promise((r) => setTimeout(r, 8000))]);
+  const loading = loadPortraits(p);
+  // Wait (up to 8 s) for the portraits only if this sync uses one: a new token, or a token not already showing it.
+  const portraitUrl = (m: PartyPackage["members"][number]) => (m.avatarUrl ? circularTokenUrl(m.avatarUrl.split("?")[0]!) : null);
+  const needsPortrait = preview?.rows.some((r) => portraitUrl(r.member) && (r.item ? opts.portraits && r.item.image?.url !== portraitUrl(r.member) : opts.createMissing));
+  if (needsPortrait) await Promise.race([loading, new Promise((r) => setTimeout(r, 8000))]);
   if (preview && canSync(preview) && preview.rows.every((r) => r.item || (opts.createMissing && !r.ambiguous.length))) await doSync();
   else await OBR.notification.show("Party received from D&D Beyond — check the preview, then press Sync party.", "WARNING");
 }
