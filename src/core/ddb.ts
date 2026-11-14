@@ -9,8 +9,8 @@ import { MAX_DICE, MAX_DIE_SIDES } from "./constants";
 import { fmtMod } from "./dice";
 import { evalMath } from "./fivetools-copy";
 import type { ListEntry } from "./schema";
-import { ddbItemInfo } from "./items";
-import { SHEET_SCHEMA, type UnitSheet } from "./sheet";
+import { baseName, ddbItemInfo, itemInfo, type ItemInfo } from "./items";
+import { COIN_KEYS, coinsText, SHEET_SCHEMA, type Coins, type UnitSheet } from "./sheet";
 
 export const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"] as const;
 export type Ability = (typeof ABILITIES)[number];
@@ -74,8 +74,14 @@ const withChip = (formula: string) => { const c = chip(formula); return c ? `${f
 
 export interface DdbConvertOptions {
   /** Campaign party inventory (character-service /party/inventory/<campaignId>): items a member equips from it count. */
-  partyInventory?: { partyItems?: any[]; modifiers?: { item?: any[] } } | null;
+  partyInventory?: { partyItems?: any[]; currency?: Partial<Coins>; modifiers?: { item?: any[] } } | null;
 }
+
+/**
+ * A synced sheet keeps every description in full. Item metadata has no documented limit (256 kB on one token worked
+ * live), but each write goes to everyone in the room: past this size the longest texts are shortened, with a flag.
+ */
+export const SHEET_BYTES_BUDGET = 200_000;
 
 export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): PartyMember {
   const flags: string[] = [];
@@ -263,7 +269,7 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
       const lu = a.limitedUse;
       const uses = lu && (lu.maxUses || lu.useProficiencyBonus) ? (lu.maxUses ?? 0) + (lu.useProficiencyBonus ? pb : 0) : 0;
       const usesText = uses ? ` (${uses}/${RESET[lu.resetType] ?? "rest"}${lu.numberUsed ? `, ${lu.numberUsed} used` : ""})` : "";
-      let desc = tpl(a.snippet || htmlToText(a.description));
+      let desc = tpl(htmlToText(a.description) || a.snippet || "");
       if (a.dice?.diceString) desc += ` ${withChip(a.dice.diceString)}`;
       const entry = { name: `${a.name}${usesText}`, text: desc };
       const kind = ACTIVATION[a.activation?.activationType] ?? "other";
@@ -276,31 +282,34 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
   const addFeature = (name: string, text: string, source: string) => {
     if (!name || seen.has(name) || SKIP.test(name)) return;
     seen.add(name);
-    const t = tpl(text);
-    abilities.push({ name, text: `${t.length > 700 ? `${t.slice(0, 700)}…` : t}${source ? ` (${source})` : ""}` });
+    const t = tpl(text ?? "");
+    abilities.push({ name, text: `${t}${source ? ` (${source})` : ""}` });
   };
   for (const k of c.classes ?? []) {
-    for (const f of k.classFeatures ?? []) if ((f.definition?.requiredLevel ?? 99) <= k.level) addFeature(f.definition.name, f.definition.snippet || htmlToText(f.definition.description), k.definition?.name);
-    for (const f of k.subclassDefinition?.classFeatures ?? []) if ((f.requiredLevel ?? 99) <= k.level) addFeature(f.name, f.snippet || htmlToText(f.description), k.subclassDefinition.name);
+    for (const f of k.classFeatures ?? []) if ((f.definition?.requiredLevel ?? 99) <= k.level) addFeature(f.definition.name, htmlToText(f.definition.description) || f.definition.snippet, k.definition?.name);
+    for (const f of k.subclassDefinition?.classFeatures ?? []) if ((f.requiredLevel ?? 99) <= k.level) addFeature(f.name, htmlToText(f.description) || f.snippet, k.subclassDefinition.name);
   }
-  for (const t of c.race?.racialTraits ?? []) addFeature(t.definition?.name, t.definition?.snippet || htmlToText(t.definition?.description), c.race?.baseName ?? "species");
+  for (const t of c.race?.racialTraits ?? []) addFeature(t.definition?.name, htmlToText(t.definition?.description) || t.definition?.snippet, c.race?.baseName ?? "species");
   for (const f of c.feats ?? []) {
     const d = f.definition ?? {};
     if (/ability score (increase|improvement)/i.test(d.name ?? "")) continue;
-    addFeature(d.name, d.snippet || htmlToText(d.description), "feat");
+    addFeature(d.name, htmlToText(d.description) || d.snippet, "feat");
   }
 
   // ---- spells
   const spells = spellEntries(c, { pb, mod, level, score }, flags);
 
-  // ---- inventory
-  const inventory: ListEntry[] = inv
-    .filter((i) => i.definition?.name)
-    .map((i) => ({
-      name: `${i.definition.name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}${i.equipped ? " (equipped)" : ""}${i.isAttuned ? " (attuned)" : ""}`,
-      text: htmlToText(i.definition.snippet || i.definition.description).slice(0, 300),
-      item: ddbItemInfo(i),
-    }));
+  // ---- inventory: own items (with the container each is in), custom items, then the party's shared stash
+  const inventory = inventoryEntries(c, inv, opts.partyInventory);
+  const currency = coins(c.currencies);
+
+  // ---- proficiencies (armor, weapons, tools: saves and skills are shown elsewhere), hit dice, notes
+  const proficiencies = [...new Set(mods.filter((m) => m.type === "proficiency" && typeof m.subType === "string"
+    && !m.subType.endsWith("-saving-throws") && !(m.subType in SKILLS) && m.friendlySubtypeName).map((m) => m.friendlySubtypeName as string))];
+  const hd = (c.classes ?? []).filter((k: any) => k.definition?.hitDice && k.level);
+  const hdUsed = hd.reduce((n: number, k: any) => n + (k.hitDiceUsed ?? 0), 0);
+  const hitDice = hd.length ? `${hd.map((k: any) => `${k.level}d${k.definition.hitDice}`).join(" + ")}${hdUsed ? ` (${hdUsed} used)` : ""}` : undefined;
+  const notes = noteEntries(c);
 
   // ---- flags for things we can't compute
   if (find("set", "unarmored-armor-class").length) flags.push("Unarmored Defense/natural armor detected — verify AC against D&D Beyond.");
@@ -346,6 +355,10 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     legendary: [],
     spells,
     inventory,
+    ...(currency ? { currency } : {}),
+    ...(proficiencies.length ? { proficiencies: proficiencies.join(", ") } : {}),
+    ...(hitDice ? { hitDice } : {}),
+    ...(notes.length ? { notes } : {}),
     source: { provenance: "user-provided", url: `https://www.dndbeyond.com/characters/${c.id}`, notes: ["Synced from D&D Beyond."] },
     flags: [],
   };
@@ -367,9 +380,103 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     hp,
     ac,
     initiative,
-    sheet: { ...sheet, flags: allFlags },
+    sheet: fitSheet({ ...sheet, flags: allFlags }, allFlags),
     flags: allFlags,
   };
+}
+
+// ------------------------------------------------------------------ inventory, coins, notes
+
+const coins = (x: any): Coins | undefined => {
+  if (!x || typeof x !== "object") return undefined;
+  const c = Object.fromEntries(COIN_KEYS.map((k) => [k, Math.max(0, Math.floor(Number(x[k]) || 0))])) as unknown as Coins;
+  return COIN_KEYS.some((k) => c[k] > 0) ? c : undefined;
+};
+
+const itemText = (i: any, info: ItemInfo) => [
+  info.charges ? `Charges: ${info.charges.max - info.charges.used}/${info.charges.max}${info.charges.reset ? ` (regain: ${info.charges.reset})` : ""}.` : "",
+  htmlToText(i.definition?.description || i.definition?.snippet || i.description),
+  i.notes ? `Notes: ${htmlToText(i.notes)}` : "",
+].filter(Boolean).join("\n");
+
+const itemName = (name: string, i: any) => `${name}${i.quantity > 1 ? ` ×${i.quantity}` : ""}${i.equipped ? " (equipped)" : ""}${i.isAttuned ? " (attuned)" : ""}`;
+
+/**
+ * Every item on the sheet, in D&D Beyond's order but grouped: carried items, then each container's contents
+ * (the entry says which container), custom items, and the campaign's shared party inventory and coins.
+ */
+export function inventoryEntries(c: any, inv: any[], party: DdbConvertOptions["partyInventory"]): ListEntry[] {
+  const byId = new Map(inv.filter((i) => i.id != null).map((i) => [i.id, i]));
+  const containerOf = (i: any): string | undefined => {
+    if (i._fromParty) return "Party inventory";
+    const box = i.containerEntityId != null && i.containerEntityId !== c.id ? byId.get(i.containerEntityId) : undefined;
+    return box && box !== i ? box.definition?.name : undefined;
+  };
+  const own = inv.filter((i) => i.definition?.name).map((i, n) => {
+    const container = containerOf(i);
+    const item = ddbItemInfo(i, { container, party: !!i._fromParty });
+    return { n, group: i._fromParty ? 3 : container ? 1 : 0, entry: { name: itemName(i.definition.name, i), text: itemText(i, item), item } as ListEntry };
+  });
+  const names = new Set(own.map((o) => baseName(o.entry.name).toLowerCase()));
+  const custom = (c.customItems ?? []).filter((i: any) => i?.name && !names.has(String(i.name).toLowerCase())).map((i: any, n: number) => {
+    const text = [htmlToText(i.description), i.notes ? `Notes: ${htmlToText(i.notes)}` : ""].filter(Boolean).join("\n");
+    const guess = itemInfo({ name: i.name, text });
+    const item: ItemInfo = { ...guess, ...(i.quantity > 1 ? { quantity: i.quantity } : {}), ...(typeof i.weight === "number" && i.weight > 0 ? { weight: i.weight } : {}), custom: true };
+    return { n, group: 2, entry: { name: itemName(i.name, i), text, item } as ListEntry };
+  });
+  // The shared stash: items nobody has equipped (an item someone equips is on their own sheet).
+  const stash = (party?.partyItems ?? []).filter((i: any) => i?.definition?.name && !i.equipped).map((i: any, n: number) => {
+    const item = ddbItemInfo(i, { container: "Party inventory", party: true });
+    return { n, group: 3, entry: { name: itemName(i.definition.name, i), text: itemText(i, item), item } as ListEntry };
+  });
+  const partyCoins = coinsText(coins(party?.currency));
+  const out = [...own, ...custom, ...stash].sort((a, b) => a.group - b.group || a.n - b.n).map((o) => o.entry);
+  if (partyCoins) out.push({ name: "Party coins", text: partyCoins, item: { kind: "gear", container: "Party inventory", party: true } });
+  return out;
+}
+
+/** Background, personality, appearance and the sheet's notes, as card entries. */
+export function noteEntries(c: any): ListEntry[] {
+  const out: ListEntry[] = [];
+  const add = (name: string, raw: unknown) => { const text = typeof raw === "string" ? htmlToText(raw) : ""; if (text) out.push({ name, text }); };
+  const bg = c.background?.hasCustomBackground ? c.background?.customBackground : c.background?.definition;
+  if (bg?.name) {
+    const feat = bg.featureName ?? bg.featuresBackground?.featureName;
+    const featText = bg.featureDescription ?? bg.featuresBackground?.featureDescription;
+    out.push({ name: `Background: ${bg.name}`, text: [htmlToText(bg.shortDescription || bg.description), feat ? `${feat}. ${htmlToText(featText)}` : ""].filter(Boolean).join("\n") || bg.name });
+  }
+  const t = c.traits ?? {};
+  add("Personality Traits", t.personalityTraits); add("Ideals", t.ideals); add("Bonds", t.bonds); add("Flaws", t.flaws);
+  const looks = [["Age", c.age], ["Height", c.height], ["Weight", c.weight ? `${c.weight} lb.` : ""], ["Eyes", c.eyes], ["Hair", c.hair], ["Skin", c.skin], ["Gender", c.gender]]
+    .filter(([, v]) => v !== undefined && v !== null && String(v).trim()).map(([k, v]) => `${k} ${v}`);
+  const appearance = [looks.join(", "), htmlToText(t.appearance)].filter(Boolean).join("\n");
+  if (appearance) out.push({ name: "Appearance", text: appearance });
+  add("Faith", c.faith);
+  if (c.lifestyle?.name) out.push({ name: "Lifestyle", text: String(c.lifestyle.name) });
+  if (typeof c.currentXp === "number" && c.currentXp > 0) out.push({ name: "Experience Points", text: String(c.currentXp) });
+  const n = c.notes ?? {};
+  add("Backstory", n.backstory); add("Allies", n.allies); add("Enemies", n.enemies); add("Organizations", n.organizations);
+  add("Personal Possessions", n.personalPossessions); add("Other Holdings", n.otherHoldings); add("Other Notes", n.otherNotes);
+  return out;
+}
+
+const sheetBytes = (sheet: UnitSheet) => new TextEncoder().encode(JSON.stringify(sheet)).length;
+
+/** Keeps every text whole unless the sheet is over the budget; then shortens the longest texts step by step. */
+export function fitSheet(sheet: UnitSheet, flags: string[], budget = SHEET_BYTES_BUDGET): UnitSheet {
+  if (sheetBytes(sheet) <= budget) return sheet;
+  const LONG = ["traits", "actions", "bonusActions", "reactions", "spells", "inventory", "notes"] as const;
+  for (const cap of [4000, 2000, 1000, 500, 250]) {
+    const cut = (e: ListEntry) => (e.text.length > cap ? { ...e, text: `${e.text.slice(0, cap)}…` } : e);
+    const next = { ...sheet } as UnitSheet;
+    for (const k of LONG) if (next[k]) (next as any)[k] = (next[k] as ListEntry[]).map(cut);
+    if (sheetBytes(next) <= budget || cap === 250) {
+      const note = `Very long sheet: descriptions over ${cap} characters were shortened (full text on D&D Beyond).`;
+      flags.push(note);
+      return { ...next, flags: next.flags.includes(note) ? next.flags : [...next.flags, note] };
+    }
+  }
+  return sheet;
 }
 
 function componentName(c: any, m: any): string | undefined {
@@ -453,7 +560,7 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
     const lvl = d.level === 0 ? "Cantrip" : `Level ${d.level}`;
     const entry: ListEntry = {
       name: `${prefix}${d.name} (${lvl})`,
-      text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.snippet || d.description).slice(0, 260)}`.trim(),
+      text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.description || d.snippet)}`.trim(),
     };
     if (time.cost) entry.cost = time.cost;
     if (time.cost === "longer" || (time.cost === "reaction" && d.castingTimeDescription)) entry.costNote = time.cost === "longer" ? time.label : `Reaction: ${d.castingTimeDescription}`;

@@ -13,6 +13,17 @@ export interface ItemInfo {
   /** Weapon properties ("Light", "Finesse", "Thrown"…). */
   properties?: string[];
   quantity?: number;
+  /** D&D Beyond extras, shown on the card: the container it's carried in ("Backpack", "Party inventory"), charges, etc. */
+  container?: string;
+  charges?: { max: number; used: number; reset?: string };
+  rarity?: string;
+  /** Needs attunement (whether it's attuned is in the entry name). */
+  attunement?: boolean;
+  weight?: number;
+  /** A custom item made on D&D Beyond (not from a book). */
+  custom?: boolean;
+  /** From the campaign's shared party inventory rather than the character's own. */
+  party?: boolean;
 }
 
 const DDB_KIND: Record<string, ItemKind> = {
@@ -20,16 +31,40 @@ const DDB_KIND: Record<string, ItemKind> = {
 };
 
 /** From a D&D Beyond inventory item. */
-export function ddbItemInfo(i: any): ItemInfo {
+const RESET: Record<number, string> = { 1: "Short Rest", 2: "Long Rest", 3: "Dawn", 4: "Other" };
+
+export function ddbItemInfo(i: any, extra: Pick<ItemInfo, "container" | "custom" | "party"> = {}): ItemInfo {
   const d = i?.definition ?? {};
   const kind = DDB_KIND[String(d.filterType ?? "").toLowerCase()] ?? "gear";
   const properties = (d.properties ?? []).map((p: any) => p?.name).filter((n: unknown): n is string => typeof n === "string");
+  const lu = i?.limitedUse ?? d.limitedUse;
+  const maxUses = Number(lu?.maxUses ?? 0);
+  const rarity = d.magic && typeof d.rarity === "string" ? d.rarity : undefined;
   return {
     kind,
     ...(d.magic ? { magic: true } : {}),
     ...(properties.length ? { properties } : {}),
     ...(i?.quantity > 1 ? { quantity: i.quantity } : {}),
+    ...(maxUses > 0 ? { charges: { max: maxUses, used: Number(lu.numberUsed ?? 0), ...(RESET[lu.resetType] || lu.resetTypeDescription ? { reset: RESET[lu.resetType] ?? String(lu.resetTypeDescription) } : {}) } } : {}),
+    ...(rarity ? { rarity } : {}),
+    ...(d.canAttune ? { attunement: true } : {}),
+    ...(typeof d.weight === "number" && d.weight > 0 ? { weight: d.weight } : {}),
+    ...(extra.container ? { container: extra.container } : {}),
+    ...(extra.custom ? { custom: true } : {}),
+    ...(extra.party ? { party: true } : {}),
   };
+}
+
+/** The extra facts the card shows next to an item: "in Backpack · Rare · requires attunement · 3 lb. · custom". */
+export function itemDetails(info: ItemInfo | undefined): string {
+  if (!info) return "";
+  return [
+    info.container ? `in ${info.container}` : "",
+    info.rarity ?? "",
+    info.attunement ? "requires attunement" : "",
+    info.weight ? `${info.weight} lb.` : "",
+    info.custom ? "custom" : "",
+  ].filter(Boolean).join(" · ");
 }
 
 /** Light weapons by the PHB (both editions). */

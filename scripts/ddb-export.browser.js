@@ -19,6 +19,15 @@ async function ddbExport(campaignId, { mode = "clipboard", targetOrigin } = {}) 
     document.body.append(el);
     setTimeout(() => el.remove(), 8000);
   };
+  // The campaign's shared inventory: every item and the party's coins go on the sheets; only equipped items' modifiers
+  // affect stats, so only those are kept.
+  const slimParty = (party) => {
+    if (!party) return null;
+    const items = party.partyItems ?? [];
+    const defIds = new Set(items.filter((i) => i.equipped).map((i) => i.definition && i.definition.id));
+    return { partyItems: items, currency: party.currency ?? null,
+      modifiers: { item: ((party.modifiers && party.modifiers.item) || []).filter((m) => defIds.has(m.componentId)) } };
+  };
   try {
     const tokenFor = async () => (await (await fetch("https://auth-service.dndbeyond.com/v1/cobalt-token", { method: "POST", credentials: "include" })).json()).token;
     const characterId = campaignId ? null : Number((location.pathname.match(/\/characters\/(\d+)/) ?? [])[1]);
@@ -30,9 +39,7 @@ async function ddbExport(campaignId, { mode = "clipboard", targetOrigin } = {}) 
       const character = await get(`https://character-service.dndbeyond.com/character/v5/character/${characterId}?includeCustomItems=true`);
       const camp = character.campaign && character.campaign.id ? { id: character.campaign.id, name: character.campaign.name || "" } : { name: character.name };
       const party = camp.id ? await get(`https://character-service.dndbeyond.com/character/v5/party/inventory/${camp.id}`).catch(() => null) : null;
-      const equipped = (party?.partyItems ?? []).filter((i) => i.equipped);
-      const defIds = new Set(equipped.map((i) => i.definition && i.definition.id));
-      const partyInventory = party ? { partyItems: equipped, modifiers: { item: ((party.modifiers && party.modifiers.item) || []).filter((m) => defIds.has(m.componentId)) } } : null;
+      const partyInventory = slimParty(party);
       const bundle = { schema: "owlbear-butler/ddb-export@1", single: true, campaign: camp, fetchedAt: new Date().toISOString(), characters: [character], partyInventory };
       if (mode === "return") return bundle;
       if (targetOrigin && window.opener && !window.opener.closed) {
@@ -72,10 +79,7 @@ async function ddbExport(campaignId, { mode = "clipboard", targetOrigin } = {}) 
       Promise.all(ids.map((id) => get(`https://character-service.dndbeyond.com/character/v5/character/${id}?includeCustomItems=true`))),
       get(`https://character-service.dndbeyond.com/character/v5/party/inventory/${campaignId}`).catch(() => null),
     ]);
-    // Only equipped shared items affect stats; keep the payload small.
-    const equipped = (party?.partyItems ?? []).filter((i) => i.equipped);
-    const defIds = new Set(equipped.map((i) => i.definition && i.definition.id));
-    const partyInventory = party ? { partyItems: equipped, modifiers: { item: ((party.modifiers && party.modifiers.item) || []).filter((m) => defIds.has(m.componentId)) } } : null;
+    const partyInventory = slimParty(party);
 
     const bundle = { schema: "owlbear-butler/ddb-export@1", campaign: { id: campaignId, name: campaignName }, fetchedAt: new Date().toISOString(), characters, partyInventory };
     const json = JSON.stringify(bundle);
