@@ -7,6 +7,8 @@
  *    Hovering Magic (Cast a Spell in 5E) reveals the sheet's spells cast with an action and its Magic actions.
  *    A creature's Multiattack is the first Action.
  *  - A tile opens "how it works" in plain words and the sheet's text.
+ *  - Hovering or picking an action shows its reach or range on the map, with a ring on every creature it reaches
+ *    (drawn by the background page, for this browser only: see background/reach.ts).
  *  - Every roll shows its modifier or dice, on the tile and in the detail, and rolls on click (Shift: advantage,
  *    Ctrl/Cmd: disadvantage), public or private like the card's rolls.
  * Nothing is spent or counted here (Butler only tracks HP).
@@ -28,6 +30,7 @@ import { BUTLER_ITEM_KEY } from "../core/constants";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import type { UnitSheet, UnitState } from "../core/sheet";
 import { readUnit } from "../core/unit";
+import { AIM_CHANNEL, meleeReachOf, reachOf, showReach, SHOW_REACH_KEY, widest, type Aim, type Reach } from "../core/reach";
 import { openCard } from "../extension/cardPopover";
 import { DDB_ORIGIN, onDdbExport } from "../extension/ddbLink";
 import { h, store, type Child } from "../extension/dom";
@@ -78,6 +81,47 @@ const isOpen = (key: string) => revealOpen.has(key) || revealPinned.has(key);
 let hbForm: { id: string; name: string; cost: HomebrewCost; summary: string; text: string; error?: string } | null = null;
 
 const itemInfo = (i: Item) => ({ visible: i.visible, createdUserId: i.createdUserId, name: i.name, label: (i as any).text?.plainText || undefined, imageUrl: (i as any).image?.url });
+
+// ------------------------------------------------------------------ reach on the map
+
+/** The tile under the pointer: its reach shows on the map (else the selected tile's). */
+let hovered: string | null = null;
+/** Every item shown (tiles and what they reveal), and the unit's melee reach, set each render. */
+let shownItems: ActionItem[] = [];
+let meleeReach = 5;
+let sentAim = "null";
+let aimTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** How far an item reaches; the Attack tile shows the farthest of its attacks. */
+function reachFor(it: ActionItem): Reach | null {
+  if (it.key === ATTACK_KEY) return widest((reveals[ATTACK_KEY] ?? []).map((o) => reachOf(o, meleeReach)));
+  return reachOf(it, meleeReach);
+}
+
+function currentAim(): Aim | null {
+  if (!item || !showReach(store.get(SHOW_REACH_KEY))) return null;
+  const find = (key: string | null) => (key ? shownItems.find((x) => x.key === key) : undefined);
+  const it = find(hovered) ?? find(selected);
+  const reach = it && reachFor(it);
+  return it && reach ? { unitId: item.id, name: it.name, reach } : null;
+}
+
+/** Tells the background page what to draw (after a short pause, so sweeping across tiles doesn't redraw each one). */
+function sendAim(now = false, force = false) {
+  clearTimeout(aimTimer);
+  const go = () => {
+    const aim = currentAim();
+    const json = JSON.stringify(aim);
+    if (json === sentAim && !force) return;
+    sentAim = json;
+    void OBR.broadcast.sendMessage(AIM_CHANNEL, aim, { destination: "LOCAL" }).catch(() => {});
+  };
+  if (now) go(); else aimTimer = setTimeout(go, 120);
+}
+const hoverAim = (key: string) => ({
+  onmouseenter: () => { hovered = key; sendAim(); },
+  onmouseleave: () => { if (hovered === key) { hovered = null; sendAim(); } },
+});
 
 // ------------------------------------------------------------------ rendering
 
@@ -223,7 +267,10 @@ function tile(it: ActionItem): HTMLElement {
       if (rv) { if (selected !== it.key) { revealPinned.add(rv); revealOpen.add(rv); } else { revealPinned.delete(rv); revealOpen.delete(rv); } }
       selected = selected === it.key ? null : it.key; render();
     },
-    ...(rv ? hoverReveal(rv) : {}),
+    ...(() => {
+      const a = hoverAim(it.key), r = rv ? hoverReveal(rv) : null;
+      return { onmouseenter: () => { a.onmouseenter(); r?.onmouseenter(); }, onmouseleave: () => { a.onmouseleave(); r?.onmouseleave(); } };
+    })(),
   },
   h("span", { className: "tcost" }, COST_GLYPH[it.cost]),
   badge ? h("span", { className: "tbadge" }, badge) : null,
@@ -251,6 +298,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
       h("span", {}, h("strong", {}, it.name),
         it.cost !== "none" ? h("span", { className: `small cost-text cost-${it.cost}` }, ` ${COST_GLYPH[it.cost]} ${COST_LABEL[it.cost]}`) : null),
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
+    reachLine(it),
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
       ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
     lastRollLine(it),
@@ -261,6 +309,14 @@ function detail(it: ActionItem, bar: ActionBar): Child {
     it.source === "Homebrew" && role === "GM" ? h("div", { className: "row" },
       h("button", { className: "secondary small", onclick: () => { const hb = homebrewActions().find((x) => x.id === it.homebrewId); if (hb) { hbForm = { id: hb.id, name: hb.name, cost: hb.cost, summary: hb.summary ?? "", text: hb.text }; render(); } } }, "Edit"),
       h("button", { className: "secondary small", onclick: () => { if (confirm(`Remove the homebrew action ${it.name} from the room?`)) { selected = null; void deleteHomebrew(it.homebrewId!).catch(showErr); } } }, "Remove")) : null);
+}
+
+/** The item's reach in words, under its name: "Reach 10 ft · Range 30 ft · Long range 120 ft: Disadvantage". */
+function reachLine(it: ActionItem): Child {
+  const r = reachFor(it);
+  if (!r) return null;
+  return h("div", { className: "small muted ab-reach" }, h("span", { "aria-hidden": "true" }, "◎ "), [...r.bands.map((b) => b.label), ...(r.note ? [r.note] : [])].join(" · "),
+    showReach(store.get(SHOW_REACH_KEY)) ? " (shown on the map)" : "");
 }
 
 function showErr(e: unknown) { note = e instanceof Error ? e.message : String(e); render(); }
@@ -296,6 +352,8 @@ function footer(sheet: UnitSheet, state: UnitState): Child {
   const mine = !!item && role === "PLAYER" && controls({ id: meId, role }, itemInfo(item), state);
   return h("div", { className: "ab-footer small muted" },
     h("span", { className: "grow" }, "Click a value to roll · Shift: advantage · Ctrl/⌘: disadvantage"),
+    h("label", { className: "ab-reach-toggle", title: "Hovering or picking an action shows how far it reaches on the map, and rings the creatures in reach (only you see it)" },
+      h("input", { type: "checkbox", checked: showReach(store.get(SHOW_REACH_KEY)), onchange: (e: Event) => { store.set(SHOW_REACH_KEY, (e.target as HTMLInputElement).checked ? "1" : "0"); render(); } }), " Reach on map"),
     h("div", { className: "seg ab-vis" },
       h("button", { className: visibility === "public" ? "on" : "", title: "Everyone sees the roll", onclick: () => setVisibility("public") }, "Public"),
       h("button", { className: visibility === "private" ? "on" : "", title: role === "GM" ? "Only you see it" : "Only you and the GM see it", onclick: () => setVisibility("private") }, "Private")),
@@ -342,6 +400,8 @@ function render() {
     const layout = barLayout(bar, tab);
     const { sections, magicOptions } = layout;
     reveals = layout.reveals;
+    shownItems = [...bar.items, ...Object.values(reveals).flat()];
+    meleeReach = meleeReachOf(sheet.actions.filter((e) => /\bMelee\b/i.test(e.text)).map((e) => e.text));
     const sel = bar.items.find((it) => it.key === selected) ?? Object.values(reveals).flat().find((it) => it.key === selected);
 
     const tabInfo = tab === "action" || tab === "bonus" || tab === "reaction" || tab === "legendary" ? COST_EXPLAINED[tab] : "";
@@ -364,6 +424,8 @@ function render() {
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   const grid = document.querySelector(".ab-grid");
   if (grid) grid.scrollTop = scroll;
+  if (!item) { shownItems = []; hovered = null; }
+  sendAim(true);
 }
 
 OBR.onReady(async () => {
@@ -376,4 +438,7 @@ OBR.onReady(async () => {
   [item = null] = await OBR.scene.items.getItems([itemId]);
   render();
   OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });
+  // The map keeps the reach only while this page says so: repeat it, and clear it when the action bar closes.
+  setInterval(() => { if (sentAim !== "null") sendAim(true, true); }, 2000);
+  window.addEventListener("pagehide", () => { void OBR.broadcast.sendMessage(AIM_CHANNEL, null, { destination: "LOCAL" }).catch(() => {}); });
 });

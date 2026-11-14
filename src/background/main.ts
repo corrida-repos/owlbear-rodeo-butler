@@ -26,6 +26,8 @@ import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
+import { receiveAim, resetReach, updateReach } from "./reach";
+import { AIM_CHANNEL, SHOW_REACH_KEY } from "../core/reach";
 import { resetDarkness, updateDarkness } from "./darkness";
 import { AURA_CHANNEL, AURA_CHOSEN_KEY, AURA_SCOPE_KEY, HUD_KEY, readChosen, readSceneLight, setUnitLight, toggleChosen } from "../core/vision";
 import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
@@ -198,7 +200,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetDarkness(); resetMovementMemory(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -216,6 +218,7 @@ async function onSceneChange() {
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
       await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] vision auras failed", e));
+      await updateReach(items, role).catch((e) => console.error("[Butler] reach auras failed", e));
       await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
@@ -398,6 +401,9 @@ OBR.onReady(async () => {
   });
   window.addEventListener("storage", (e) => { if (e.key === HUD_KEY || e.key === AURA_SCOPE_KEY || e.key === AURA_CHOSEN_KEY) void onSceneChange(); });
   OBR.broadcast.onMessage(AURA_CHANNEL, () => void onSceneChange());
+  // Reach and range: the action being looked at on this browser's action bar.
+  OBR.broadcast.onMessage(AIM_CHANNEL, (event) => { if (receiveAim(event.data, () => void onSceneChange())) void onSceneChange(); });
+  window.addEventListener("storage", (e) => { if (e.key === SHOW_REACH_KEY) void onSceneChange(); });
   OBR.scene.grid.onChange(() => void onSceneChange());
 
   void onSceneChange();

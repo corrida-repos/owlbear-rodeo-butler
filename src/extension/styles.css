@@ -271,3 +271,5 @@ button.status-chip:disabled { cursor: default; }
 .ab-last { margin: 2px 0 4px; }
 .ab-vis { flex: none; }
 .ab-vis button { padding: 2px 8px; font-size: 11px; }
+.ab-reach { margin: 2px 0; }
+.ab-reach-toggle { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }

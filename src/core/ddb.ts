@@ -554,7 +554,10 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
       const label = m.subType === "hit-points" ? "healing" : `${m.friendlySubtypeName ?? m.subType}`;
       parts.push(`${withChip(f)} ${label}`);
     }
-    const range = d.range?.origin === "Self" ? "Self" : d.range?.rangeValue ? `${d.range.rangeValue} ft.` : d.range?.origin ?? "";
+    const base = d.range?.origin === "Self" ? "Self" : d.range?.rangeValue ? `${d.range.rangeValue} ft.` : d.range?.origin ?? "";
+    // The area of effect, so the action bar can show it on the map: "Self (15-ft. Cone)", "150 ft. (20-ft. Sphere)".
+    const aoe = d.range?.aoeType && Number(d.range?.aoeValue) > 0 ? ` (${Number(d.range.aoeValue)}-ft. ${d.range.aoeType})` : "";
+    const range = base ? `${base}${aoe}` : "";
     const time = castingTime(d.activation);
     const tags = [time.label, d.concentration ? "Concentration" : "", d.ritual ? "Ritual" : "", range].filter(Boolean).join(", ");
     const lvl = d.level === 0 ? "Cantrip" : `Level ${d.level}`;
