@@ -16,7 +16,8 @@ import { damageAfter, parseChips, rollLabel, type RollSegment, type Segment } fr
 import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
-import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
+import { coinsText, maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
+import { itemDetails } from "../core/items";
 import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
 import { addConditionTo, changeHp, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
@@ -54,7 +55,7 @@ let last: { msg: RollMessage; entry?: string; damage: RollSegment[]; attackNatur
 let log: RollMessage[] = [];
 let editOpen = false;
 let error = "";
-const closed = new Set<string>(["spells", "inventory"]);
+const closed = new Set<string>(["spells", "inventory", "notes"]);
 let renderPending = false;
 document.addEventListener("focusout", () => { if (renderPending) { renderPending = false; setTimeout(render, 0); } });
 
@@ -323,7 +324,8 @@ function infoLines(sheet: UnitSheet): Child {
   const lines: [string, string | undefined][] = [
     ["Vulnerabilities", d.vulnerable], ["Resistances", d.resist], ["Immunities", d.immune], ["Condition immunities", d.conditionImmune],
     ["Senses", [sheet.senses, sheet.passivePerception !== undefined ? `Passive Perception ${sheet.passivePerception}` : ""].filter(Boolean).join("; ") || undefined],
-    ["Languages", sheet.languages], ["Challenge", challengeLine(sheet)],
+    ["Languages", sheet.languages], ["Proficiencies", sheet.proficiencies], ["Hit Dice", sheet.hitDice],
+    ["Coins", coinsText(sheet.currency) || undefined], ["Challenge", challengeLine(sheet)],
   ];
   const skills = skillRolls(sheet);
   return h("div", { className: "panel stack tight" },
@@ -333,10 +335,17 @@ function infoLines(sheet: UnitSheet): Child {
 }
 
 function sections(sheet: UnitSheet): Child[] {
-  return SECTIONS.filter(([key]) => sheet[key].length).map(([key, title]) =>
+  const lists: [string, string, SheetEntry[], boolean][] = [
+    ...SECTIONS.map(([key, title]): [string, string, SheetEntry[], boolean] => [key, title, sheet[key], true]),
+    ["notes", "Background & notes", sheet.notes ?? [], false],
+  ];
+  return lists.filter(([, , list]) => list.length).map(([key, title, list, canRoll]) =>
     h("details", { className: "panel section", open: !closed.has(key), ontoggle: (e: Event) => { (e.target as HTMLDetailsElement).open ? closed.delete(key) : closed.add(key); } },
-      h("summary", {}, `${title} (${sheet[key].length})`),
-      ...sheet[key].map((entry) => h("p", { className: "entry-text" }, h("strong", {}, `${entry.name}. `), ...entryText(entry, true)))));
+      h("summary", {}, `${title} (${list.length})`),
+      ...list.map((entry) => {
+        const details = key === "inventory" ? itemDetails(entry.item) : "";
+        return h("p", { className: "entry-text" }, h("strong", {}, `${entry.name}. `), details ? h("span", { className: "small muted" }, `(${details}) `) : null, ...entryText(entry, canRoll));
+      })));
 }
 
 function lastRoll(): Child {

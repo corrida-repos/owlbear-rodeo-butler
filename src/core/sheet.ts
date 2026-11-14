@@ -64,9 +64,22 @@ export interface UnitSheet {
   legendary: SheetEntry[];
   spells: SheetEntry[];
   inventory: SheetEntry[];
+  /** Coins the character carries (D&D Beyond). */
+  currency?: Coins;
+  /** Armor, weapon and tool proficiencies (D&D Beyond). */
+  proficiencies?: string;
+  /** e.g. "3d10 (1 used)" (D&D Beyond). */
+  hitDice?: string;
+  /** Background, personality, appearance, backstory and the sheet's notes (D&D Beyond). */
+  notes?: SheetEntry[];
   source: { provenance: Provenance; book?: string; bookTitle?: string; page?: number; url?: string; notes?: string[] };
   flags: string[];
 }
+
+export interface Coins { cp: number; sp: number; ep: number; gp: number; pp: number }
+export const COIN_KEYS = ["pp", "gp", "ep", "sp", "cp"] as const;
+/** "12 gp, 5 sp" (empty when there are none). */
+export const coinsText = (c: Partial<Coins> | undefined) => COIN_KEYS.filter((k) => (c?.[k] ?? 0) > 0).map((k) => `${c![k]} ${k}`).join(", ");
 
 /** A condition or status effect on a unit. `key` is a GameSystem condition key or "custom". */
 export interface ConditionInstance {
@@ -147,6 +160,9 @@ export function validateSheet(x: unknown): string[] {
     if (!Array.isArray(x[l]) || !x[l].every((it: unknown) => isObj(it) && typeof it.name === "string" && typeof it.text === "string"))
       e.push(`${l}: array of {name, text}`);
   }
+  if (x.notes !== undefined && (!Array.isArray(x.notes) || !x.notes.every((it: unknown) => isObj(it) && typeof it.name === "string" && typeof it.text === "string")))
+    e.push("notes: array of {name, text}");
+  if (x.currency !== undefined && (!isObj(x.currency) || !Object.values(x.currency).every(isNum))) e.push("currency: numbers");
   if (!isObj(x.source) || typeof x.source.provenance !== "string") e.push("source.provenance: missing");
   if (!Array.isArray(x.flags)) e.push("flags: array");
   return e;
