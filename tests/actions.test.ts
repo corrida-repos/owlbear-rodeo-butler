@@ -141,7 +141,7 @@ describe("action bar from a creature", () => {
 describe("combat options anyone has (PHB + DMG optional rules)", () => {
   const sheet = { ...brann.sheet, abilities: { ...brann.sheet.abilities, str: 16, dex: 14 }, proficiencyBonus: 2, speed: { walk: 30 },
     skills: [{ name: "Athletics", bonus: 5 }], actions: brann.sheet.actions.filter((a) => a.name !== "Unarmed Strike") };
-  const opts = combatOptions(sheet, "2024");
+  const opts = combatOptions(sheet, "2024", { handheld: true });
   const by = (n: string) => opts.find((o) => o.name === n)!;
   it("works out this character's numbers", () => {
     expect(by("Unarmed Strike")).toMatchObject({ cost: "attack", summary: "+5 [1d20+5] · 4 Bludgeoning" });
@@ -200,16 +200,17 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(by("Magic").text).toMatch(/free hand/);
     expect(by("Interact with an Object").text).not.toMatch(/draw or sheathe a weapon/);
     expect(by("Attack").text).toMatch(/equip or unequip one weapon/);
-    const layout = barLayout(actionBar(sheet));
+    const layout = barLayout(actionBar(sheet, "2024", { handheld: true }));
     expect(layout.attackOptions.map((o) => o.name)).not.toContain("Equip or Unequip a Weapon");
     expect(layout.sections.find((s) => s.id === "free")!.items.map((i) => i.name)).toContain("Equip or Unequip a Weapon");
-    const old = combatOptions(sheet, "2014");
+    const old = combatOptions(sheet, "2014", { handheld: true });
     expect(old.some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
     expect(old.find((o) => o.name === "Interact with an Object")!.text).toMatch(/draw or sheathe a weapon/);
   });
   it("handheld management: Don or Doff a Shield, weapon swaps and focus notes show only with the room setting on", () => {
+    expect(combatOptions(sheet, "2024").some((o) => o.name === "Don or Doff a Shield")).toBe(false);
     expect(by("Don or Doff a Shield")).toMatchObject({ cost: "action", costNote: "Utilize action", group: "Actions" });
-    expect(combatOptions(sheet, "2014").find((o) => o.name === "Don or Doff a Shield")!.text).toMatch(/^Donning or doffing a shield takes an action/);
+    expect(combatOptions(sheet, "2014", { handheld: true }).find((o) => o.name === "Don or Doff a Shield")!.text).toMatch(/^Donning or doffing a shield takes an action/);
     for (const rules of ["2024", "2014"] as const) {
       const off = combatOptions(sheet, rules, { handheld: false });
       const names = off.map((o) => o.name);

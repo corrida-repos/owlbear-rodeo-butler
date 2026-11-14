@@ -79,7 +79,7 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const hasUnarmed = sheet.actions.some((a) => /^Unarmed Strike\b/i.test(a.name));
   const o2024 = rules === "2024";
   // Handheld management (room setting): shields, weapon swaps and what drawing a weapon or focus costs.
-  const hh = opts.handheld !== false;
+  const hh = opts.handheld === true;
   const impDmg = `${str ? `1d4 ${str > 0 ? "+" : "-"} ${Math.abs(str)}` : "1d4"} [1d4${str ? fmtMod(str) : ""}]`;
 
   const list: CombatOption[] = [

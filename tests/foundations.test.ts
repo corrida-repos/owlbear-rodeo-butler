@@ -77,8 +77,8 @@ describe("room settings", () => {
     const meta = settingsUpdate({}, { system: "dnd5e-2014" });
     expect(readSettings(meta).system).toBe("dnd5e-2014");
     expect(readSettings(settingsUpdate(meta, { autoDeadAtZero: true }))).toEqual({ ...DEFAULT_SETTINGS, system: "dnd5e-2014", autoDeadAtZero: true });
-    expect(DEFAULT_SETTINGS.handheld).toBe(true);
-    expect(readSettings(settingsUpdate(meta, { handheld: false })).handheld).toBe(false);
+    expect(DEFAULT_SETTINGS.handheld).toBe(false);
+    expect(readSettings(settingsUpdate(meta, { handheld: true })).handheld).toBe(true);
   });
 });
 

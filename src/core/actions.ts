@@ -218,7 +218,7 @@ export interface BarOptions {
   /** Include the DMG's optional action options (room setting, on by default). */
   dmg?: boolean;
   /** Include handheld management: Don or Doff a Shield, Equip or Unequip a Weapon, and the notes on drawing weapons
-   *  and spellcasting foci (room setting, on by default). */
+   *  and spellcasting foci (room setting, off by default). */
   handheld?: boolean;
   /** The room's homebrew actions. */
   homebrew?: HomebrewAction[];
