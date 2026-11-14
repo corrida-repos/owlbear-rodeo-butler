@@ -5,7 +5,7 @@
 import { BUTLER_NS } from "./constants";
 import type { Duration } from "./conditions";
 import type { PartyMember } from "./ddb";
-import type { HpChange } from "./hp";
+import { ZERO_HP_CHOICES, type HpChange, type ZeroHpChoice } from "./hp";
 import type { ResolvedImage } from "./importer";
 import type { UnitSheet } from "./sheet";
 import { isUnitLight, type UnitLight } from "./vision";
@@ -19,6 +19,10 @@ interface Base { v: 1; unitId: string; playerId: string; playerName: string }
 export interface EndTurnRequest extends Base { type: "end-turn"; round: number }
 /** A death saving throw the player rolled from their card (the natural d20). */
 export interface DeathSaveRequest extends Base { type: "death-save"; natural: number }
+/** Death save counters the player set by hand (rolled at the table, or a correction). */
+export interface DeathSaveSetRequest extends Base { type: "death-save-set"; successes: number; failures: number }
+/** The player's answer when their unit drops to 0 HP: Dead, Death saves, Stable or Alive. */
+export interface ZeroHpChoiceRequest extends Base { type: "zero-hp-choice"; choice: ZeroHpChoice }
 /** A Concentration save the player rolled for a pending check (the total). */
 export interface ConcentrationRequest extends Base { type: "concentration"; total: number }
 /** Movement tracker: rewind to the last 5 ft point, or toggle Dash, for the player's active unit. */
@@ -43,7 +47,7 @@ export type WildShapeOp =
   /** A rest: a Short Rest gives one use back (5.5E), a Long Rest all. */
   | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
-export type PlayerRequest = EndTurnRequest | DeathSaveRequest | ConcentrationRequest | RewindRequest | DashRequest
+export type PlayerRequest = EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | LightRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
@@ -54,6 +58,8 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   if (!r || r.v !== 1 || typeof r.unitId !== "string" || typeof r.playerId !== "string" || typeof r.playerName !== "string") return false;
   if (r.type === "end-turn") return typeof r.round === "number";
   if (r.type === "death-save") return Number.isInteger(r.natural) && r.natural >= 1 && r.natural <= 20;
+  if (r.type === "death-save-set") return [r.successes, r.failures].every((n) => Number.isInteger(n) && n >= 0 && n <= 3);
+  if (r.type === "zero-hp-choice") return ZERO_HP_CHOICES.includes(r.choice);
   if (r.type === "concentration") return typeof r.total === "number" && Number.isFinite(r.total);
   if (r.type === "rewind") return true;
   if (r.type === "dash") return typeof r.on === "boolean";

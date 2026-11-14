@@ -4,11 +4,14 @@ import {
   activeAndNext, EMPTY_ENCOUNTER, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat, turnOrder,
   waitingForInitiative, type OrderUnit,
 } from "../src/core/encounter";
-import { applyDeathSave, applyHp, lifeStatusPatch, markDead, parseHpInput, revive, setStable } from "../src/core/hp";
+import { applyDeathSave, applyHp, lifeStatusPatch, markDead, parseHpInput, revive, setDeathSaveCounts, setStable, zeroHpChoicePatch } from "../src/core/hp";
+import { zeroHpPromptee } from "../src/core/card";
+import { needsDeathSaves } from "../src/core/systems";
+import { isPlayerRequest } from "../src/core/turns";
 import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet, type UnitState } from "../src/core/sheet";
 import {
-  changeHp, encounterAction, endTurnFor, markUnitsDead, moveTie, recordDeathSave, reviveUnits, rollInitiativeFor, setInEncounter,
-  setInitiative, setLifeStatus, setMaxHp, toggleConditionOn, trackerView,
+  changeHp, chooseAtZero, encounterAction, endTurnFor, markUnitsDead, moveTie, recordDeathSave, reviveUnits, rollInitiativeFor, setDeathSaves,
+  setInEncounter, setInitiative, setLifeStatus, setMaxHp, toggleConditionOn, trackerView, zeroHpUnits,
 } from "../src/core/tracker";
 import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
@@ -116,7 +119,7 @@ describe("HP rules", () => {
 
   it("party member: 0 HP starts death saves; damage at 0 is a failure; massive damage is reported", () => {
     const r = applyHp(wolf, pc({ hp: 5 }), { kind: "damage", amount: 9 });
-    expect(r.patch).toEqual({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
+    expect(r.patch).toEqual({ hp: 0, deathSaves: { successes: 0, failures: 0 }, zeroHpPending: true });
     expect(r.events).toEqual(["dropped-to-zero"]);
     const f = applyHp(wolf, pc({ hp: 0, deathSaves: { successes: 1, failures: 1 } }), { kind: "damage", amount: 3, critical: true });
     expect(f.patch.deathSaves).toEqual({ successes: 1, failures: 3 });
@@ -140,10 +143,45 @@ describe("HP rules", () => {
     const r = applyHp(wolf, pc({ hp: 5, conditions: [{ id: "d", key: "dead" }] }), { kind: "damage", amount: 9 });
     expect(r).toEqual({ patch: { hp: 0 }, events: [] });
   });
-  it("creatures at 0 HP are reported (Mark as dead offered), no death saves", () => {
+  it("creatures at 0 HP are reported and wait on the controller's choice; no death saves until chosen", () => {
     const r = applyHp(wolf, newState(wolf, { hp: 4 }), { kind: "damage", amount: 10 });
-    expect(r.patch).toEqual({ hp: 0 });
+    expect(r.patch).toEqual({ hp: 0, zeroHpPending: true });
     expect(r.events).toEqual(["creature-at-zero"]);
+  });
+
+  it("0 HP choice: Dead, Death saves (any unit), Stable or Alive; each clears the prompt", () => {
+    const down = newState(wolf, { hp: 0, zeroHpPending: true });
+    expect(zeroHpChoicePatch(down, "dead")).toMatchObject({ inEncounter: false, zeroHpPending: undefined });
+    const dying = zeroHpChoicePatch(down, "dying");
+    expect(dying).toMatchObject({ deathSaves: { successes: 0, failures: 0 }, zeroHpPending: undefined });
+    expect(needsDeathSaves({ ...down, ...dying } as UnitState)).toBe(true);
+    const stable = zeroHpChoicePatch(down, "stable");
+    expect(stable.conditions!.map((c) => c.key)).toEqual(["stable"]);
+    expect(zeroHpChoicePatch(down, "alive")).toEqual({ hp: 1, conditions: [], deathSaves: undefined, zeroHpPending: undefined });
+    // A party member hit again before choosing keeps the failure it took.
+    expect(zeroHpChoicePatch(pc({ hp: 0, zeroHpPending: true, deathSaves: { successes: 0, failures: 1 } }), "dying").deathSaves).toEqual({ successes: 0, failures: 1 });
+  });
+
+  it("a creature on death saves follows the same rules: damage at 0 is a failure, healing ends it and the prompt", () => {
+    const c = newState(wolf, { hp: 0, deathSaves: { successes: 1, failures: 0 } });
+    const d = applyHp(wolf, c, { kind: "damage", amount: 2 });
+    expect(d.patch.deathSaves).toEqual({ successes: 1, failures: 1 });
+    expect(d.events).toContain("death-save-failure");
+    // A creature not on death saves (Stable, or no choice yet) takes no failures.
+    expect(applyHp(wolf, newState(wolf, { hp: 0 }), { kind: "damage", amount: 2 }).patch.deathSaves).toBeUndefined();
+    const h = applyHp(wolf, newState(wolf, { hp: 0, zeroHpPending: true }), { kind: "heal", amount: 3 });
+    expect(h.patch).toMatchObject({ hp: 3, zeroHpPending: undefined });
+    expect("zeroHpPending" in h.patch).toBe(true);
+  });
+
+  it("death saves tracked by hand: counters 0–3, three successes → Stable; rolling one answers the prompt", () => {
+    expect(setDeathSaveCounts(pc({ hp: 0 }), 2, 1)).toEqual({ patch: { deathSaves: { successes: 2, failures: 1 } }, outcome: "set" });
+    expect(setDeathSaveCounts(pc({ hp: 0 }), 0, 7).outcome).toBe("dead");
+    expect(setDeathSaveCounts(pc({ hp: 0 }), 0, 7).patch.deathSaves).toEqual({ successes: 0, failures: 3 });
+    const st = setDeathSaveCounts(pc({ hp: 0, zeroHpPending: true }), 3, 0);
+    expect(st.outcome).toBe("stable");
+    expect(st.patch).toMatchObject({ deathSaves: { successes: 0, failures: 0 }, zeroHpPending: undefined });
+    expect(applyDeathSave(pc({ hp: 0, zeroHpPending: true }), 15).patch).toEqual({ deathSaves: { successes: 1, failures: 0 }, zeroHpPending: undefined });
   });
 
   it("death saves: success, failures, nat 1, nat 20, three successes → Stable", () => {
@@ -244,10 +282,10 @@ describe("tracker operations in a scene", () => {
   });
 
   it("Change status: Dead, Stable and Death Saves exclude each other, other conditions toggle on and off", async () => {
-    // Death Saves on a party member at full HP: down to 0, counters reset; creatures are skipped.
-    expect(await setLifeStatus(scene, ["pc", "w1"], "dying")).toEqual({ skipped: [expect.any(String)] });
+    // Death Saves at full HP: down to 0, counters reset; creatures can make them too.
+    await setLifeStatus(scene, ["pc", "w1"], "dying");
     expect(state("pc")).toMatchObject({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
-    expect(state("w1").hp).toBe(20);
+    expect(state("w1")).toMatchObject({ hp: 0, deathSaves: { successes: 0, failures: 0 } });
     await setLifeStatus(scene, ["pc", "w1"], "stable");
     expect(state("pc").conditions.map((c) => c.key)).toEqual(["stable"]);
     expect(state("w1")).toMatchObject({ hp: 0 });
@@ -266,7 +304,53 @@ describe("tracker operations in a scene", () => {
     await toggleConditionOn(scene, ["w2"], "exhaustion", true, { level: 3 });
     expect(state("w2").conditions).toMatchObject([{ key: "exhaustion", level: 3 }]);
     expect(lifeStatusPatch({ conditions: [], hp: 5, party: false }, "stable")).toMatchObject({ hp: 0, deathSaves: undefined });
-    expect(() => lifeStatusPatch({ conditions: [], hp: 0, party: false }, "dying")).toThrow(/party/);
+    expect(lifeStatusPatch({ conditions: [], hp: 0, party: false }, "dying")).toMatchObject({ deathSaves: { successes: 0, failures: 0 } });
+  });
+
+  it("0 HP prompt: the controller chooses; the GM answers for units no connected player controls", async () => {
+    await changeHp(scene, ["pc", "w1"], { kind: "damage", amount: 30 });
+    expect(state("pc")).toMatchObject({ hp: 0, zeroHpPending: true, deathSaves: { successes: 0, failures: 0 } });
+    expect(state("w1")).toMatchObject({ hp: 0, zeroHpPending: true });
+    const items = await scene.getItems();
+    // Ana is connected: she answers for her PC, the GM for the wolf.
+    expect(zeroHpUnits(items, { id: "ana", role: "PLAYER" }, ["ana"]).pending.map((u) => u.id)).toEqual(["pc"]);
+    expect(zeroHpUnits(items, { id: "gm", role: "GM" }, ["ana"]).pending.map((u) => u.id)).toEqual(["w1"]);
+    expect(zeroHpUnits(items, { id: "gm", role: "GM" }, []).pending.map((u) => u.id).sort()).toEqual(["pc", "w1"]);
+    expect(zeroHpUnits(items, { id: "gm", role: "GM" }, ["ana"], { all: true }).pending).toHaveLength(2);
+    // The wolf goes on death saves; the GM rolls one, then ticks the rest by hand.
+    await chooseAtZero(scene, "w1", "dying");
+    expect(state("w1")).toMatchObject({ deathSaves: { successes: 0, failures: 0 } });
+    expect(state("w1").zeroHpPending).toBeUndefined();
+    expect(zeroHpUnits(await scene.getItems(), { id: "gm", role: "GM" }, ["ana"]).dying.map((u) => u.id)).toEqual(["w1"]);
+    expect(await recordDeathSave(scene, "w1", 12)).toBe("success");
+    expect(await setDeathSaves(scene, "w1", 1, 2)).toBe("set");
+    expect(await setDeathSaves(scene, "w1", 3, 2)).toBe("stable");
+    expect(state("w1").conditions.map((c) => c.key)).toEqual(["stable"]);
+    // Ana keeps her PC up after all.
+    await chooseAtZero(scene, "pc", "alive");
+    expect(state("pc")).toMatchObject({ hp: 1, conditions: [] });
+    expect(state("pc").deathSaves).toBeUndefined();
+    await expect(setDeathSaves(scene, "pc", 1, 0)).rejects.toThrow(/0 HP/);
+    // Dead: out of initiative.
+    await changeHp(scene, ["w2"], { kind: "damage", amount: 9 });
+    await chooseAtZero(scene, "w2", "dead");
+    expect(state("w2")).toMatchObject({ inEncounter: false });
+    expect(state("w2").zeroHpPending).toBeUndefined();
+    // Auto-dead (room setting) skips the prompt.
+    await changeHp(scene, ["bandit"], { kind: "damage", amount: 99 }, { autoDeadAtZero: true });
+    expect(state("bandit").zeroHpPending).toBeUndefined();
+  });
+
+  it("who answers the 0 HP prompt", () => {
+    expect(zeroHpPromptee({}, { controlledBy: "ana" }, ["ana"])).toBe("ana");
+    expect(zeroHpPromptee({}, { controlledBy: "ana" }, [])).toBe("GM");
+    expect(zeroHpPromptee({ createdUserId: "bo" }, {}, ["bo"])).toBe("bo");
+    expect(zeroHpPromptee({ createdUserId: "gm" }, {}, ["bo"])).toBe("GM");
+    const base = { v: 1, unitId: "u", playerId: "p", playerName: "P" };
+    expect(isPlayerRequest({ ...base, type: "zero-hp-choice", choice: "stable" })).toBe(true);
+    expect(isPlayerRequest({ ...base, type: "zero-hp-choice", choice: "undead" })).toBe(false);
+    expect(isPlayerRequest({ ...base, type: "death-save-set", successes: 2, failures: 3 })).toBe(true);
+    expect(isPlayerRequest({ ...base, type: "death-save-set", successes: 4, failures: 0 })).toBe(false);
   });
 
   it("typed initiative, rolled initiative, ties, max HP and player end-turn requests", async () => {

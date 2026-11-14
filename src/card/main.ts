@@ -19,7 +19,8 @@ import type { RollMode } from "../core/schema";
 import { maxHp, STATE_KEY, type SheetEntry, type UnitSheet, type UnitState } from "../core/sheet";
 import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
-import { addConditionTo, changeHp, makeStable, recordDeathSave, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
+import { addConditionTo, changeHp, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
+import { zeroHpSection } from "../extension/zeroHp";
 import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
@@ -88,38 +89,18 @@ async function roll(formula: string, label: string, kind: RollMessage["kind"], e
   return sent;
 }
 
-/** Death saving throw: rolled like any d20 (advantage applies), then recorded (by the GM's client for a player). */
-async function deathSave(ev: MouseEvent) {
-  const msg = await roll("1d20", "Death save", "save", ev);
-  if (!msg || msg.natural === undefined) return;
-  try {
-    if (role === "GM") {
-      const outcome = await recordDeathSave(obrGateway, itemId, msg.natural);
-      if (outcome === "dead") error = "Third failure: mark as dead from the tracker or the token's menu.";
-    } else {
-      await sendRequest({ type: "death-save", unitId: itemId, natural: msg.natural });
-    }
-  } catch (e) {
-    error = e instanceof Error ? e.message : String(e);
-  }
-  render();
-}
+let zeroNote: { text: string; bad: boolean } | null = null;
 
+/** Dead (with Revive for the GM); otherwise the 0-HP prompt or the death save tracker (see extension/zeroHp.ts). */
 function zeroHpPanel(state: UnitState): Child {
-  const dead = isDead(state);
-  if (dead) {
+  if (isDead(state)) {
     return role === "GM" ? h("div", { className: "panel row between" }, h("strong", {}, "☠ Dead"),
       h("button", { className: "secondary", onclick: () => void reviveUnits(obrGateway, [itemId]).catch((e) => { error = String(e); render(); }) }, "Revive")) : null;
   }
-  if (!needsDeathSaves(state)) return null;
-  const ds = state.deathSaves ?? { successes: 0, failures: 0 };
-  const dots = (n: number, ch: string) => Array.from({ length: 3 }, (_, i) => h("span", { className: i < n ? "dot on" : "dot" }, ch));
-  return h("div", { className: "panel deathsaves" },
-    h("div", { className: "row between" }, h("strong", {}, "Death saves"),
-      h("span", {}, h("span", { className: "ok" }, ...dots(ds.successes, "✓")), "  ", h("span", { className: "bad" }, ...dots(ds.failures, "✗")))),
-    h("div", { className: "row", style: "margin-top:6px" },
-      h("button", { onclick: (ev: MouseEvent) => void deathSave(ev), title: "10+ succeeds · natural 1: two failures · natural 20: back to 1 HP" }, "Roll death save"),
-      role === "GM" ? h("button", { className: "secondary", onclick: () => void makeStable(obrGateway, itemId).catch((e) => { error = String(e); render(); }) }, "Stable") : null));
+  const report = (text: string, bad = false) => { zeroNote = { text, bad }; render(); };
+  const section = zeroHpSection({ unitId: itemId, role, report }, state, needsDeathSaves(state), (ev) => roll("1d20", "Death save", "save", ev));
+  if (!section) { zeroNote = null; return null; }
+  return h("div", { className: "stack tight" }, section, zeroNote ? h("div", { className: `small ${zeroNote.bad ? "bad" : "ok"}` }, zeroNote.text) : null);
 }
 
 /** Units in the scene by id, for duration texts and the "until X's turn" choices. */

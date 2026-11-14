@@ -20,6 +20,15 @@ export function controls(viewer: CardViewer, item: Pick<CardItem, "createdUserId
 }
 
 /**
+ * Who answers a unit's 0-HP prompt (Dead, Death saves, Stable, Alive) and makes its death saves: the player who
+ * controls it while they're connected (`playerIds`: connected players, not GMs), otherwise the GM.
+ */
+export function zeroHpPromptee(item: Pick<CardItem, "createdUserId">, state: Pick<UnitState, "controlledBy">, playerIds: string[]): string {
+  const owner = state.controlledBy || item.createdUserId;
+  return owner && playerIds.includes(owner) ? owner : "GM";
+}
+
+/**
  * GM: everything. Player: the full card of units they control (D4); for any other unit only name, image and
  * conditions; nothing at all for hidden tokens.
  */

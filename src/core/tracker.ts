@@ -8,13 +8,16 @@ import {
   activeAndNext, endCombat, ENCOUNTER_KEY, moveInTie, nextTurn, passTurnFrom, previousTurn, readEncounter, startCombat,
   turnOrder, waitingForInitiative, type EncounterState, type OrderUnit,
 } from "./encounter";
-import { applyDeathSave, applyHp, lifeStatusPatch, markDead, revive, setStable, type DeathSaveOutcome, type HpChange, type HpEvent, type LifeStatus } from "./hp";
+import {
+  applyDeathSave, applyHp, lifeStatusPatch, markDead, revive, setDeathSaveCounts, setStable, zeroHpChoicePatch,
+  type DeathSaveOutcome, type HpChange, type HpEvent, type LifeStatus, type ZeroHpChoice,
+} from "./hp";
 import type { SceneGateway, SceneItemLite } from "./importer";
 import { initiativeSetupFor } from "./combat";
 import { addCondition, conditionText, expiredOnTurnChange, removeCondition, type Duration, type TurnPoint } from "./conditions";
-import { isDead, type GameSystem } from "./systems";
+import { isDead, needsDeathSaves, type GameSystem } from "./systems";
 import { isUnitItem, readUnit } from "./unit";
-import { unitName } from "./card";
+import { unitName, zeroHpPromptee } from "./card";
 import { finishRevert, readWildShape, revertIfIncapacitated, wildShapeHp } from "./wildshape";
 
 export interface TrackerUnit extends OrderUnit {
@@ -203,6 +206,22 @@ export async function changeHp(gw: SceneGateway, ids: string[], change: HpChange
   return reports;
 }
 
+/**
+ * Units at 0 HP waiting on their controller (`pending`: the Dead / Death saves / Stable / Alive prompt) or making death
+ * saves (`dying`), among those `viewer` answers for: a player, the units they control (while connected); the GM, the
+ * rest, or every unit with `all`. `playerIds`: the connected players (not GMs).
+ */
+export function zeroHpUnits(items: SceneItemLite[], viewer: { id: string; role: "GM" | "PLAYER" }, playerIds: string[], opts: { all?: boolean } = {}) {
+  const byId = new Map(items.map((i) => [i.id, i]));
+  const mine = trackerUnits(items).filter((u) => {
+    if (u.dead || u.hp > 0) return false;
+    if (viewer.role === "GM" && opts.all) return true;
+    const who = zeroHpPromptee(byId.get(u.id) ?? {}, u.state, playerIds);
+    return who === (viewer.role === "GM" ? "GM" : viewer.id);
+  });
+  return { pending: mine.filter((u) => u.state.zeroHpPending), dying: mine.filter((u) => !u.state.zeroHpPending && needsDeathSaves(u.state)) };
+}
+
 /** Mark as dead (F10): Dead condition, out of initiative, turn passes on if it was theirs. */
 export async function markUnitsDead(gw: SceneGateway, ids: string[]) {
   await requireGm(gw);
@@ -233,6 +252,24 @@ export async function recordDeathSave(gw: SceneGateway, id: string, natural: num
   const { patch, outcome } = applyDeathSave(u.state, natural);
   await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
   return outcome;
+}
+
+/** Death save counters set by hand (rolled at the table, or a correction). Three successes: Stable. */
+export async function setDeathSaves(gw: SceneGateway, id: string, successes: number, failures: number): Promise<"set" | "stable" | "dead"> {
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u) throw new Error("That token is no longer in the scene.");
+  if (u.state.hp > 0 || isDead(u.state)) throw new Error(`${u.name} isn't at 0 HP making death saves.`);
+  const { patch, outcome } = setDeathSaveCounts(u.state, successes, failures);
+  await gw.patchMetadata([{ id, key: STATE_KEY, patch }]);
+  return outcome;
+}
+
+/** The controller's answer to "dropped to 0 HP": Dead, Death saves, Stable or Alive (see zeroHpChoicePatch). */
+export async function chooseAtZero(gw: SceneGateway, id: string, choice: ZeroHpChoice) {
+  if (choice === "dead") { await markUnitsDead(gw, [id]); return; }
+  const u = trackerUnits(await gw.getItems()).find((x) => x.id === id);
+  if (!u) throw new Error("That token is no longer in the scene.");
+  await gw.patchMetadata([{ id, key: STATE_KEY, patch: zeroHpChoicePatch(u.state, choice) as Record<string, unknown> }]);
 }
 
 /** Sets a max HP override (or clears it with null), keeping current HP within the new maximum. */
@@ -291,15 +328,13 @@ export async function toggleConditionOn(gw: SceneGateway, ids: string[], key: st
   if (on) await revertIfIncapacitated(gw, ids);
 }
 
-/** "Change status": Dead, Stable, Death Saves or none of them (see lifeStatusPatch). Death Saves skips non-party units. */
-export async function setLifeStatus(gw: SceneGateway, ids: string[], to: LifeStatus): Promise<{ skipped: string[] }> {
-  if (to === "dead") { await markUnitsDead(gw, ids); return { skipped: [] }; }
+/** "Change status": Dead, Stable, Death Saves or none of them (see lifeStatusPatch). Any unit can make death saves. */
+export async function setLifeStatus(gw: SceneGateway, ids: string[], to: LifeStatus) {
+  if (to === "dead") { await markUnitsDead(gw, ids); return; }
   await requireGm(gw);
   const units = trackerUnits(await gw.getItems()).filter((u) => ids.includes(u.id));
-  const skipped = to === "dying" ? units.filter((u) => !u.party).map((u) => u.name) : [];
-  const patches = units.filter((u) => to !== "dying" || u.party).map((u) => ({ id: u.id, key: STATE_KEY, patch: lifeStatusPatch(u.state, to) as Record<string, unknown> }));
+  const patches = units.map((u) => ({ id: u.id, key: STATE_KEY, patch: lifeStatusPatch(u.state, to) as Record<string, unknown> }));
   if (patches.length) await gw.patchMetadata(patches);
-  return { skipped };
 }
 
 /** Result of a Concentration save (the roll's total): below the DC ends Concentration. Clears the pending check. */

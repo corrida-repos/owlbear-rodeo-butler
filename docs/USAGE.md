@@ -69,7 +69,7 @@ Below the sync, **Import published / homebrewed party member** work exactly like
    | `12` | Set current HP to 12. |
    | `t5` | Grant 5 temporary HP; keeps the higher amount rather than stacking. |
 
-4. A party member at 0 HP uses death saves. Use their card to record saves or make them Stable. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
+4. When a unit drops to 0 HP, its controller (the player, or the GM for creatures and for player units whose player isn't connected) gets a **0 HP** window: **Dead**, **Death saves**, **Stable** or **Alive** (back to 1 HP). Any unit can make death saves. Roll them from that window or the unit's card, or record a roll made at the table: type the d20, tick successes and failures, or click the dots to correct them. **Mark as dead** removes a unit from initiative; **Revive** is available under **Not in initiative**.
 5. **End combat** stops the encounter. **Reset round & initiative** clears rolls and round while keeping the units in the encounter.
 
 The active unit gets a map highlight. Controllers receive turn notices, and the player view shows whose turn it is and who is next. A player can **End my turn** when the GM allows player edits.

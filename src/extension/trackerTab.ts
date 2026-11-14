@@ -40,8 +40,8 @@ document.addEventListener("focusout", () => { if (pending) { pending = false; se
 export function resetTrackerTab() { view = null; notes = []; }
 
 const EVENT_TEXT: Partial<Record<HpEvent, (n: string) => string>> = {
-  "creature-at-zero": (n) => `${n} is at 0 HP: mark it dead (☠) when it's out.`,
-  "dropped-to-zero": (n) => `${n} dropped to 0 HP and makes death saves.`,
+  "creature-at-zero": (n) => `${n} is at 0 HP: choose Dead, Death saves, Stable or Alive (the 0 HP prompt).`,
+  "dropped-to-zero": (n) => `${n} dropped to 0 HP: on death saves until their controller chooses (Dead, Death saves, Stable or Alive).`,
   "death-save-failure": (n) => `${n} took damage at 0 HP: one death save failure.`,
   "three-failures": (n) => `${n} has three death save failures: mark as dead (☠)?`,
   "massive-damage": (n) => `${n} took massive damage (at least their max HP past 0): instant death by the rules. Mark as dead (☠)?`,

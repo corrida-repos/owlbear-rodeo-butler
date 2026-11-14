@@ -10,13 +10,16 @@
  */
 import "../extension/devlog";
 import OBR, { buildShape, type Item, type KeyFilter } from "@owlbear-rodeo/sdk";
-import { controls } from "../core/card";
+import { controls, zeroHpPromptee } from "../core/card";
+import { ZERO_HP_TEXT } from "../core/hp";
+import { needsDeathSaves } from "../core/systems";
+import { openZeroHp } from "../extension/zeroHpPopover";
 import { BUTLER_NS } from "../core/constants";
 import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls";
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import {
-  addConditionTo, changeHp, endTurnFor, expireConditions, markUnitsDead, recordDeathSave, removeConditionFrom, resolveConcentration,
-  rollInitiativeFor, setInEncounter, setInitiative, setParty, trackerView, type TrackerView,
+  addConditionTo, changeHp, chooseAtZero, endTurnFor, expireConditions, recordDeathSave, removeConditionFrom, resolveConcentration,
+  setDeathSaves, setInitiative, setParty, trackerView, zeroHpUnits, type TrackerView,
 } from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
@@ -172,6 +175,23 @@ async function updateRing(v: TrackerView, items: Item[], role: "GM" | "PLAYER") 
   ringFor = show.id;
 }
 
+/** Units whose 0-HP prompt this client already opened (so it opens once per drop, not on every scene change). */
+const prompted = new Set<string>();
+const connectedPlayerIds = async () => (await OBR.party.getPlayers()).filter((p) => p.role === "PLAYER").map((p) => p.id);
+
+/** A unit dropped to 0 HP: opens the 0 HP popover on its controller's client (the player, or the GM). */
+async function promptZeroHp(lite: Awaited<ReturnType<typeof obrGateway.getItems>>, role: "GM" | "PLAYER") {
+  const pendingIds = lite.filter((i) => (i.metadata[STATE_KEY] as { zeroHpPending?: boolean } | undefined)?.zeroHpPending).map((i) => i.id);
+  for (const id of [...prompted]) if (!pendingIds.includes(id)) prompted.delete(id);
+  if (!pendingIds.some((id) => !prompted.has(id))) return;
+  const { pending } = zeroHpUnits(lite, { id: OBR.player.id, role }, await connectedPlayerIds());
+  const fresh = pending.filter((u) => !prompted.has(u.id));
+  if (!fresh.length) return;
+  for (const u of fresh) prompted.add(u.id);
+  await openZeroHp().catch((e) => console.error("[Butler] 0 HP popover failed", e));
+  await notify(`${fresh.map((u) => u.name).join(", ")} dropped to 0 HP: dead, death saves, stable or alive?`, "WARNING");
+}
+
 async function onSceneChange() {
   if (busy) { again = true; return; }
   busy = true;
@@ -183,6 +203,7 @@ async function onSceneChange() {
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
       await updateRing(v, items, role);
+      await promptZeroHp(lite, role).catch((e) => console.error("[Butler] 0 HP prompt failed", e));
       const primary = await isPrimaryGm();
       if (primary) await setupDruids(lite);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
@@ -214,7 +235,12 @@ async function onSceneChange() {
       const unit = (id?: string) => v.order.find((u) => u.id === id);
       const item = (id?: string) => items.find((i) => i.id === id);
       const activeU = unit(v.active), next = unit(v.next);
-      if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
+      // A unit making death saves: its controller gets the death save tracker at the start of its turn.
+      if (activeU && needsDeathSaves(activeU.state) && !activeU.state.zeroHpPending
+        && zeroHpUnits(lite, me, await connectedPlayerIds()).dying.some((u) => u.id === activeU.id)) {
+        await notify(`${activeU.name} is dying: roll a death save.`, "WARNING");
+        await openZeroHp().catch((e) => console.error("[Butler] 0 HP popover failed", e));
+      } else if (activeU && item(activeU.id) && controls(me, item(activeU.id)!, activeU.state) && role === "PLAYER") {
         await notify(`It's your turn: ${activeU.name}`, "SUCCESS");
         if (store.get("butler.autoActions") === "1") await openActions(activeU.id).catch((e) => console.error("[Butler] action bar failed", e));
       } else if (next && item(next.id) && role === "PLAYER" && controls(me, item(next.id)!, next.state)) {
@@ -279,6 +305,18 @@ async function handleRequest(req: unknown) {
         const outcome = await recordDeathSave(obrGateway, req.unitId, req.natural);
         if (outcome === "dead") await notify(`${name}: third death save failure. Mark as dead?`, "WARNING");
         if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
+        if (outcome === "regain-1-hp") await notify(`${name} rolled a natural 20 and is back up with 1 HP!`, "SUCCESS");
+        break;
+      }
+      case "death-save-set": {
+        const outcome = await setDeathSaves(obrGateway, req.unitId, req.successes, req.failures);
+        if (outcome === "dead") await notify(`${name}: three death save failures. Mark as dead?`, "WARNING");
+        if (outcome === "stable") await notify(`${name} is Stable.`, "SUCCESS");
+        break;
+      }
+      case "zero-hp-choice": {
+        await chooseAtZero(obrGateway, req.unitId, req.choice);
+        await notify(`${req.playerName}: ${name} ${ZERO_HP_TEXT[req.choice]}.`, req.choice === "dead" ? "WARNING" : "INFO");
         break;
       }
       case "hp": {

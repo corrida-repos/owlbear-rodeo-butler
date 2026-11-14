@@ -149,6 +149,12 @@ button.ok-bg { background: var(--ok); }
 .deathsaves { border-color: var(--bad); }
 .dot { opacity: .25; font-weight: 800; margin-left: 2px; }
 .dot.on { opacity: 1; }
+.zero-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ds-dots { white-space: nowrap; }
+button.dot-btn { background: transparent; border: 0; padding: 0 2px; font-weight: 800; color: inherit; opacity: .25; font-size: 15px; }
+button.dot-btn.on { opacity: 1; }
+button.dot-btn:hover { opacity: .7; }
+.zero-unit { display: flex; gap: 8px; align-items: center; }
 .stat input.hpbox { width: 100%; margin-top: 2px; }
 .panel.myturn { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok) inset; }
 .movebar { display: flex; gap: 8px; align-items: center; margin-top: 3px; color: var(--ok); font-weight: 600; }

@@ -59,7 +59,7 @@ const BUTLER: ConditionDef[] = [
   /** Riding a mount: the action bar offers Dismount instead of Mount. */
   { key: "mounted", label: "Mounted" },
 ];
-/** Party members at 0 HP that aren't Dead or Stable (both supersede it). Both systems. */
+/** Units at 0 HP making death saves (party members, or any unit put on them), not Dead or Stable. Both systems. */
 const DEATH_SAVES: ConditionDef = { key: "death-saves", label: "Death Saves", automatic: true };
 const BUTLER_AUTO = [DEATH_SAVES];
 const BLOODIED: ConditionDef = { key: "bloodied", label: "Bloodied", automatic: true };
@@ -107,9 +107,12 @@ export function isBloodied(system: GameSystem, sheet: Pick<UnitSheet, "hp">, sta
 
 export const isStable = (state: Pick<UnitState, "conditions">) => state.conditions.some((c) => c.key === "stable");
 
-/** Party member at 0 HP and neither Dead nor Stable: making death saving throws. Dead and Stable supersede it. */
-export function needsDeathSaves(state: Pick<UnitState, "hp" | "party" | "conditions">): boolean {
-  return state.party && state.hp <= 0 && !isDead(state) && !isStable(state);
+/**
+ * At 0 HP and neither Dead nor Stable, and either a party member or a unit its controller put on death saves (it has
+ * counters): making death saving throws. Dead and Stable supersede it.
+ */
+export function needsDeathSaves(state: Pick<UnitState, "hp" | "party" | "conditions" | "deathSaves">): boolean {
+  return (state.party || !!state.deathSaves) && state.hp <= 0 && !isDead(state) && !isStable(state);
 }
 
 export interface ShownCondition { key: string; label: string; level?: number; automatic?: boolean; detail?: string }

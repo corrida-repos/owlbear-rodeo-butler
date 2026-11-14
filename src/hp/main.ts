@@ -28,7 +28,7 @@ let half = false;
 let busy = false;
 
 const EVENTS: Record<string, string> = {
-  "creature-at-zero": "at 0 HP", "dropped-to-zero": "down: death saves", "death-save-failure": "death save failure",
+  "creature-at-zero": "at 0 HP: Dead, Death saves, Stable or Alive?", "dropped-to-zero": "down: death saves (or Dead, Stable, Alive)", "death-save-failure": "death save failure",
   "three-failures": "three failures", "massive-damage": "massive damage", "stable-lost": "no longer Stable", "revived-from-zero": "back up",
   "concentration-check": "Concentration check (on its card)", "concentration-lost": "Concentration lost",
   "wild-shape-ended": "Wild Shape ended (back to normal form)",
@@ -76,16 +76,15 @@ function lifeChips(): Child[] {
     const turnOff = state === "all";
     // Death Saves ends by healing, Stable or Dead, not by switching it off.
     const click = to === "dying" && turnOff ? null : () => void run(async () => {
-      const { skipped } = await setLifeStatus(obrGateway, ids, turnOff ? "none" : to);
-      note = skipped.length ? `${skipped.join(", ")}: not a party member, so no death saves (Stable or Dead instead).` : "";
+      await setLifeStatus(obrGateway, ids, turnOff ? "none" : to);
+      note = "";
     });
     return chip(label, state, turnOff ? offTitle : onTitle, click, `life life-${to}`);
   };
-  const anyParty = units.some((u) => u.party);
   return [
     life("dead", "💀 Dead", "Mark as dead: out of initiative, death saves and Stable cleared", "Revive: remove Dead (heal to bring it back above 0 HP)"),
     life("stable", "Stable", "Stable: at 0 HP but no longer dying (sets HP to 0 if needed)", "Remove Stable (a party member at 0 HP goes back to death saves)"),
-    anyParty ? life("dying", "Death Saves", "Making death saving throws: sets HP to 0 and resets the counters (party members)", "Ends when the unit is healed, made Stable or marked Dead") : null,
+    life("dying", "Death Saves", "Making death saving throws: sets HP to 0 and resets the counters (any unit)", "Ends when the unit is healed, made Stable or marked Dead"),
   ];
 }
 

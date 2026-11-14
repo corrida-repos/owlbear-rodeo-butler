@@ -100,8 +100,11 @@ export interface UnitState {
   conditions: ConditionInstance[];
   /** A pending Constitution save to keep Concentration after taking damage (cleared when rolled or dismissed). */
   concentrationCheck?: { dc: number; damage: number };
-  /** Death saving throws while a party member is at 0 HP (cleared when healed or marked dead). */
+  /** Death saving throws while at 0 HP (party members by default; any unit its controller puts on death saves).
+   *  Cleared when healed or marked dead. */
   deathSaves?: { successes: number; failures: number };
+  /** Just dropped to 0 HP: the controller still has to choose Dead, Death saves, Stable or Alive (see hp.ts). */
+  zeroHpPending?: boolean;
   /** Portrait shown on the card/tracker; defaults to the token image. */
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
