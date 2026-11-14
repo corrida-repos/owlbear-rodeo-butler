@@ -190,7 +190,8 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(summaryOf("Make a saving throw +3 [1d20+3].", true)).toBe("");
   });
   it("2024: equipping or unequipping a weapon goes with an attack, not the free object interaction", () => {
-    expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", withAttack: true });
+    expect(by("Equip or Unequip a Weapon")).toMatchObject({ cost: "free", costNote: "One per attack of the Attack action" });
+    expect(by("Equip or Unequip a Weapon").text).toMatch(/^Free, but only during the Attack action: you get one per attack\./);
     expect(by("Equip or Unequip a Weapon").text).toMatch(/one swap per attack/);
     expect(by("Equip or Unequip a Weapon").text).toMatch(/War Magic/);
     expect(by("Equip or Unequip a Weapon").text).toMatch(/spellcasting focus isn't one/);
@@ -199,8 +200,8 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(by("Interact with an Object").text).not.toMatch(/draw or sheathe a weapon/);
     expect(by("Attack").text).toMatch(/equip or unequip one weapon/);
     const layout = barLayout(actionBar(sheet));
-    expect(layout.attackOptions.map((o) => o.name)).toContain("Equip or Unequip a Weapon");
-    expect(layout.sections.flatMap((s) => s.items).some((i) => i.name === "Equip or Unequip a Weapon")).toBe(false);
+    expect(layout.attackOptions.map((o) => o.name)).not.toContain("Equip or Unequip a Weapon");
+    expect(layout.sections.find((s) => s.id === "free")!.items.map((i) => i.name)).toContain("Equip or Unequip a Weapon");
     const old = combatOptions(sheet, "2014");
     expect(old.some((o) => o.name === "Equip or Unequip a Weapon")).toBe(false);
     expect(old.find((o) => o.name === "Interact with an Object")!.text).toMatch(/draw or sheathe a weapon/);
