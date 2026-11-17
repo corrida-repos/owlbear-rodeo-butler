@@ -7,6 +7,7 @@ import { combatOptions, skillBonus } from "../src/core/combatOptions";
 import { parseChips, rollSegments } from "../src/core/chips";
 import { castingTime, convertDdbCharacter } from "../src/core/ddb";
 import { EDIT_REQUESTS } from "../src/core/turns";
+import { DEFAULT_SETTINGS } from "../src/core/settings";
 import type { UnitSheet } from "../src/core/sheet";
 
 /** Names an item shows under (attack options count under Action), like the old tabs. */
@@ -260,8 +261,16 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
   it("doesn't repeat an Unarmed Strike the sheet already has, and explains the DMG ones as optional", () => {
     expect(combatOptions(brann.sheet).some((o) => o.name === "Unarmed Strike")).toBe(false);
     const disarm = actionBar(sheet).items.find((i) => i.name === "Disarm")!;
-    expect(explain(disarm).at(-1)).toMatch(/optional rule from the Dungeon Master's Guide/);
+    expect(explain(disarm).at(-1)).toMatch(/^2014 DMG \(optional\): an optional rule from the 2014 Dungeon Master's Guide/);
+    expect(disarm.sourceBadge).toBe("2014 DMG");
     expect(isAttackOption(disarm)).toBe(true);
+  });
+  it("labels the DMG options plain DMG in 5E rooms, and shows them by default in both editions", () => {
+    const old = actionBar(sheet, "2014").items.find((i) => i.name === "Disarm")!;
+    expect(old.sourceBadge).toBe("DMG");
+    expect(old.sourceLabel).toBe("DMG");
+    expect(explain(old).at(-1)).toMatch(/^An optional rule from the Dungeon Master's Guide/);
+    expect(DEFAULT_SETTINGS.dmgOptions).toBe(true);
   });
 });
 

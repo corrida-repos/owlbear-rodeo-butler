@@ -259,12 +259,12 @@ function withChips(it: ActionItem, text: string, inTile = false): Child[] {
 
 function tile(it: ActionItem): HTMLElement {
   const icon = it.category === "item" ? "⚱" : it.category === "spell" || MAGIC_KEYS.includes(it.key) ? "✦" : it.key === ATTACK_KEY ? "⚔" : it.category === "common" ? "⬡" : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
-  const badge = it.source === "DMG" ? "DMG" : it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
+  const badge = it.source === "DMG" ? it.sourceBadge ?? "DMG" : it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
   const rv = reveals[it.key]?.length ? it.key : null;
   const color = it.key === ATTACK_KEY ? "act" : it.cost === "bonus" ? "bonus" : "accent";
   return h("button", {
     className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}${rv ? ` is-reveal is-reveal-${cssKey(rv)} reveal-color-${color}${isOpen(rv) ? " open" : ""}` : ""}`,
-    title: `${it.name}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}${rv ? ` · hover or click for its options (${reveals[rv]!.length})` : ""}`,
+    title: `${it.name}${it.sourceLabel ? ` · ${it.sourceLabel}` : ""}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}${rv ? ` · hover or click for its options (${reveals[rv]!.length})` : ""}`,
     onclick: () => {
       if (rv) { if (selected !== it.key) { revealPinned.add(rv); revealOpen.add(rv); } else { revealPinned.delete(rv); revealOpen.delete(rv); } }
       selected = selected === it.key ? null : it.key; render();

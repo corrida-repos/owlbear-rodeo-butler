@@ -8,7 +8,7 @@
  * so a re-sync updates it. Pure, so the parsing and explanations are unit-tested; the actions page renders it.
  */
 import { parseChips, rollSegments, type RollSegment } from "./chips";
-import { combatOptions, type OptionGroup } from "./combatOptions";
+import { combatOptions, dmgBadge, dmgLabel, type OptionGroup } from "./combatOptions";
 import type { HomebrewAction } from "./homebrew";
 import { baseName, itemInfo, LIGHT_WEAPONS, lightWeaponCount, weaponIn } from "./items";
 import type { SheetEntry, UnitSheet } from "./sheet";
@@ -44,6 +44,9 @@ export interface ActionItem {
   /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule, Homebrew = the GM's). */
   group?: OptionGroup;
   source?: "PHB" | "DMG" | "Homebrew";
+  /** DMG options: the label and tile badge for the room's edition ("2014 DMG (optional)" / "2014 DMG" in 5.5E). */
+  sourceLabel?: string;
+  sourceBadge?: string;
   /** Done along with an attack of the Attack action (shown under Attack though it costs nothing). */
   withAttack?: boolean;
   /** Done with another action, so revealed under that action's tile (its key): 2024 Stabilize under Help, a potion
@@ -233,6 +236,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
     const item: ActionItem = {
       key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
       ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
+      ...(c.source === "DMG" ? { sourceLabel: dmgLabel(rules), sourceBadge: dmgBadge(rules) } : {}),
       ...(c.withAttack ? { withAttack: true } : {}),
       ...(c.under ? { under: `common:${c.under}` } : {}),
       ...(c.ifCondition ? { ifCondition: c.ifCondition } : {}),
@@ -491,7 +495,9 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   if (it.category === "common") {
     // The rule, with this unit's numbers, comes first; then what it costs.
     if (it.text) out.unshift(it.text);
-    if (it.source === "DMG") out.push("An optional rule from the Dungeon Master's Guide (the GM can turn these off in Room settings).");
+    if (it.source === "DMG") out.push(it.sourceLabel === "2014 DMG (optional)"
+      ? "2014 DMG (optional): an optional rule from the 2014 Dungeon Master's Guide, which the 2024 DMG doesn't have (the GM can turn these off in Room settings)."
+      : "An optional rule from the Dungeon Master's Guide (the GM can turn these off in Room settings).");
     if (it.source === "Homebrew") out.push("Homebrew: added by the GM for this room.");
     return out;
   }

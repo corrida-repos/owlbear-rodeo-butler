@@ -2,7 +2,7 @@
  * Combat options every creature has by the rules, beyond what its sheet lists: the Player's Handbook actions
  * (Dash, Dodge, Help…), Unarmed Strike with Grapple and Shove, movement (jumping, climbing, standing up…), and the
  * Dungeon Master's Guide optional action options (Disarm, Overrun, Tumble…), listed alongside the rest unless the GM
- * turns them off. Worded for the room's edition, with the
+ * turns them off. Those come from the 2014 DMG: in 5.5E rooms they're labelled "2014 DMG (optional)" (see dmgLabel). Worded for the room's edition, with the
  * numbers worked out from the unit's sheet (to-hit, DCs, skill bonuses, jump distances). Reference only.
  */
 import { fmtMod } from "./dice";
@@ -33,6 +33,12 @@ export interface CombatOption {
   /** Ways to do it with different skills (Search with Perception or Insight…), revealed under its tile. */
   variants?: OptionVariant[];
 }
+
+/** How the DMG options are labelled: plain "DMG" in 5E rooms; in 5.5E rooms they come from the 2014 DMG (the 2024
+ *  DMG doesn't have them), so they say so. */
+export const dmgLabel = (rules: "2024" | "2014") => rules === "2024" ? "2014 DMG (optional)" : "DMG";
+/** The short badge on an action bar tile. */
+export const dmgBadge = (rules: "2024" | "2014") => rules === "2024" ? "2014 DMG" : "DMG";
 
 export interface OptionVariant { name: string; summary: string; text: string }
 

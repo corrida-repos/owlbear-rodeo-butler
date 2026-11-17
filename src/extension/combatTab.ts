@@ -145,7 +145,9 @@ function renderSettings(): Child {
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoDeadAtZero, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoDeadAtZero: (e.target as HTMLInputElement).checked }))() }),
       "Mark creatures dead automatically at 0 HP (party members still make death saves)"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().dmgOptions, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ dmgOptions: (e.target as HTMLInputElement).checked }))() }),
-      "Action bars include the DMG's optional action options (Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature)"),
+      roomSystem().rules === "2024"
+        ? "Action bars include the 2014 DMG's optional action options, labelled 2014 DMG (optional): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature (the 2024 DMG doesn't have them)"
+        : "Action bars include the DMG's optional action options (Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature)"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().handheld, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ handheld: (e.target as HTMLInputElement).checked }))() }),
       "Handheld management: action bars include Don or Doff a Shield, Equip or Unequip a Weapon (5.5E) and the notes on drawing weapons and swapping spellcasting foci with your free object interaction"),
     h("div", { className: "small muted", style: "margin-top:4px" }, "Homebrew actions: add them with ＋ Homebrew on any unit's action bar; they show for every unit in the room."));
