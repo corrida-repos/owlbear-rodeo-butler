@@ -26,6 +26,7 @@ import {
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
+import { chaseTurnEnded } from "./chase";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
 import { receiveAim, resetReach, updateReach } from "./reach";
@@ -205,6 +206,8 @@ async function onSceneChange() {
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
+      // The movement record before this pass updates it: on a turn change it's still the previous unit's (Dash count).
+      const prevMovement = readMovement(meta);
       await updateRing(v, items, role);
       await promptZeroHp(lite, role).catch((e) => console.error("[Butler] 0 HP prompt failed", e));
       const primary = await isPrimaryGm();
@@ -235,6 +238,7 @@ async function onSceneChange() {
         const forward = lastTurn.round > prevTurn.round || (lastTurn.round === prevTurn.round && pos(lastTurn.turnId) > pos(prevTurn.turnId));
         if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
         if (forward) await checkMorale(v, lastTurn.round).catch((e) => console.error("[Butler] fight or flight failed", e));
+        if (forward) for (const line of await chaseTurnEnded(prevTurn, lastTurn, prevMovement).catch((e) => { console.error("[Butler] chase failed", e); return [] as string[]; })) await notify(line);
       }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
