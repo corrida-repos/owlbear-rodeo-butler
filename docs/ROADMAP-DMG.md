@@ -80,6 +80,6 @@ G1 → G2 → G3 → G9 → G10 → G5 → G6 → G7 → G4 → G8 (small and se
 | G5 | done | unit tests (Frightened, allies down, edge cases); turn-start prompt live check pending |
 | G6 | done | unit tests (object AC/HP tables, presets, damage rules, hitting cover); DM Tools panel live check pending |
 | G7 | done | unit tests (sides, order, tables, Dash budget, escape); automation on turn changes live check pending |
-| G8 | planned | |
+| G8 | done | unit tests (catalog, pictures, save/half/condition rules); automatic triggers on the map live check pending |
 | G9 | done | unit tests (2024 Bonus Action, 2014 action, no weapon / ingested poison) |
 | G10 | done | unit tests (DMG zombie examples, Advantage/Disadvantage columns, area table); DM Tools tab live check pending |

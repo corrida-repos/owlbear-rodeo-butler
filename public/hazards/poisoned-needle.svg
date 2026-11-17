@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#7cb342" fill-opacity="0.35" stroke="#7cb342" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M70 60 h60 v80 h-60Z M100 90 a8 8 0 1 1 0.1 0 M100 98 v20 M130 100 l35-10" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M70 60 h60 v80 h-60Z M100 90 a8 8 0 1 1 0.1 0 M100 98 v20 M130 100 l35-10" fill="none" stroke="#7cb342" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Poisoned Needle</text>
+</svg>

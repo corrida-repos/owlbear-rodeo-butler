@@ -28,6 +28,7 @@ import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { chaseTurnEnded } from "./chase";
 import { resetAreas, updateAreas } from "./aoe";
+import { resetHazards, watchHazards } from "./hazards";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
 import { receiveAim, resetReach, updateReach } from "./reach";
@@ -203,7 +204,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); resetHazards(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -225,6 +226,10 @@ async function onSceneChange() {
         .catch((e) => console.error("[Butler] vision auras failed", e));
       await updateReach(items, role).catch((e) => console.error("[Butler] reach auras failed", e));
       await updateAreas(items).catch((e) => console.error("[Butler] area templates failed", e));
+      const turnKeyNow = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
+      const turnStarted = primary && turnKeyNow && turnKeyNow !== lastTurnKey && lastTurnKey !== null ? v.active ?? null : null;
+      if (primary) for (const line of await watchHazards(items, [...v.order, ...v.waiting, ...v.outside], turnKeyNow || "out", turnStarted)
+        .catch((e) => { console.error("[Butler] hazards failed", e); return [] as string[]; })) await notify(line, "WARNING");
       await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";

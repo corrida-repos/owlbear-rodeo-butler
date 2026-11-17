@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#ff9800" fill-opacity="0.35" stroke="#ff9800" stroke-width="8"/>
+<path d="M60 100 q40-60 80 0Z M95 100 v40 h10 v-40" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M60 100 q40-60 80 0Z M95 100 v40 h10 v-40" fill="none" stroke="#ff9800" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">Fireball Fungus</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#6d4c41" fill-opacity="0.35" stroke="#6d4c41" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M40 50 h120 M60 50 l-10 40 M100 50 l10 50 M140 50 l-5 35 M70 130 l15-10 l15 10Z" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 50 h120 M60 50 l-10 40 M100 50 l10 50 M140 50 l-5 35 M70 130 l15-10 l15 10Z" fill="none" stroke="#6d4c41" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Collapsing Roof</text>
+</svg>

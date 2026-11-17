@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#cfd8dc" fill-opacity="0.35" stroke="#cfd8dc" stroke-width="8"/>
+<path d="M100 40 v120 M40 100 h120 M58 58 l84 84 M142 58 l-84 84 M70 100 a30 30 0 0 1 60 0 a30 30 0 0 1-60 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M100 40 v120 M40 100 h120 M58 58 l84 84 M142 58 l-84 84 M70 100 a30 30 0 0 1 60 0 a30 30 0 0 1-60 0" fill="none" stroke="#cfd8dc" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">Webs</text>
+</svg>

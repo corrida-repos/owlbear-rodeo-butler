@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#fdd835" fill-opacity="0.35" stroke="#fdd835" stroke-width="8"/>
+<path d="M70 110 a15 15 0 1 1 30 0 a15 15 0 1 1 30 0 a15 15 0 1 1-60 0Z" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M70 110 a15 15 0 1 1 30 0 a15 15 0 1 1 30 0 a15 15 0 1 1-60 0Z" fill="none" stroke="#fdd835" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">Yellow Mold</text>
+</svg>
