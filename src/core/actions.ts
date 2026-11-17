@@ -242,6 +242,8 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
     const variants: ActionItem[] = (c.variants ?? []).map((v) => ({
       ...item, key: `${item.key}#${v.name}`, name: v.name, text: v.text, summary: v.summary, under: item.key, costNote: undefined,
     }));
+    // The rolls are on the variants: the option itself only says what it does.
+    if (variants.length) { item.summary = ""; item.text = `${item.text} Hover it to pick a skill: each shows your bonus.`; }
     return [item, ...variants];
   });
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({

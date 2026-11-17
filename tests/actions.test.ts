@@ -148,7 +148,8 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(by("Grapple")).toMatchObject({ cost: "attack", summary: "DC 13 Str/Dex" });
     expect(by("Grapple").text).toContain("against DC 13 (8 + Strength + proficiency)");
     expect(by("Shove").text).toContain("push it 5 ft. away or knock it Prone");
-    expect(by("Escape a Grapple").summary).toBe("Athletics +5 [1d20+5] or Acrobatics +2 [1d20+2]");
+    expect(by("Escape a Grapple").summary).toBeUndefined();
+    expect(by("Escape a Grapple").variants!.map((v) => `${v.name} ${v.summary}`)).toEqual(["Athletics +5 [1d20+5]", "Acrobatics +2 [1d20+2]"]);
     expect(by("Jump").summary).toBe("16 ft. / 6 ft.");
     expect(by("Stand Up").summary).toBe("15 ft.");
     expect(by("Dash").summary).toBe("+30 ft.");
@@ -168,15 +169,21 @@ describe("combat options anyone has (PHB + DMG optional rules)", () => {
     expect(rolls("Hide")).toEqual(["+2=1d20+2"]);
     expect(rolls("Unarmed Strike")).toEqual(["+5=1d20+5"]);
     expect(rolls("Improvised Weapon")).toEqual(["+3=1d20+3", "1d4 + 3=1d4+3"]);
-    expect(rolls("Escape a Grapple")).toEqual(["+5=1d20+5", "+2=1d20+2"]);
+    expect(rolls("Escape a Grapple")).toEqual([]); // the rolls are on its skill variants
     expect(rolls("Shove Aside")).toEqual(["+5 dis=2d20kl1+5"]);
-    for (const n of ["Influence", "Search", "Study", "Stabilize", "Climb", "Swim", "Disarm", "Overrun", "Tumble", "Climb onto a Bigger Creature"]) {
+    for (const n of ["Stabilize", "Climb", "Swim", "Disarm", "Overrun", "Tumble"]) {
       expect(rolls(n).length, n).toBeGreaterThan(0);
+    }
+    // Options with several skills: no roll until you pick a skill; every skill variant has one.
+    for (const n of ["Influence", "Search", "Study", "Escape a Grapple", "Climb onto a Bigger Creature"]) {
+      expect(rolls(n), n).toEqual([]);
+      for (const v of by(n).variants!) expect(rollSegments(parseChips(v.summary)).length, `${n}: ${v.name}`).toBe(1);
     }
     // Every roll in a rule's text is a chip too, with its kind from the wording.
     const kinds = (n: string) => rollSegments(parseChips(by(n).text)).map((r) => r.kind);
     expect(kinds("Unarmed Strike")).toEqual(["attack"]);
-    expect(kinds("Influence")).toEqual(["check", "check", "check", "check", "check"]);
+    expect(kinds("Influence")).toEqual([]);
+    expect(rollSegments(parseChips(by("Influence").variants![0]!.text)).map((r) => r.kind)).toEqual(["check"]);
     // Saves show the DC, not a roll.
     expect(kinds("Dismount")).toEqual([]);
     expect(by("Dismount").summary).toBe("15 ft. · DC 10 Dex save");
@@ -413,6 +420,14 @@ describe("options with several skills show each as a variant", () => {
     expect(l.sections.flatMap((s) => s.items).some((i) => i.name === "Insight")).toBe(false);
     // 5E: Search is Perception or Investigation.
     expect(barLayout(actionBar(sheet, "2014")).reveals["common:Search"]!.map((o) => o.name)).toEqual(["Perception", "Investigation"]);
+  });
+  it("the option itself shows no roll until you hover it", () => {
+    const bar = actionBar(sheet);
+    for (const n of ["Search", "Study", "Influence"]) {
+      const it = bar.items.find((i) => i.key === `common:${n}`)!;
+      expect(it.summary).toBe("");
+      expect(it.text).not.toMatch(/\[1d20/);
+    }
   });
   it("Escape a Grapple shows Athletics and Acrobatics", () => {
     expect(combatOptions(sheet).find((o) => o.name === "Escape a Grapple")!.variants!.map((v) => v.name).sort()).toEqual(["Acrobatics", "Athletics"]);
