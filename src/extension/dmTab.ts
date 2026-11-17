@@ -7,6 +7,7 @@ import { trackerView, type TrackerView } from "../core/tracker";
 import { h, rerender, type Child } from "./dom";
 import { mobPanel } from "./mobPanel";
 import { moralePanel } from "./moralePanel";
+import { objectsPanel } from "./objectsPanel";
 import { obrGateway } from "./obrGateway";
 
 let view: TrackerView | null = null;
@@ -31,5 +32,5 @@ export function resetDmTab() { view = null; }
 export function renderDmTab(): Child[] {
   if (!view) { refreshDmTab(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const units = [...view.order, ...view.waiting, ...view.outside];
-  return [moralePanel(units, sceneMeta), mobPanel(units)];
+  return [moralePanel(units, sceneMeta), mobPanel(units), objectsPanel(sceneMeta)];
 }

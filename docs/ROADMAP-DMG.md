@@ -78,7 +78,7 @@ G1 → G2 → G3 → G9 → G10 → G5 → G6 → G7 → G4 → G8 (small and se
 | G3 | done | unit tests (expiry, 2024 initiative Disadvantage); live check pending |
 | G4 | planned | |
 | G5 | done | unit tests (Frightened, allies down, edge cases); turn-start prompt live check pending |
-| G6 | planned | |
+| G6 | done | unit tests (object AC/HP tables, presets, damage rules, hitting cover); DM Tools panel live check pending |
 | G7 | planned | |
 | G8 | planned | |
 | G9 | done | unit tests (2024 Bonus Action, 2014 action, no weapon / ingested poison) |
