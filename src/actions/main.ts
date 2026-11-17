@@ -398,7 +398,7 @@ function render() {
     const { sheet, state } = u;
     const bar = actionBar(sheet, roomSystem().rules, { dmg: roomSettings().dmgOptions, handheld: roomSettings().handheld, homebrew: homebrewActions(), conditions: state.conditions.map((c) => c.key) });
     const layout = barLayout(bar, tab);
-    const { sections, magicOptions } = layout;
+    const { sections } = layout;
     reveals = layout.reveals;
     shownItems = [...bar.items, ...Object.values(reveals).flat()];
     meleeReach = meleeReachOf(sheet.actions.filter((e) => /\bMelee\b/i.test(e.text)).map((e) => e.text));
@@ -417,7 +417,7 @@ function render() {
       tabsRow(bar),
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
       h("div", { className: "ab-grid" }, ...(grid.length ? grid : [h("div", { className: "small muted" }, "Nothing here.")])),
-      hbForm ? homebrewForm() : sel ? detail(sel, bar) : h("div", { className: "small muted" }, `Hover Attack for every way to attack${magicOptions.length ? `, ${roomSystem().rules === "2024" ? "Magic" : "Cast a Spell"} for spells${roomSystem().rules === "2024" ? " and magic items" : ""}` : ""}; click an option to see how it works.`),
+      hbForm ? homebrewForm() : sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Hover an option to see possible variants; click an option to see how it works."),
       note ? h("div", { className: "panel small row between" }, note, h("button", { className: "icon tiny", onclick: () => { note = ""; render(); } }, "OK")) : null,
       footer(sheet, state));
   }
