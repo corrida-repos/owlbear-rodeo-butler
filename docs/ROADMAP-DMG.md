@@ -77,7 +77,7 @@ G1 → G2 → G3 → G9 → G10 → G5 → G6 → G7 → G4 → G8 (small and se
 | G2 | done | unit tests (DMG 30 ft example across three stops, rewind); live check pending |
 | G3 | done | unit tests (expiry, 2024 initiative Disadvantage); live check pending |
 | G4 | planned | |
-| G5 | planned | |
+| G5 | done | unit tests (Frightened, allies down, edge cases); turn-start prompt live check pending |
 | G6 | planned | |
 | G7 | planned | |
 | G8 | planned | |

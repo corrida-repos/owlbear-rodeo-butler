@@ -47,6 +47,7 @@ import {
   addKnownShape, detectWildShape, readWildShape, removeKnownShape, resetWildShapeUses, revertWildShape, setupWildShape, transformUnit, WILD_KEY,
 } from "../core/wildshape";
 import { migrateSheet } from "../core/sheet";
+import { fleeReason, MORALE_KEY, type MoralePrompt } from "../core/morale";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
@@ -233,6 +234,7 @@ async function onSceneChange() {
         const pos = (id: string) => v.order.findIndex((u) => u.id === id);
         const forward = lastTurn.round > prevTurn.round || (lastTurn.round === prevTurn.round && pos(lastTurn.turnId) > pos(prevTurn.turnId));
         if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
+        if (forward) await checkMorale(v, lastTurn.round).catch((e) => console.error("[Butler] fight or flight failed", e));
       }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
@@ -259,6 +261,18 @@ async function onSceneChange() {
   } finally {
     busy = false;
   }
+}
+
+/** Fight or flight (DMG): at the start of a monster's turn, tell the GM if it's likely to flee (a prompt to roll on). */
+async function checkMorale(v: TrackerView, round: number) {
+  const fresh = await obrGateway.getItems();
+  const all = trackerView(fresh, await OBR.scene.getMetadata());
+  const units = [...all.order, ...all.waiting, ...all.outside];
+  const active = units.find((u) => u.id === v.active);
+  const reason = active ? fleeReason(active, units) : null;
+  const prompt: MoralePrompt | undefined = active && reason ? { unitId: active.id, name: active.name, round, reason } : undefined;
+  await OBR.scene.setMetadata({ [MORALE_KEY]: prompt });
+  if (prompt) await notify(`Fight or flight: ${prompt.name} is likely to flee (${reason}). Roll its DC 10 Wisdom save in the Tracker.`, "WARNING");
 }
 
 /**

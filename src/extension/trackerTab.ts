@@ -18,6 +18,7 @@ import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
 import { visionPanel } from "./visionPanel";
+import { moralePrompt } from "./moralePanel";
 
 let view: TrackerView | null = null;
 let sceneMeta: Record<string, unknown> = {};
@@ -131,7 +132,7 @@ function controls(v: TrackerView): Child {
 export function renderTrackerTab(): Child[] {
   if (!view) { refreshTracker(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const v = view;
-  const out: Child[] = [controls(v)];
+  const out: Child[] = [controls(v), moralePrompt([...v.order, ...v.waiting, ...v.outside], sceneMeta)];
   if (notes.length) out.push(h("div", { className: "panel warn small" }, ...notes.map((n) => h("div", {}, n)), h("button", { className: "icon tiny", onclick: () => { notes = []; rerender(); } }, "OK")));
   out.push(h("div", { className: "panel tracker" },
     v.order.length ? null : h("div", { className: "small muted" }, "Nobody has an initiative yet. Roll above, or type players' rolls in the boxes below."),
