@@ -13,7 +13,7 @@ import { parseHpInput } from "../core/hp";
 import type { SceneItemLite } from "../core/importer";
 import { partyFromDdbExport, type PartyRecord } from "../core/party";
 import { displayConditions } from "../core/systems";
-import { trackerView, type TrackerUnit } from "../core/tracker";
+import { trackerUnits, trackerView, type TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
 import { openActions } from "./actionsPopover";
@@ -21,6 +21,7 @@ import { openCard } from "./cardPopover";
 import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
 import { h, store, type Child } from "./dom";
 import { followToggle } from "./follow";
+import { pendingSaves, pendingSavesBox } from "./castUi";
 import { movementInfo } from "./movementView";
 import { obrGateway } from "./obrGateway";
 import { sendRequest } from "./requests";
@@ -183,6 +184,7 @@ function visionUnits() {
 export function renderPlayerView(): Child[] {
   return [
     turnPanel(),
+    pendingSavesBox(pendingSaves(sceneMeta, trackerUnits(lite), items, me()), "PLAYER"),
     note ? h("div", { className: "panel small" }, note, " ", h("button", { className: "icon tiny", onclick: () => { note = ""; renderAgain(); } }, "OK")) : null,
     orderPanel(),
     myUnitsPanel(),

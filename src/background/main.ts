@@ -21,7 +21,7 @@ import { canSeeRoll, isRollMessage, ROLL_CHANNEL, rollText } from "../core/rolls
 import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import {
   addConditionTo, changeHp, chooseAtZero, endTurnFor, expireConditions, recordDeathSave, removeConditionFrom, resolveConcentration,
-  setDeathSaves, setInitiative, setParty, trackerView, zeroHpUnits, type TrackerView,
+  setDeathSaves, setInitiative, setParty, trackerUnits, trackerView, zeroHpUnits, type TrackerView,
 } from "../core/tracker";
 import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
@@ -29,6 +29,8 @@ import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./mov
 import { chaseTurnEnded } from "./chase";
 import { resetAreas, updateAreas } from "./aoe";
 import { resetHazards, watchHazards } from "./hazards";
+import { receiveCast, receiveCastSave } from "./casts";
+import { pendingSaves } from "../extension/castUi";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
 import { receiveAim, resetReach, updateReach } from "./reach";
@@ -185,6 +187,17 @@ async function updateRing(v: TrackerView, items: Item[], role: "GM" | "PLAYER") 
 const prompted = new Set<string>();
 const connectedPlayerIds = async () => (await OBR.party.getPlayers()).filter((p) => p.role === "PLAYER").map((p) => p.id);
 
+/** Saves this player's units owe against a cast: one notice each (they roll it in the popover or the action bar). */
+const savesNoticed = new Set<string>();
+async function notifySaves(meta: Record<string, unknown>, lite: Awaited<ReturnType<typeof obrGateway.getItems>>) {
+  for (const p of pendingSaves(meta, trackerUnits(lite), lite, { id: OBR.player.id, role: "PLAYER" })) {
+    const k = `${p.rec.id}|${p.unit.id}`;
+    if (savesNoticed.has(k)) continue;
+    savesNoticed.add(k);
+    await notify(`${p.unit.name}: roll a DC ${p.rec.dc} saving throw against ${p.rec.caster.name}'s ${p.rec.spell} (Butler popover or the action bar).`, "WARNING");
+  }
+}
+
 /** A unit dropped to 0 HP: opens the 0 HP popover on its controller's client (the player, or the GM). */
 async function promptZeroHp(lite: Awaited<ReturnType<typeof obrGateway.getItems>>, role: "GM" | "PLAYER") {
   const pendingIds = lite.filter((i) => (i.metadata[STATE_KEY] as { zeroHpPending?: boolean } | undefined)?.zeroHpPending).map((i) => i.id);
@@ -212,6 +225,7 @@ async function onSceneChange() {
       const prevMovement = readMovement(meta);
       await updateRing(v, items, role);
       await promptZeroHp(lite, role).catch((e) => console.error("[Butler] 0 HP prompt failed", e));
+      if (role === "PLAYER") await notifySaves(meta, lite).catch((e) => console.error("[Butler] save prompt failed", e));
       const primary = await isPrimaryGm();
       if (primary) await setupDruids(lite);
       const active = v.encounter.started && v.active ? { id: v.active, round: v.encounter.round } : null;
@@ -319,6 +333,17 @@ async function handleRequest(req: unknown) {
     }
     const name = (it as { text?: { plainText?: string } }).text?.plainText || it.name;
     switch (req.type) {
+      case "cast": {
+        // The caster's id and name come from the token, not the request.
+        const line = await receiveCast({ ...req.record, caster: { id: req.unitId, name } });
+        await notify(line);
+        break;
+      }
+      case "cast-save": {
+        const line = await receiveCastSave(req.castId, req.unitId, req.total);
+        if (line) await notify(`${req.playerName}: ${line}`);
+        break;
+      }
       case "end-turn":
         if (await endTurnFor(obrGateway, req.unitId, req.round)) await notify(`${req.playerName} ended their turn.`);
         break;

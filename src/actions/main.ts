@@ -28,6 +28,9 @@ import { d20Penalty } from "../core/conditions";
 import { isSurprised, SURPRISED_TEXT } from "../core/systems";
 import { areaOf } from "../core/reach";
 import { placeTemplate } from "../extension/aoeItems";
+import { castSection } from "./castSection";
+import { pendingSaves, pendingSavesBox } from "../extension/castUi";
+import { trackerUnits } from "../core/tracker";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
@@ -62,6 +65,9 @@ const COST_GLYPH: Record<Cost, string> = { action: "●", bonus: "▲", reaction
 const COST_LABEL: Record<Cost, string> = { action: "Action", bonus: "Bonus Action", reaction: "Reaction", legendary: "Legendary Action", free: "Free", longer: "Longer casting time", move: "Movement", attack: "One attack", none: "" };
 
 let item: Item | null = null;
+/** Every item in the scene (targets for Cast). */
+let sceneItems: Item[] = [];
+let sceneMeta: Record<string, unknown> = {};
 let role: "GM" | "PLAYER" = "PLAYER";
 let meId = "";
 let meName = "";
@@ -305,6 +311,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
     reachLine(it),
     areaButton(it),
+    item ? castSection({ item, items: sceneItems, role, me: { id: meId, name: meName }, visibility, reach: reachFor(it), render, setNote: (t) => { note = t; } }, it) : null,
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
       ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
     lastRollLine(it),
@@ -430,6 +437,7 @@ function render() {
     nodes.push(
       head(sheet, state),
       tabsRow(bar),
+      pendingSavesBox(pendingSaves(sceneMeta, trackerUnits(sceneItems), sceneItems, { id: meId, role }).filter((p) => p.unit.id === item!.id), role),
       isSurprised(state) ? h("div", { className: "small warn" }, SURPRISED_TEXT[roomSystem().rules]) : null,
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
       h("div", { className: "ab-grid" }, ...(grid.length ? grid : [h("div", { className: "small muted" }, "Nothing here.")])),
@@ -453,9 +461,11 @@ OBR.onReady(async () => {
   await Promise.all([initRoomSettings(), initHomebrew()]);
   onRoomSettings(() => render());
   onHomebrew(() => render());
-  [item = null] = await OBR.scene.items.getItems([itemId]);
+  [sceneItems, sceneMeta] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata()]);
+  OBR.scene.onMetadataChange((m) => { sceneMeta = m; render(); });
+  item = sceneItems.find((i) => i.id === itemId) ?? null;
   render();
-  OBR.scene.items.onChange((items) => { item = items.find((i) => i.id === itemId) ?? null; render(); });
+  OBR.scene.items.onChange((items) => { sceneItems = items; item = items.find((i) => i.id === itemId) ?? null; render(); });
   // The map keeps the reach only while this page says so: repeat it, and clear it when the action bar closes.
   setInterval(() => { if (sentAim !== "null") sendAim(true, true); }, 2000);
   window.addEventListener("pagehide", () => { void OBR.broadcast.sendMessage(AIM_CHANNEL, null, { destination: "LOCAL" }).catch(() => {}); });

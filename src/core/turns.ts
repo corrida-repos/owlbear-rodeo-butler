@@ -3,6 +3,7 @@
  * encounter record, and Owlbear only lets them change tokens they own, so these go through the GM.
  */
 import { BUTLER_NS } from "./constants";
+import type { CastRecord } from "./cast";
 import type { Duration } from "./conditions";
 import type { PartyMember } from "./ddb";
 import { ZERO_HP_CHOICES, type HpChange, type ZeroHpChoice } from "./hp";
@@ -47,7 +48,11 @@ export type WildShapeOp =
   /** A rest: a Short Rest gives one use back (5.5E), a Long Rest all. */
   | { op: "rest"; rest?: "short" | "long" };
 export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
-export type PlayerRequest = EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
+/** A spell or attack cast at targets from the action bar (unitId: the caster); the GM's client resolves it (cast.ts). */
+export interface CastRequest extends Base { type: "cast"; record: CastRecord }
+/** A party member's saving throw against a cast (unitId: the target). */
+export interface CastSaveRequest extends Base { type: "cast-save"; castId: string; total: number }
+export type PlayerRequest = CastRequest | CastSaveRequest | EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | LightRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
@@ -57,6 +62,9 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
   if (!r || r.v !== 1 || typeof r.unitId !== "string" || typeof r.playerId !== "string" || typeof r.playerName !== "string") return false;
   if (r.type === "end-turn") return typeof r.round === "number";
+  if (r.type === "cast") return !!r.record && typeof r.record.id === "string" && Array.isArray(r.record.targets) && r.record.targets.length <= 40
+    && ["attack", "save", "damage"].includes(r.record.kind) && r.record.targets.every((t) => !!t && typeof t.id === "string");
+  if (r.type === "cast-save") return typeof r.castId === "string" && Number.isFinite(r.total);
   if (r.type === "death-save") return Number.isInteger(r.natural) && r.natural >= 1 && r.natural <= 20;
   if (r.type === "death-save-set") return [r.successes, r.failures].every((n) => Number.isInteger(n) && n >= 0 && n <= 3);
   if (r.type === "zero-hp-choice") return ZERO_HP_CHOICES.includes(r.choice);
