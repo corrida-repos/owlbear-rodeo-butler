@@ -290,3 +290,10 @@ input.num { width: 64px; }
 .dm-item select, .dm-item input[type=text], .row.wrap select, .row.wrap input[type=text] { width: auto; max-width: 100%; }
 .dm-item input[type=text].num, .row.wrap input.num { width: 64px; }
 .dm-item .grow { min-width: 90px; }
+/* Compact strip under a shrunk popover's bar (the action bar's Cast while aiming on the map). */
+.pop-compact { display: none; }
+body.pop-minimized .pop-compact { display: block; position: sticky; top: 28px; z-index: 49; background: var(--panel); border-bottom: 1px solid var(--border); padding: 4px 8px; max-height: 120px; overflow: auto; }
+.pop-compact .chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.pop-compact .chip { padding: 2px 6px; font-size: 11px; background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.pop-compact .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pop-compact .chip.out { opacity: 0.55; }

@@ -46,8 +46,12 @@ export async function openPlaced(p: Popover) {
   await OBR.popover.open(open);
 }
 
+/** What a page can do with its frame: a compact strip shown under the bar while shrunk (the action bar's Cast), and
+ *  shrinking or restoring the window itself. */
+export interface PopoverFrame { setCompact(el: HTMLElement | null): void; minimize(on: boolean): Promise<void>; minimized(): boolean }
+
 /** Adds the move / shrink / close bar to this popover page. */
-export function installPopoverFrame(id: string, title: string) {
+export function installPopoverFrame(id: string, title: string): PopoverFrame {
   const bar = document.createElement("div");
   bar.className = "pop-bar";
   const grip = document.createElement("div");
@@ -62,7 +66,11 @@ export function installPopoverFrame(id: string, title: string) {
   close.title = "Close";
   close.onclick = () => void OBR.popover.close(id);
   bar.append(grip, shrink, close);
-  document.body.prepend(bar);
+  const compact = document.createElement("div");
+  compact.className = "pop-compact";
+  document.body.prepend(bar, compact);
+  /** Height while shrunk: the bar, plus the compact strip when there is one. */
+  const minHeight = () => BAR + 4 + (compact.childElementCount ? compact.offsetHeight : 0);
 
   const setShrinkLabel = () => {
     const min = readJson<number>(MIN(id));
@@ -71,12 +79,15 @@ export function installPopoverFrame(id: string, title: string) {
     document.body.classList.toggle("pop-minimized", !!min);
   };
   setShrinkLabel();
-  shrink.onclick = async () => {
+  const minimize = async (on: boolean) => {
     const min = readJson<number>(MIN(id));
-    if (min) { writeJson(MIN(id), null); await OBR.popover.setHeight(id, min); }
-    else { const h = (await OBR.popover.getHeight(id)) ?? readJson<Popover>(OPTS(id))?.height ?? 400; writeJson(MIN(id), h); await OBR.popover.setHeight(id, BAR + 4); }
-    setShrinkLabel();
+    if (!on && min) { writeJson(MIN(id), null); setShrinkLabel(); await OBR.popover.setHeight(id, min); }
+    else if (on && !min) {
+      const h = (await OBR.popover.getHeight(id)) ?? readJson<Popover>(OPTS(id))?.height ?? 400;
+      writeJson(MIN(id), h); setShrinkLabel(); await OBR.popover.setHeight(id, minHeight());
+    }
   };
+  shrink.onclick = () => void minimize(!readJson<number>(MIN(id)));
 
   let start: { x: number; y: number; frame: { x: number; y: number } } | null = null;
   grip.addEventListener("pointerdown", (e) => {
@@ -117,4 +128,18 @@ export function installPopoverFrame(id: string, title: string) {
     grip.textContent = "⠿ Back to its usual place next time";
     setTimeout(() => { grip.textContent = `⠿ ${title}`; }, 1800);
   });
+
+  let lastMin = 0;
+  return {
+    setCompact(el) {
+      if (el) compact.replaceChildren(el); else compact.replaceChildren();
+      // While shrunk, the window follows the strip's height.
+      if (readJson<number>(MIN(id))) {
+        const hgt = minHeight();
+        if (hgt !== lastMin) { lastMin = hgt; void OBR.popover.setHeight(id, hgt).catch(() => {}); }
+      }
+    },
+    minimize,
+    minimized: () => !!readJson<number>(MIN(id)),
+  };
 }

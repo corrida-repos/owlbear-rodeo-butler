@@ -31,6 +31,8 @@ export interface CastCtx {
   reach: Reach | null;
   render: () => void;
   setNote: (s: string) => void;
+  /** Shrinks the action bar to its Cast strip, to see the range on the map (and back). */
+  aim?: (on: boolean) => void;
 }
 
 interface Candidate { id: string; name: string; feet: number; band: string | null; long: boolean; ac: number; party: boolean }
@@ -38,6 +40,8 @@ let cache: { key: string; sig: string; list: Candidate[] } | null = null;
 let computing = "";
 const picked = new Set<string>();
 let pickedFor = "";
+/** The last cast's result, shown in the strip (the full panel's note is hidden while aiming). */
+let stripNote = "";
 
 const shownName = (i: Item, role: "GM" | "PLAYER") => {
   const u = readUnit(i.metadata)!;
@@ -124,6 +128,7 @@ async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
   }
   await sendRequest({ type: "cast", unitId: ctx.item.id, record: rec }, ctx.role);
   ctx.setNote(`${it.name}: ${lines.join("; ")}. The GM applies the damage from the Tracker.`);
+  stripNote = `${it.name}: ${lines.join("; ")}.`;
   picked.clear();
   ctx.render();
 }
@@ -154,6 +159,38 @@ export function castSection(ctx: CastCtx, it: ActionItem): Child {
         h("span", { className: c.band ? (c.long ? "warn" : "ok") : "muted" }, `${c.feet} ft · ${c.band ? (c.long ? "long range: Disadvantage" : "in range") : ctx.reach ? "out of range" : "range unknown"}`))))
       : h("div", { className: "muted" }, "Reading who's on the map…"),
     h("div", { className: "row" },
+      ctx.aim ? h("button", { className: "secondary", title: "Shrink this window to a strip with the targets and Cast, so you can see the range on the map", onclick: () => ctx.aim!(true) }, "◎ Aim on the map") : null,
       h("button", { disabled: !picked.size, title: plan.kind === "attack" ? "Shift: Advantage · Ctrl/⌘: Disadvantage" : "", onclick: (ev: MouseEvent) => void cast(ctx, it, ev).catch((e) => { ctx.setNote(`Cast failed: ${e instanceof Error ? e.message : String(e)}`); ctx.render(); }) },
         `${isSpell ? "Cast" : "Use"} at ${picked.size || "…"} target${picked.size === 1 ? "" : "s"}`)));
+}
+
+/**
+ * The Cast strip shown under the shrunk action bar while aiming: the entry, its range, a chip per creature (in range
+ * first; tap to target) and Cast. The range stays drawn on the map meanwhile.
+ */
+export function castStrip(ctx: CastCtx, it: ActionItem): HTMLElement | null {
+  if (it.category === "common") return null;
+  const plan = castPlan(editionText(it.text, roomSystem().rules));
+  if (!plan) return null;
+  castSection(ctx, it); // keeps the target list current
+  const list = cache?.key === it.key ? cache.list : [];
+  const range = ctx.reach ? ctx.reach.bands.map((b) => b.label).join(" · ") : "range unknown";
+  const isSpell = it.category === "spell";
+  return h("div", { className: "small" },
+    h("div", { className: "row between" },
+      h("span", {}, h("strong", {}, it.name), ` · ${range}`),
+      ctx.aim ? h("button", { className: "secondary small", title: "Back to the full action bar", onclick: () => ctx.aim!(false) }, "▢ Back") : null),
+    list.length
+      ? h("div", { className: "chips" }, ...list.map((c) => h("button", {
+        className: `chip${picked.has(c.id) ? " on" : ""}${c.band ? "" : " out"}`,
+        title: `${c.feet} ft · ${c.band ? (c.long ? "long range: Disadvantage" : "in range") : "out of range"}`,
+        onclick: () => { if (picked.has(c.id)) picked.delete(c.id); else picked.add(c.id); ctx.render(); },
+      }, `${c.name} ${c.feet}ft${c.long ? " (dis)" : ""}`)))
+      : h("div", { className: "muted" }, "Reading who's on the map…"),
+    stripNote ? h("div", { className: "ok" }, stripNote) : null,
+    h("div", { className: "row" },
+      h("button", { className: "secondary small", onclick: () => { picked.clear(); stripNote = ""; for (const c of list) if (c.band) picked.add(c.id); ctx.render(); } }, "Everyone in range"),
+      h("button", { className: "small", disabled: !picked.size, title: plan.kind === "attack" ? "Shift: Advantage · Ctrl/⌘: Disadvantage" : "",
+        onclick: (ev: MouseEvent) => void cast(ctx, it, ev).catch((e) => { ctx.setNote(`Cast failed: ${e instanceof Error ? e.message : String(e)}`); ctx.render(); }) },
+        `${isSpell ? "Cast" : "Use"} at ${picked.size || "…"}`)));
 }

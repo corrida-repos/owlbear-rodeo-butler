@@ -28,7 +28,7 @@ import { d20Penalty } from "../core/conditions";
 import { isSurprised, SURPRISED_TEXT } from "../core/systems";
 import { areaOf } from "../core/reach";
 import { placeTemplate } from "../extension/aoeItems";
-import { castSection } from "./castSection";
+import { castSection, castStrip } from "./castSection";
 import { pendingSaves, pendingSavesBox } from "../extension/castUi";
 import { trackerUnits } from "../core/tracker";
 import { cryptoRng, fmtMod } from "../core/dice";
@@ -311,7 +311,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
     reachLine(it),
     areaButton(it),
-    item ? castSection({ item, items: sceneItems, role, me: { id: meId, name: meName }, visibility, reach: reachFor(it), render, setNote: (t) => { note = t; } }, it) : null,
+    item ? castSection(castCtx(it), it) : null,
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
       ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
     lastRollLine(it),
@@ -331,6 +331,12 @@ function areaButton(it: ActionItem): Child {
   return h("div", { className: "row small" }, h("button", { className: "secondary small", title: "Drag it into place; squares it covers by at least half are highlighted",
     onclick: () => void placeTemplate({ shape: a.shape, size: a.size, label: `${it.name} (${a.size} ft)` }, a.selfCentred ? itemId : undefined).then(() => { note = "Area placed: drag it into place (rotate a Cone or Line with Owlbear's handle). DM Tools lists who's in it."; render(); }, showErr) },
     `◎ Place the ${a.size}-ft ${a.shape} on the map`));
+}
+
+/** What the Cast box and strip need (castSection.ts). */
+function castCtx(it: ActionItem) {
+  return { item: item!, items: sceneItems, role, me: { id: meId, name: meName }, visibility, reach: reachFor(it), render, setNote: (t: string) => { note = t; },
+    aim: (on: boolean) => void frame.minimize(on).then(render) };
 }
 
 /** The item's range in words, under its name: "Melee range 10 ft · Range 30 ft · Long range 120 ft: Disadvantage". */
@@ -449,10 +455,13 @@ function render() {
   const grid = document.querySelector(".ab-grid");
   if (grid) grid.scrollTop = scroll;
   if (!item) { shownItems = []; hovered = null; }
+  // The Cast strip under the shrunk bar: the selected entry, while the map shows its range.
+  const sel = selected ? shownItems.find((x) => x.key === selected) : undefined;
+  frame.setCompact(item && sel ? castStrip(castCtx(sel), sel) : null);
   sendAim(true);
 }
 
-installPopoverFrame(ACTIONS_POPOVER, "Actions");
+const frame = installPopoverFrame(ACTIONS_POPOVER, "Actions");
 
 OBR.onReady(async () => {
   role = await OBR.player.getRole();
