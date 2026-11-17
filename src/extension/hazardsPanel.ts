@@ -28,7 +28,7 @@ const how = (d: HazardDef) => [
 export function hazardsPanel(units: TrackerUnit[]): Child {
   const d = hazardDef(st.key)!;
   return h("details", { className: "panel" }, h("summary", {}, h("strong", {}, `Hazards and traps${placed.length ? ` (${placed.length})` : ""}`)),
-    h("div", { className: "small muted" }, "The DMG's hazards and traps, with their rules running: a unit that enters one (or starts its turn in one) gets the save rolled, damage applied and conditions added; you get a notice. Damage resistances aren't applied: adjust by hand."),
+    h("div", { className: "small muted" }, "The DMG's hazards and traps, with their rules running: a unit that enters one (or starts its turn in one) gets the save rolled, damage applied and conditions added; you get a notice. Resistances, Vulnerabilities and Immunities on the sheet apply (conditional ones, like “from nonmagical attacks”, are reported, not applied)."),
     h("div", { className: "row wrap", style: "margin-top:6px" },
       h("select", { onchange: (e: Event) => { st.key = (e.target as HTMLSelectElement).value; st.hidden = hazardDef(st.key)!.kind === "trap"; rerender(); } },
         h("optgroup", { label: "Hazards" }, ...HAZARDS.filter((x) => x.kind === "hazard").map((x) => h("option", { value: x.key, selected: x.key === st.key }, x.name))),

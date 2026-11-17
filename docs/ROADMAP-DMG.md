@@ -58,6 +58,7 @@ the Owlbear-facing parts (popover tabs, background page, map items) are thin and
 - The mechanics run: a unit that enters the area or starts its turn there gets the hazard's saving throw rolled,
   damage applied (half on a success where the rules say so) and conditions added; the GM is notified.
 - Detect/disarm DCs shown on the hazard's card.
+- Damage follows the creature's Resistances, Vulnerabilities and Immunities (after halving on a save); conditions it's immune to are skipped; conditional defenses are reported, not applied.
 
 ### G9 · Apply Poison (injury poison)
 - When a unit's inventory has a weapon and an injury poison (Basic Poison, Serpent Venom, Wyvern Poison, Purple Worm

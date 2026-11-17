@@ -31,3 +31,38 @@ describe("hazards and traps (2024 DMG)", () => {
     expect(entered(new Set(["a"]), new Set(["a", "b"]))).toEqual(["b"]);
   });
 });
+
+describe("hazard damage and the creature's defenses", async () => {
+  const { damageAgainst, immuneToCondition, parseDefenses } = await import("../src/core/defenses");
+  it("reads defense lines, keeping qualified B/P/S conditional", () => {
+    const d = parseDefenses("Cold, Fire; Bludgeoning, Piercing, and Slashing from Nonmagical Attacks");
+    expect([...d.always]).toEqual(["Cold", "Fire"]);
+    expect([...d.conditional].sort()).toEqual(["Bludgeoning", "Piercing", "Slashing"]);
+    // 5etools flattens the group into one comma list: still only B/P/S are conditional.
+    expect([...parseDefenses("Acid, Bludgeoning, Piercing, Slashing from nonmagical attacks").always]).toEqual(["Acid"]);
+  });
+  it("Immunity, Resistance (round down), Vulnerability (×2), conditional reported", () => {
+    expect(damageAgainst({ immune: "Poison" }, 12, "Poison")).toEqual({ amount: 0, note: "Immunity to Poison" });
+    expect(damageAgainst({ resist: "Cold" }, 11, "cold").amount).toBe(5);
+    expect(damageAgainst({ vulnerable: "Fire" }, 7, "Fire").amount).toBe(14);
+    expect(damageAgainst({ resist: "Bludgeoning from nonmagical attacks" }, 10, "Bludgeoning")).toEqual({ amount: 10, note: "a conditional Bludgeoning defense on its sheet wasn't applied" });
+    expect(damageAgainst(undefined, 9, "Acid").amount).toBe(9);
+    expect(immuneToCondition({ conditionImmune: "Charmed, Poisoned" }, "poisoned")).toBe(true);
+    expect(immuneToCondition({ conditionImmune: "Charmed" }, "restrained")).toBe(false);
+  });
+  it("Brown Mold vs a creature resistant to Cold: half on a save, then halved again", () => {
+    const d = hazardDef("brown-mold")!;
+    const r = resolveHazard(d, "Yeti", 14, [22], { resist: "Cold" });
+    expect(r.damage).toBe(5);
+    expect(r.text).toBe("Brown Mold → Yeti: 14 vs DC 12: succeeds. 5 Cold damage (half; Resistance to Cold).");
+    expect(resolveHazard(d, "Fire elemental", 3, [22], { immune: "Cold" }).text).toBe("Brown Mold → Fire elemental: 3 vs DC 12: fails. No damage (Immunity to Cold).");
+  });
+  it("mixed damage types are handled one by one; immune conditions are skipped", () => {
+    // Spiked Pit: 1d6 Bludgeoning + 2d8 Piercing, Prone.
+    const r = resolveHazard(hazardDef("spiked-pit")!, "Golem", null, [4, 10], { immune: "Piercing" });
+    expect(r.damage).toBe(4);
+    const ooze = resolveHazard(hazardDef("yellow-mold")!, "Ooze", 2, [11], { immune: "Poison", conditionImmune: "Poisoned" });
+    expect(ooze).toMatchObject({ damage: 0, conditions: [] });
+    expect(ooze.text).toMatch(/Immune to Poisoned\.$/);
+  });
+});

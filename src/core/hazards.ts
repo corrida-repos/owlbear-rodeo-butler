@@ -5,7 +5,8 @@
  * Pure data and resolution; the background page watches tokens and runs it, DM Tools places them.
  */
 import { BUTLER_NS } from "./constants";
-import type { Ability } from "./sheet";
+import type { Ability, UnitSheet } from "./sheet";
+import { damageAgainst, immuneToCondition } from "./defenses";
 
 export const HAZARD_KEY = `${BUTLER_NS}/hazard`;
 
@@ -120,17 +121,35 @@ export interface HazardOutcome {
 
 /**
  * What happens to a creature: `saveTotal` (if the hazard has a save), `rolled` damage per damage entry (already
- * multiplied by `times`). No save: the damage and conditions always apply.
+ * multiplied by `times`). No save: the damage and conditions always apply. `defenses`: the creature's sheet defenses,
+ * applied per damage type after halving on a success (Immunity, Resistance, Vulnerability); conditions it's immune to
+ * are skipped.
  */
-export function resolveHazard(d: HazardDef, name: string, saveTotal: number | null, rolled: number[]): HazardOutcome {
+export function resolveHazard(d: HazardDef, name: string, saveTotal: number | null, rolled: number[], defenses?: UnitSheet["defenses"]): HazardOutcome {
   const failed = !d.save || saveTotal === null || saveTotal < d.save.dc;
-  const full = rolled.reduce((s, n) => s + n, 0);
-  const damage = failed ? full : d.half ? Math.floor(full / 2) : 0;
-  const conditions = failed ? d.conditions ?? [] : [];
+  const notes: string[] = [];
+  const parts = (d.damage ?? []).map((dm, i) => {
+    const raw = rolled[i] ?? 0;
+    const base = failed ? raw : d.half ? Math.floor(raw / 2) : 0;
+    if (!base) return { type: dm.type, amount: 0 };
+    const r = damageAgainst(defenses, base, dm.type);
+    if (r.note) notes.push(r.note);
+    return { type: dm.type, amount: r.amount };
+  });
+  const damage = parts.reduce((s, p) => s + p.amount, 0);
+  const all = failed ? d.conditions ?? [] : [];
+  const conditions = all.filter((c) => !immuneToCondition(defenses, c.key));
+  const skipped = all.filter((c) => !conditions.includes(c));
+  const label = (c: { key: string; label?: string }) => c.label ?? c.key[0]!.toUpperCase() + c.key.slice(1);
   const saveText = d.save && saveTotal !== null ? ` ${saveTotal} vs DC ${d.save.dc}: ${failed ? "fails" : "succeeds"}.` : "";
-  const dmgText = damage ? ` ${damage} ${d.damage!.map((x) => x.type).join(" + ")} damage${!failed && d.half ? " (half)" : ""}.` : "";
-  const condText = conditions.length ? ` ${conditions.map((c) => c.label ?? c.key[0]!.toUpperCase() + c.key.slice(1)).join(", ")}.` : "";
-  return { damage, conditions, failed, text: `${d.name} → ${name}:${saveText}${dmgText}${condText}`.replace(/:$/, ": nothing happens.") };
+  const shown = parts.filter((p) => p.amount > 0);
+  const tags = [!failed && d.half ? "half" : "", ...notes].filter(Boolean);
+  const dmgText = damage ? ` ${shown.map((p) => `${p.amount} ${p.type}`).join(" + ")} damage${tags.length ? ` (${tags.join("; ")})` : ""}.` : "";
+  const zero = !damage && notes.length ? ` No damage (${notes.join("; ")}).` : "";
+  const condText = conditions.length ? ` ${conditions.map(label).join(", ")}.` : "";
+  const skipText = skipped.length ? ` Immune to ${skipped.map(label).join(", ")}.` : "";
+  const body = `${saveText}${damage ? dmgText : zero}${condText}${skipText}`;
+  return { damage, conditions, failed, text: `${d.name} → ${name}:${body || " nothing happens."}` };
 }
 
 /** Which placed hazards a token newly entered: in `now` but not in `before`. */

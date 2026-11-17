@@ -45,7 +45,7 @@ export async function triggerHazard(d: HazardDef, hazardItem: Item | null, unit:
       rolled.push(sum);
     }
   }
-  const out = resolveHazard(d, unit.name, saveTotal, rolled);
+  const out = resolveHazard(d, unit.name, saveTotal, rolled, unit.sheet.defenses);
   if (out.damage) await changeHp(obrGateway, [unit.id], { kind: "damage", amount: out.damage }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
   if (out.conditions.length) {
     const meta = await OBR.scene.getMetadata();
