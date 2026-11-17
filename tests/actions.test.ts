@@ -400,6 +400,25 @@ describe("the inventory, and actions the sheet rules out", () => {
   });
 });
 
+describe("options with several skills show each as a variant", () => {
+  const sheet = { ...brann.sheet, skills: [{ name: "Insight", bonus: 6 }, { name: "Perception", bonus: 3 }, { name: "Arcana", bonus: 1 }] };
+  it("Search, Study and Influence reveal one tile per skill, best first, with what each is for", () => {
+    const l = barLayout(actionBar(sheet));
+    const search = l.reveals["common:Search"]!;
+    expect(search.map((o) => o.name)).toEqual(["Insight", "Perception", "Medicine", "Survival"]);
+    expect(search[0]).toMatchObject({ cost: "action", summary: "+6 [1d20+6]" });
+    expect(search[0]!.text).toMatch(/^Wisdom \(Insight\) check \(you: \+6 \[1d20\+6\]\): read a creature's state of mind/);
+    expect(l.reveals["common:Study"]!.map((o) => o.name)).toContain("Religion");
+    expect(l.reveals["common:Influence"]!.map((o) => o.name)).toContain("Animal Handling");
+    expect(l.sections.flatMap((s) => s.items).some((i) => i.name === "Insight")).toBe(false);
+    // 5E: Search is Perception or Investigation.
+    expect(barLayout(actionBar(sheet, "2014")).reveals["common:Search"]!.map((o) => o.name)).toEqual(["Perception", "Investigation"]);
+  });
+  it("Escape a Grapple shows Athletics and Acrobatics", () => {
+    expect(combatOptions(sheet).find((o) => o.name === "Escape a Grapple")!.variants!.map((v) => v.name).sort()).toEqual(["Acrobatics", "Athletics"]);
+  });
+});
+
 describe("homebrew actions", () => {
   it("are added, edited and removed, and checked before saving", () => {
     let list = upsertHomebrew([], { name: "Called Shot", cost: "attack", summary: "-5 to hit", text: "Aim for a weak spot." });

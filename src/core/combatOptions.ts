@@ -30,6 +30,21 @@ export interface CombatOption {
   ifCondition?: string;
   /** Only while it doesn't (Drop Prone, Mount). */
   unlessCondition?: string;
+  /** Ways to do it with different skills (Search with Perception or Insight…), revealed under its tile. */
+  variants?: OptionVariant[];
+}
+
+export interface OptionVariant { name: string; summary: string; text: string }
+
+type Skill = [string, keyof UnitSheet["abilities"]];
+const ABILITY_NAME: Record<keyof UnitSheet["abilities"], string> = { str: "Strength", dex: "Dexterity", con: "Constitution", int: "Intelligence", wis: "Wisdom", cha: "Charisma" };
+
+/** One variant per skill, best bonus first: "Perception +5 [1d20+5]" with what that skill finds or does. */
+function skillVariants(sheet: Pick<UnitSheet, "skills" | "abilities">, list: Skill[], uses: Record<string, string>, tail = ""): OptionVariant[] {
+  return list.map(([n, a]) => ({ n, a, bonus: skillBonus(sheet, n, a) })).sort((x, y) => y.bonus - x.bonus).map(({ n, a, bonus }) => ({
+    name: n, summary: d20Chip(bonus),
+    text: `${ABILITY_NAME[a]} (${n}) check (you: ${d20Chip(bonus)})${uses[n] ? `: ${uses[n]}` : ""}.${tail ? ` ${tail}` : ""}`,
+  }));
 }
 
 /** A d20 roll written the way sheet text carries one: "+5 [1d20+5]", or "+5 dis [2d20kl1+5]" with Disadvantage.
@@ -67,6 +82,21 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
   const search: [string, keyof UnitSheet["abilities"]][] = rules === "2024"
     ? [["Perception", "wis"], ["Insight", "wis"], ["Medicine", "wis"], ["Survival", "wis"]] : [["Perception", "wis"], ["Investigation", "int"]];
   const study: [string, keyof UnitSheet["abilities"]][] = [["Arcana", "int"], ["History", "int"], ["Investigation", "int"], ["Nature", "int"], ["Religion", "int"]];
+  const searchUses: Record<string, string> = rules === "2024"
+    ? { Perception: "spot a concealed creature or object", Insight: "read a creature's state of mind, or tell whether it's lying", Medicine: "find an ailment or the cause of death", Survival: "find tracks or food" }
+    : { Perception: "spot or hear something hidden", Investigation: "look for clues and work out what they mean" };
+  const studyUses: Record<string, string> = {
+    Arcana: "recall or work out lore about spells, magic items, eldritch symbols, magical traditions or the planes",
+    History: "recall or work out historic events, people, nations and cultures",
+    Investigation: "work out traps, ciphers, riddles and gadgets",
+    Nature: "recall or work out lore about terrain, plants, animals and weather",
+    Religion: "recall or work out lore about deities, rituals, religious hierarchies, holy symbols and cults",
+  };
+  const influenceUses: Record<string, string> = {
+    Persuasion: "persuade a creature that can understand you", Deception: "deceive a creature that can understand you",
+    Intimidation: "intimidate a creature", Performance: "amuse a creature", "Animal Handling": "gently coax a Beast or Monstrosity",
+  };
+  const breakFree: Skill[] = [["Athletics", "str"], ["Acrobatics", "dex"]];
   const top = (list: [string, keyof UnitSheet["abilities"]][]) => { const b = bestSkill(sheet, list); return `${b.name} ${d20Chip(b.bonus)}`; };
   const unarmedHit = str + pb;
   const unarmedDmg = Math.max(1, 1 + str);
@@ -100,19 +130,20 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
       ? `While Heavily Obscured or behind Three-Quarters or Total Cover, out of any enemy's line of sight, make a DC 15 Dexterity (Stealth) check (you: ${d20Chip(stealth)}). On a success you have the Invisible condition until you make noise louder than a whisper, attack, cast a spell with a Verbal component, or an enemy finds you.`
       : `Make a Dexterity (Stealth) check (you: ${d20Chip(stealth)}) while creatures can't clearly see you. Creatures searching for you compare it with their Wisdom (Perception). You're found if you attack or make noise.` },
     ...(o2024 ? [
-      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(influence), text: `Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher. You: ${skillChips(sheet, influence)}.` },
+      { name: "Influence", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(influence), variants: skillVariants(sheet, influence, influenceUses, "Usually against DC 15 or the creature's Intelligence score, whichever is higher."), text: `Urge a creature to do something: a Charisma (Deception, Intimidation, Performance or Persuasion) or Wisdom (Animal Handling) check, usually against DC 15 or the creature's Intelligence score, whichever is higher. You: ${skillChips(sheet, influence)}.` },
       { name: "Magic", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, text: `Cast a spell with a casting time of an action, or use a magic item or magical feature that takes an action. If you cast a spell with a Bonus Action, you can't cast another spell with a spell slot that turn.${hh ? " Somatic and Material components need a free hand (the same hand can do both, or hold the focus). Without the Attack action there's no free weapon swap, so sheathing a weapon to free a hand uses your free object interaction. A holy symbol on your shield, or the War Caster feat, means you don't need to free a hand." : ""}` },
     ] : []),
     { name: "Ready", cost: "action", group: "Actions", source: "PHB", text: "Choose a trigger you can see (\"if the orc steps through the door\") and an action, or movement up to your Speed. When it happens, you can use your Reaction to do it, or ignore it. A readied spell is cast now and held with Concentration until it's released; it's lost if you don't use it before your next turn." },
-    { name: "Search", cost: "action", group: "Actions", source: "PHB", summary: top(search), text: `${o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check."} You: ${skillChips(sheet, search)}.` },
-    ...(o2024 ? [{ name: "Study", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(study), text: `Recall or work something out: an Intelligence check (Arcana, History, Investigation, Nature or Religion). You: ${skillChips(sheet, study)}.` }] : []),
+    { name: "Search", cost: "action", group: "Actions", source: "PHB", summary: top(search), variants: skillVariants(sheet, search, searchUses), text: `${o2024 ? "Look for something: a Wisdom check (Insight, Medicine, Perception or Survival)." : "Look for something: a Wisdom (Perception) or Intelligence (Investigation) check."} You: ${skillChips(sheet, search)}.` },
+    ...(o2024 ? [{ name: "Study", cost: "action" as const, group: "Actions" as const, source: "PHB" as const, summary: top(study), variants: skillVariants(sheet, study, studyUses), text: `Recall or work something out: an Intelligence check (Arcana, History, Investigation, Nature or Religion). You: ${skillChips(sheet, study)}.` }] : []),
     { name: o2024 ? "Utilize" : "Use an Object", cost: "action", group: "Actions", source: "PHB", text: o2024
       ? "Use a nonmagical object that needs your action (pull a stuck lever, light a lantern, pick up a fallen ally's weapon if it's a second object this turn)."
       : "Use an object that needs your action, or interact with a second object this turn." },
     ...(hh ? [{ name: "Don or Doff a Shield", cost: "action" as const, ...(o2024 ? { costNote: "Utilize action" } : {}), group: "Actions" as const, source: "PHB" as const, text: o2024
       ? "Putting on or taking off a shield takes the Utilize action (it isn't a weapon, so the Attack action's free swap doesn't cover it, nor does your free object interaction). You get its Armor Class bonus only while it's strapped to your arm, and that hand can't hold a weapon or a spellcasting focus, though a holy symbol can be emblazoned on the shield and used as one."
       : "Donning or doffing a shield takes an action (your free object interaction doesn't cover it). You get its Armor Class bonus only while it's strapped to your arm, and that hand can't hold a weapon or a spellcasting focus, though a holy symbol can be emblazoned on the shield and used as one." }] : []),
-    { name: "Escape a Grapple", cost: "action", ifCondition: "grappled", group: "Actions", source: "PHB", summary: best, text: o2024
+    { name: "Escape a Grapple", cost: "action", ifCondition: "grappled", group: "Actions", source: "PHB", summary: best,
+      variants: skillVariants(sheet, breakFree, { Athletics: "break free by force", Acrobatics: "slip out of the hold" }, o2024 ? "Against the grapple's escape DC; on a success you're no longer Grappled." : "Contested by the grappler's Strength (Athletics); on a success you escape."), text: o2024
       ? `While Grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) against the grapple's escape DC. On a success you're no longer Grappled.`
       : `While grappled, make a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by the grappler's Strength (Athletics). On a success you escape.` },
     { name: "Stabilize", cost: "action", costNote: o2024 ? "Help action" : undefined, ...(o2024 ? { under: "Help" as const } : {}), group: "Actions", source: "PHB", summary: `DC 10 · Medicine ${d20Chip(medicine)}`, text: `Give first aid to a creature at 0 Hit Points: a DC 10 Wisdom (Medicine) check (you: ${d20Chip(medicine)}). On a success it's Stable: no more death saves, and it regains 1 HP after 1d4 hours. A Healer's Kit does it without a check.` },
@@ -157,7 +188,8 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Overrun", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Athletics ${d20Chip(ath)}`, text: `Force your way through a hostile creature's space: a Strength (Athletics) check (you: ${d20Chip(ath)}) contested by its Strength (Athletics). You have Advantage if you're larger, Disadvantage if smaller. If you win, you can move through its space once this turn.` },
     { name: "Shove Aside", cost: "attack", costNote: "Replaces one attack", group: "Attack options", source: "DMG", summary: `Athletics ${d20Chip(ath, "dis")}`, text: `A Shove that moves the target 5 ft. sideways to another space within your reach instead of away: a Strength (Athletics) check with Disadvantage (you: ${d20Chip(ath, "dis")}) contested by its Strength (Athletics) or Dexterity (Acrobatics).` },
     { name: "Tumble", cost: "action", costNote: "Action or Bonus Action", group: "Movement", source: "DMG", summary: `Acrobatics ${d20Chip(acro)}`, text: `Duck and weave through a hostile creature's space: a Dexterity (Acrobatics) check (you: ${d20Chip(acro)}) contested by its Dexterity (Acrobatics). If you win, you can move through its space once this turn.` },
-    { name: "Climb onto a Bigger Creature", cost: "action", group: "Other", source: "DMG", summary: best, text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
+    { name: "Climb onto a Bigger Creature", cost: "action", group: "Other", source: "DMG", summary: best,
+      variants: skillVariants(sheet, breakFree, { Athletics: "haul yourself up", Acrobatics: "leap and scramble on" }, "Contested by its Dexterity (Acrobatics); if you win, you cling on in its space."), text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check (you: ${best}) contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
   return opts.dmg === false ? list.filter((o) => o.source !== "DMG") : list;
 }

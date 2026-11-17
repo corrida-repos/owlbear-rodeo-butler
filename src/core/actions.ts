@@ -229,14 +229,21 @@ export interface BarOptions {
 
 /** Everything anyone can do in combat by the rules (see combatOptions.ts), with this unit's numbers, plus homebrew. */
 export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: BarOptions = {}): ActionItem[] {
-  const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg, handheld: opts.handheld }).map((c) => ({
-    key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
-    ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
-    ...(c.withAttack ? { withAttack: true } : {}),
-    ...(c.under ? { under: `common:${c.under}` } : {}),
-    ...(c.ifCondition ? { ifCondition: c.ifCondition } : {}),
-    ...(c.unlessCondition ? { unlessCondition: c.unlessCondition } : {}),
-  }));
+  const rulesOptions: ActionItem[] = combatOptions(sheet, rules, { dmg: opts.dmg, handheld: opts.handheld }).flatMap((c) => {
+    const item: ActionItem = {
+      key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
+      ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
+      ...(c.withAttack ? { withAttack: true } : {}),
+      ...(c.under ? { under: `common:${c.under}` } : {}),
+      ...(c.ifCondition ? { ifCondition: c.ifCondition } : {}),
+      ...(c.unlessCondition ? { unlessCondition: c.unlessCondition } : {}),
+    };
+    // Variants (Search with Perception, Insight…): revealed under the option, sharing its cost and when it applies.
+    const variants: ActionItem[] = (c.variants ?? []).map((v) => ({
+      ...item, key: `${item.key}#${v.name}`, name: v.name, text: v.text, summary: v.summary, under: item.key, costNote: undefined,
+    }));
+    return [item, ...variants];
+  });
   const homebrew: ActionItem[] = (opts.homebrew ?? []).map((hb) => ({
     key: `homebrew:${hb.id}`, name: hb.name, text: hb.text, section: "homebrew", category: "common", cost: hb.cost,
     ...(hb.cost === "attack" ? { costNote: "One attack of the Attack action" } : {}),
