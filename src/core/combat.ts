@@ -6,6 +6,7 @@ import { BUTLER_ITEM_KEY, BUTLER_NS } from "./constants";
 import { cryptoRng, resolveRollMode, rollInitiative, type Rng } from "./dice";
 import { STATE_KEY, type UnitSheet, type UnitState } from "./sheet";
 import { isUnitItem, readUnit } from "./unit";
+import { isSurprised } from "./systems";
 import type { InitiativeSetup, SceneGateway, SceneItemLite } from "./importer";
 import type { InitiativeRoll } from "./schema";
 
@@ -96,6 +97,12 @@ export { isUnitItem };
  * 2014 rules: creatures use their Dexterity modifier (2024 stat blocks add proficiency); advantage still applies.
  */
 export function initiativeSetupFor(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState, rules: "2024" | "2014" = "2024"): InitiativeSetup {
+  const base = baseInitiativeSetup(meta, sheet, state, rules);
+  // 2024 Surprise: Disadvantage on the Initiative roll (2014: no effect on initiative).
+  return rules === "2024" && state && isSurprised(state) ? { ...base, disadvantage: true } : base;
+}
+
+function baseInitiativeSetup(meta: Record<string, unknown>, sheet?: UnitSheet, state?: UnitState, rules: "2024" | "2014" = "2024"): InitiativeSetup {
   if (rules === "2014" && sheet?.kind === "creature") {
     return { modifier: Math.floor((sheet.abilities.dex - 10) / 2), advantage: sheet.initiative.advantage, disadvantage: sheet.initiative.disadvantage };
   }

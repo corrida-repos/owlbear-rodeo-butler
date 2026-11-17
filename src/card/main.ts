@@ -280,7 +280,7 @@ function header(info: ItemInfo, sheet: UnitSheet | undefined, state: UnitState, 
 }
 
 function statsBar(sheet: UnitSheet, state: UnitState): Child {
-  const init = initiativeRoll(sheet, roomSystem().rules);
+  const init = initiativeRoll(sheet, roomSystem().rules, state);
   const max = maxHp(sheet, state);
   return h("div", { className: "statbar" },
     h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),

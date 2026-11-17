@@ -5,6 +5,7 @@
 import { crLabel, xpForCr } from "./combat";
 import { SIZE_NAMES } from "./constants";
 import { fmtMod, resolveRollMode } from "./dice";
+import { isSurprised } from "./systems";
 import type { RollMode } from "./schema";
 import { abilityMod, ABILITIES, ABILITY_NAMES, saveBonus, type Ability, type UnitSheet, type UnitState } from "./sheet";
 
@@ -103,9 +104,10 @@ export const skillRolls = (sheet: UnitSheet): StandardRoll[] =>
   sheet.skills.map((s) => ({ label: `${s.name} check`, formula: d20(s.bonus), bonus: s.bonus, kind: "check" }));
 
 /** 2014 rules: creatures roll initiative with their Dexterity modifier (2024 stat blocks add proficiency). */
-export function initiativeRoll(sheet: UnitSheet, rules: "2024" | "2014" = "2024"): StandardRoll {
+export function initiativeRoll(sheet: UnitSheet, rules: "2024" | "2014" = "2024", state?: Pick<UnitState, "conditions">): StandardRoll {
   const i = sheet.initiative;
-  const mode = resolveRollMode(i.advantage, i.disadvantage);
+  // 2024 Surprise: Disadvantage on the Initiative roll.
+  const mode = resolveRollMode(i.advantage, i.disadvantage || (rules === "2024" && !!state && isSurprised(state)));
   const mod = rules === "2014" && sheet.kind === "creature" ? abilityMod(sheet.abilities.dex) : i.modifier;
   return { label: "Initiative", formula: d20(mod), bonus: mod, kind: "initiative", ...(mode !== "normal" ? { mode } : {}) };
 }

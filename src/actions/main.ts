@@ -25,6 +25,7 @@ import { cardAccess, controls, editionText, portraitUrl, unitName } from "../cor
 import { parseChips, rollLabel, rollSegments, type RollSegment } from "../core/chips";
 import { combineModes } from "../core/card";
 import { d20Penalty } from "../core/conditions";
+import { isSurprised, SURPRISED_TEXT } from "../core/systems";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
@@ -417,6 +418,7 @@ function render() {
     nodes.push(
       head(sheet, state),
       tabsRow(bar),
+      isSurprised(state) ? h("div", { className: "small warn" }, SURPRISED_TEXT[roomSystem().rules]) : null,
       tabInfo ? h("div", { className: `small cost-text cost-${tab}` }, tabInfo) : null,
       h("div", { className: "ab-grid" }, ...(grid.length ? grid : [h("div", { className: "small muted" }, "Nothing here.")])),
       hbForm ? homebrewForm() : sel ? detail(sel, bar) : h("div", { className: "small muted" }, "Hover an option to see possible variants; click an option to see how it works."),

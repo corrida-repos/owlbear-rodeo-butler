@@ -7,6 +7,8 @@ import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import { addConditionTo, changeHp, encounterAction, expireConditions, removeConditionFrom, resolveConcentration } from "../src/core/tracker";
 import { readUnit } from "../src/core/unit";
 import { FakeScene } from "./fakeGateway";
+import { initiativeSetupFor } from "../src/core/combat";
+import { initiativeRoll } from "../src/core/card";
 
 const sheet = (name: string, over: Partial<UnitSheet> = {}): UnitSheet => ({
   schema: SHEET_SCHEMA, name, kind: "creature", size: "M", ac: 12, hp: { max: 30 }, speed: { walk: 30 },
@@ -196,5 +198,31 @@ describe("movement tracker", () => {
   it("snaps to the nearest cell centre", () => {
     expect(snapToCell({ x: 100, y: 20 }, 150)).toEqual({ x: 75, y: 75 });
     expect(snapToCell({ x: 230, y: 160 }, 150)).toEqual({ x: 225, y: 225 });
+  });
+});
+
+describe("surprised", () => {
+  const u = (conds: ReturnType<typeof addCondition>["conditions"]) => ({ id: "a", state: { conditions: conds! } });
+  it("is a condition in both editions", () => {
+    expect(DND5E_2024.conditions.some((c) => c.key === "surprised")).toBe(true);
+    expect(DND5E_2014.conditions.some((c) => c.key === "surprised")).toBe(true);
+  });
+  it("ends at the end of the unit's first turn, not at the end of the turn it was applied in", () => {
+    const pos = (id: string) => ["a", "b"].indexOf(id);
+    // Set before combat (no anchor): the end of a's first turn ends it; the end of b's turn doesn't.
+    const before = u(addCondition({ conditions: [] }, "surprised").conditions);
+    expect(expiredOnTurnChange([before], { round: 1, turnId: "b" }, { round: 2, turnId: "a" }, pos)).toHaveLength(0);
+    expect(expiredOnTurnChange([before], { round: 1, turnId: "a" }, { round: 1, turnId: "b" }, pos)).toHaveLength(1);
+    // Added during a's own turn: it lasts through a's next turn.
+    const during = u(addCondition({ conditions: [] }, "surprised", { now: { round: 1, turnId: "a" } }).conditions);
+    expect(expiredOnTurnChange([during], { round: 1, turnId: "a" }, { round: 1, turnId: "b" }, pos)).toHaveLength(0);
+    expect(expiredOnTurnChange([during], { round: 2, turnId: "a" }, { round: 2, turnId: "b" }, pos)).toHaveLength(1);
+  });
+  it("2024: Disadvantage on the Initiative roll; 2014: no effect on initiative", () => {
+    const st = { ...newState(sheet("Gob")), conditions: addCondition({ conditions: [] }, "surprised").conditions! };
+    expect(initiativeSetupFor({}, sheet("Gob"), st, "2024").disadvantage).toBe(true);
+    expect(initiativeSetupFor({}, sheet("Gob"), st, "2014").disadvantage).toBe(false);
+    expect(initiativeRoll(sheet("Gob"), "2024", st).mode).toBe("disadvantage");
+    expect(initiativeRoll(sheet("Gob"), "2024").mode).toBeUndefined();
   });
 });

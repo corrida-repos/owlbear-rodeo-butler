@@ -58,6 +58,8 @@ const BUTLER: ConditionDef[] = [
   { key: "stable", label: "Stable" },
   /** Riding a mount: the action bar offers Dismount instead of Mount. */
   { key: "mounted", label: "Mounted" },
+  /** Caught off guard as combat starts (see SURPRISED_TEXT): ends at the end of the unit's first turn. */
+  { key: "surprised", label: "Surprised" },
 ];
 /** Units at 0 HP making death saves (party members, or any unit put on them), not Dead or Stable. Both systems. */
 const DEATH_SAVES: ConditionDef = { key: "death-saves", label: "Death Saves", automatic: true };
@@ -95,6 +97,13 @@ export const getSystem = (id: unknown): GameSystem => SYSTEMS[id as SystemId] ??
 
 /** Whether creatures from this 5etools source appear in the search under this system (other books: always). */
 export const searchableSource = (system: Pick<GameSystem, "hiddenSources">, source: string) => !system.hiddenSources.includes(source.toUpperCase());
+
+/** What Surprised means in each edition (PHB 2024 "Surprise"; PHB 2014 "Surprise"). */
+export const SURPRISED_TEXT: Record<"2024" | "2014", string> = {
+  "2024": "Surprised: Disadvantage on the Initiative roll. Butler rolls it that way and removes Surprised at the end of the unit's first turn.",
+  "2014": "Surprised: can't move or take an action or bonus action on its first turn, and can't take reactions until that turn ends. Butler removes it then.",
+};
+export const isSurprised = (state: Pick<UnitState, "conditions">) => state.conditions.some((c) => c.key === "surprised");
 
 export const isDead = (state: Pick<UnitState, "conditions">) => state.conditions.some((c) => c.key === "dead");
 

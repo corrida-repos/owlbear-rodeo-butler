@@ -35,7 +35,7 @@ export function addCondition(
     ...(opts.label ? { label: opts.label.trim() } : {}),
     ...(opts.note ? { note: opts.note.trim() } : {}),
     ...(key === "exhaustion" ? { level: Math.min(6, Math.max(1, Math.round(opts.level ?? 1))) } : {}),
-    ...(until ? { until, from: opts.now! } : {}),
+    ...(until ? { until, from: opts.now! } : key === "surprised" && opts.now ? { from: opts.now } : {}),
   } as Partial<ConditionInstance>);
   return { conditions: [...rest, inst] };
 }
@@ -84,6 +84,11 @@ export function expiredOnTurnChange(
   const out: Expired[] = [];
   for (const u of units) {
     for (const c of u.state.conditions) {
+      // Surprised ends at the end of the unit's first turn (not one it was applied during).
+      if (c.key === "surprised") {
+        if (prev && prev.turnId === u.id && !(c.from && c.from.round === prev.round && c.from.turnId === prev.turnId)) out.push({ unitId: u.id, condition: c });
+        continue;
+      }
       const until = c.until;
       const from = c.from;
       if (!until || !from) continue;
