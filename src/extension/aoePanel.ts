@@ -6,7 +6,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { AOE_SHAPES, aoeName, type AoeMeta, type AoeShape } from "../core/aoe";
 import { parseHpInput } from "../core/hp";
-import { SHEET_KEY } from "../core/sheet";
+import { SHEET_KEY, STATE_KEY } from "../core/sheet";
 import { changeHp, type TrackerUnit } from "../core/tracker";
 import { placedAreas, placeTemplate, unitsInArea } from "./aoeItems";
 import { action, h, rerender, type Child } from "./dom";
@@ -24,7 +24,9 @@ export async function refreshAreas() {
   const items = await OBR.scene.items.getItems();
   const r = await placedAreas(items);
   square = r.square;
-  const units = items.filter((i) => SHEET_KEY in i.metadata && i.layer === "CHARACTER");
+  // Dead units aren't caught (they'd only clutter the list and take damage).
+  const units = items.filter((i) => SHEET_KEY in i.metadata && i.layer === "CHARACTER"
+    && !((i.metadata[STATE_KEY] as { conditions?: { key: string }[] } | undefined)?.conditions ?? []).some((c) => c.key === "dead"));
   areas = await Promise.all(r.areas.map(async (a) => ({ id: a.item.id, name: aoeName(a.meta), units: await unitsInArea(a, units, r.dpi) })));
 }
 

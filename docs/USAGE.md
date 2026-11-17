@@ -129,6 +129,17 @@ Open it from the token's right-click menu (**Wild Shape**) or the **🐾 Wild Sh
 
 **5E (2014) rooms:** any beast you have seen (no limit on Known Shapes). Swimming speeds are allowed from level 4. Circle of the Moon gets CR 1 from level 2. The form has the beast's hit points: at 0 you revert and leftover damage carries over to your own HP. Uses come back on any rest.
 
+## DM Tools (GM)
+
+The **DM Tools** tab gathers the 2024 DMG's combat tools.
+
+- **Fight or flight.** Pick a monster and click **Will they fight?** for the DC 10 Wisdom save before Initiative (a failure means it flees or parleys). During combat, when a Bloodied monster starts its turn Frightened, or having lost more than half its allies while nobody in the party is down, you get a notice and a prompt in the Tracker to roll its save.
+- **Chase mode.** Set each unit as Quarry or Pursuer (or use the one-click buttons), pick Urban or Wilderness complications and the escape factor, and **Start chase**. Butler then works on each turn change: a d12 complication after each participant's turn, resolved on the next participant (save rolled, damage, Prone or Blinded applied); Dashes counted (tick Dash on the movement tracker) with a Constitution save past 3 + Con modifier; and at the end of each round each quarry's Stealth against the pursuers' best Passive Perception. Tick **in sight** for a quarry the lead pursuer never lost sight of. Rolls are private unless you tick *players see the chase rolls*.
+- **Area templates.** Choose a shape and size and **Place** it (on the selected token for a Cone, Line or Emanation). Drag, rotate or resize it on the map: every square it covers by at least half is highlighted. The list shows who's caught; **Select** them, or type damage to apply to all of them. Square grids only.
+- **Hazards and traps.** Pick one, **Place** it at the centre of the view, and drag it where it belongs. A unit entering it (the first time on a turn) or starting its turn in it gets the save rolled and the damage and conditions applied; you get a notice. One-shot traps are then spent and revealed. **Trigger on selected** sets one off by hand (Yellow Mold when touched, a Poisoned Needle, a Rockslide's path). Damage resistances aren't applied.
+- **Mob rolls.** Pick a group of identical monsters, attack rolls or saving throws, the target's AC or the DC, and read how many succeed from the DMG's table, with average damage ready to apply.
+- **Objects.** Add a door, a spell wall, siege equipment or any object by material and size; Butler works out its AC and HP. Type damage with its type to apply immunities, vulnerabilities and thresholds.
+
 ## Action bar (what can I do?)
 
 A quick reference for one unit, in the style of Baldur's Gate 3's hotbar: everything the unit can do, sorted by what it costs, with an explanation of how each option works. Nothing is spent or counted (Butler only tracks HP), but every roll is right there: each option shows its attack bonus, check modifier or damage dice, on the tile and in the detail, and clicking one rolls it (Shift for advantage, Ctrl/⌘ for disadvantage). Rolls are public or private like the card's (the switch at the bottom is shared with the card); exhaustion is applied, and after a natural 20 that option's damage rolls as a critical hit. Saving throws show their DC instead and aren't rolled from here. Options that list several skills (Influence, Search, Study) show the best one on the tile and all of them in the detail.
@@ -140,7 +151,7 @@ Open it from the token's right-click menu (**Actions**), the **⚔ Actions** but
   - **Attack options:** Unarmed Strike (if the sheet doesn't list one), Grapple, Shove, Two-Weapon Fighting, Opportunity Attack, Improvised Weapon.
   - **Movement:** Move, Drop Prone, Stand Up, Jump, Climb, Swim, Mount, Dismount.
   - **Other:** Interact with an Object, Drink or Administer a Potion, Speak.
-  - **DMG optional rules** (marked *DMG*, only if your GM uses them): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature.
+  - **DMG optional rules** (marked *DMG* in 5E rooms and *2014 DMG* in 5.5E rooms, where they come from the 2014 book; only if your GM uses them): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature.
 
   The numbers come from the sheet: Unarmed Strike to-hit and damage, the Grapple / Shove DC (8 + Strength + proficiency; Athletics in 5E), Athletics, Acrobatics, Stealth and Medicine bonuses, Dash distance, half Speed to stand up, and jump distances from Strength. Hover a tab to see what that cost means.
 

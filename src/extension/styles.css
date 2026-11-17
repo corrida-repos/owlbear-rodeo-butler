@@ -287,3 +287,6 @@ input.num { width: 64px; }
 .tabs button { font-size: 12px; white-space: nowrap; }
 .dm-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
 .dm-item { display: flex; gap: 6px; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
+.dm-item select, .dm-item input[type=text], .row.wrap select, .row.wrap input[type=text] { width: auto; max-width: 100%; }
+.dm-item input[type=text].num, .row.wrap input.num { width: 64px; }
+.dm-item .grow { min-width: 90px; }
