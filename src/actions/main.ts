@@ -26,6 +26,8 @@ import { parseChips, rollLabel, rollSegments, type RollSegment } from "../core/c
 import { combineModes } from "../core/card";
 import { d20Penalty } from "../core/conditions";
 import { isSurprised, SURPRISED_TEXT } from "../core/systems";
+import { areaOf } from "../core/reach";
+import { placeTemplate } from "../extension/aoeItems";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, rollDetail, ROLL_CHANNEL, rollDestination, type RollMessage, type RollVisibility } from "../core/rolls";
 import type { RollMode } from "../core/schema";
@@ -302,6 +304,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
         it.cost !== "none" ? h("span", { className: `small cost-text cost-${it.cost}` }, ` ${COST_GLYPH[it.cost]} ${COST_LABEL[it.cost]}`) : null),
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
     reachLine(it),
+    areaButton(it),
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
       ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
     lastRollLine(it),
@@ -312,6 +315,15 @@ function detail(it: ActionItem, bar: ActionBar): Child {
     it.source === "Homebrew" && role === "GM" ? h("div", { className: "row" },
       h("button", { className: "secondary small", onclick: () => { const hb = homebrewActions().find((x) => x.id === it.homebrewId); if (hb) { hbForm = { id: hb.id, name: hb.name, cost: hb.cost, summary: hb.summary ?? "", text: hb.text }; render(); } } }, "Edit"),
       h("button", { className: "secondary small", onclick: () => { if (confirm(`Remove the homebrew action ${it.name} from the room?`)) { selected = null; void deleteHomebrew(it.homebrewId!).catch(showErr); } } }, "Remove")) : null);
+}
+
+/** "Place the area on the map" for an entry with an area of effect (a Cone or Line starts at the unit). */
+function areaButton(it: ActionItem): Child {
+  const a = it.category === "common" ? null : areaOf(it.text);
+  if (!a) return null;
+  return h("div", { className: "row small" }, h("button", { className: "secondary small", title: "Drag it into place; squares it covers by at least half are highlighted",
+    onclick: () => void placeTemplate({ shape: a.shape, size: a.size, label: `${it.name} (${a.size} ft)` }, a.selfCentred ? itemId : undefined).then(() => { note = "Area placed: drag it into place (rotate a Cone or Line with Owlbear's handle). DM Tools lists who's in it."; render(); }, showErr) },
+    `◎ Place the ${a.size}-ft ${a.shape} on the map`));
 }
 
 /** The item's range in words, under its name: "Melee range 10 ft · Range 30 ft · Long range 120 ft: Disadvantage". */

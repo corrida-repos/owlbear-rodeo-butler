@@ -50,6 +50,15 @@ function areaIn(text: string): { shape: string; feet: number; centred: boolean }
   return { shape, feet: Number(m[1]), centred };
 }
 
+/** An entry's area of effect as a template shape ("a 20-foot-radius Sphere" → sphere 20), or null. */
+export function areaOf(text: string): { shape: "sphere" | "cylinder" | "cube" | "cone" | "line" | "emanation"; size: number; selfCentred: boolean } | null {
+  const a = areaIn(text);
+  if (!a) return null;
+  const s = a.shape.toLowerCase();
+  const shape = s === "radius" ? (a.centred ? "emanation" : "sphere") : s === "sphere" && a.centred ? "emanation" : s as "sphere" | "cylinder" | "cube" | "cone" | "line" | "emanation";
+  return { shape, size: a.feet, selfCentred: a.centred || shape === "cone" || shape === "line" };
+}
+
 /** The tag the D&D Beyond sync writes on a spell: "[Action, Concentration, 60 ft.]" → "60 ft." / "Self" / "Touch". */
 function spellRangeTag(text: string): string | null {
   const tag = /\[([^\]]*(?:Action|Reaction|minute|hour)[^\]]*)\]/i.exec(text)?.[1];
