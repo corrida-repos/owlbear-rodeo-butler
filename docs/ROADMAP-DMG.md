@@ -82,4 +82,4 @@ G1 → G2 → G3 → G9 → G10 → G5 → G6 → G7 → G4 → G8 (small and se
 | G7 | planned | |
 | G8 | planned | |
 | G9 | done | unit tests (2024 Bonus Action, 2014 action, no weapon / ingested poison) |
-| G10 | planned | |
+| G10 | done | unit tests (DMG zombie examples, Advantage/Disadvantage columns, area table); DM Tools tab live check pending |

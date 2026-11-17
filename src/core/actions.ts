@@ -148,6 +148,16 @@ function damageRolls(text: string): { seg: RollSegment; type?: string }[] {
 /** A roll as text: its printed form, or with `chips` the "[formula]" that makes it a button again. */
 const rollText = (seg: RollSegment, chips: boolean) => chips ? `${seg.display} [${seg.formula}]` : seg.display;
 
+/** An entry's attack bonus (from its "[1d20+5]" chip) and damage formulas with types, for mob rolls. */
+export function attackProfile(text: string): { bonus?: number; damage: { formula: string; type?: string }[] } {
+  const atk = rollSegments(parseChips(text)).find((r) => r.kind === "attack");
+  const m = atk ? /1d20\s*([+-]\s*\d+)?/i.exec(atk.formula) : null;
+  return {
+    ...(m ? { bonus: Number((m[1] ?? "0").replace(/\s+/g, "")) } : {}),
+    damage: damageRolls(text).map((d) => ({ formula: d.seg.formula, ...(d.type ? { type: d.type } : {}) })),
+  };
+}
+
 export function damageOf(text: string, chips = false): string[] {
   return damageRolls(text).map((d) => `${rollText(d.seg, chips)}${d.type ? ` ${d.type}` : ""}`);
 }

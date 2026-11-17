@@ -280,3 +280,10 @@ button.status-chip:disabled { cursor: default; }
 button.pop-btn { background: transparent; color: var(--muted); border: none; padding: 0 6px; height: 22px; font-size: 12px; line-height: 1; }
 button.pop-btn:hover { color: var(--text); background: var(--bg); }
 body.pop-minimized { overflow: hidden; }
+
+/* DM Tools */
+input.num { width: 64px; }
+.panel.tight { padding: 6px 8px; margin-top: 6px; }
+.tabs button { font-size: 12px; white-space: nowrap; }
+.dm-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.dm-item { display: flex; gap: 6px; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
