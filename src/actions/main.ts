@@ -7,7 +7,7 @@
  *    Hovering Magic (Cast a Spell in 5E) reveals the sheet's spells cast with an action and its Magic actions.
  *    A creature's Multiattack is the first Action.
  *  - A tile opens "how it works" in plain words and the sheet's text.
- *  - Hovering or picking an action shows its reach or range on the map, with a ring on every creature it reaches
+ *  - Hovering or picking an action shows its range on the map, with a ring on every creature in range
  *    (drawn by the background page, for this browser only: see background/reach.ts).
  *  - Every roll shows its modifier or dice, on the tile and in the detail, and rolls on click (Shift: advantage,
  *    Ctrl/Cmd: disadvantage), public or private like the card's rolls.
@@ -313,7 +313,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
       h("button", { className: "secondary small", onclick: () => { if (confirm(`Remove the homebrew action ${it.name} from the room?`)) { selected = null; void deleteHomebrew(it.homebrewId!).catch(showErr); } } }, "Remove")) : null);
 }
 
-/** The item's reach in words, under its name: "Reach 10 ft · Range 30 ft · Long range 120 ft: Disadvantage". */
+/** The item's range in words, under its name: "Melee range 10 ft · Range 30 ft · Long range 120 ft: Disadvantage". */
 function reachLine(it: ActionItem): Child {
   const r = reachFor(it);
   if (!r) return null;
@@ -354,8 +354,8 @@ function footer(sheet: UnitSheet, state: UnitState): Child {
   const mine = !!item && role === "PLAYER" && controls({ id: meId, role }, itemInfo(item), state);
   return h("div", { className: "ab-footer small muted" },
     h("span", { className: "grow" }, "Click a value to roll · Shift: advantage · Ctrl/⌘: disadvantage"),
-    h("label", { className: "ab-reach-toggle", title: "Hovering or picking an action shows how far it reaches on the map, and rings the creatures in reach (only you see it)" },
-      h("input", { type: "checkbox", checked: showReach(store.get(SHOW_REACH_KEY)), onchange: (e: Event) => { store.set(SHOW_REACH_KEY, (e.target as HTMLInputElement).checked ? "1" : "0"); render(); } }), " Reach on map"),
+    h("label", { className: "ab-reach-toggle", title: "Hovering or picking an action shows its range on the map, and rings the creatures in range (only you see it)" },
+      h("input", { type: "checkbox", checked: showReach(store.get(SHOW_REACH_KEY)), onchange: (e: Event) => { store.set(SHOW_REACH_KEY, (e.target as HTMLInputElement).checked ? "1" : "0"); render(); } }), " Range on map"),
     h("div", { className: "seg ab-vis" },
       h("button", { className: visibility === "public" ? "on" : "", title: "Everyone sees the roll", onclick: () => setVisibility("public") }, "Public"),
       h("button", { className: visibility === "private" ? "on" : "", title: role === "GM" ? "Only you see it" : "Only you and the GM see it", onclick: () => setVisibility("private") }, "Private")),

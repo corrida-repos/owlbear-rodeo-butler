@@ -111,7 +111,7 @@ describe("action bar from a D&D Beyond character", () => {
     expect(explain(bar.items.find((i) => i.name === "Second Wind")!)).toContain("Limited: 2 times, back after a Long Rest.");
     // Common actions just explain their cost; their rule is the text.
     const oa = explain(bar.items.find((i) => i.name === "Opportunity Attack")!);
-    expect(oa[0]).toMatch(/^When a creature you can see leaves your reach/);
+    expect(oa[0]).toMatch(/^When a creature you can see leaves your melee range/);
     expect(oa[1]).toMatch(/Reaction/);
   });
 });

@@ -48,8 +48,9 @@ describe("reach: parsing an action's reach and range", () => {
 
   it("uses the unit's reach for the rules' options that say within reach, and nothing for Dash", () => {
     expect(reachOf({ key: "common:Shove", name: "Shove", text: "Push a creature no more than one size larger than you, within reach." }, 10)!.bands)
-      .toEqual([{ kind: "reach", feet: 10, label: "Reach 10 ft" }]);
+      .toEqual([{ kind: "reach", feet: 10, label: "Melee range 10 ft" }]);
     expect(r("When a creature you can see leaves your reach, you can make one melee attack.")!.bands[0]!.feet).toBe(5);
+    expect(r("When a creature you can see leaves your melee range, you can make one melee attack.")!.bands[0]).toMatchObject({ feet: 5, label: "Melee range 5 ft" });
     expect(r("Double your movement for the turn.")).toBeNull();
     expect(r("The wolf has Advantage on an attack roll against a creature if at least one of its allies is within 5 feet of the creature.")).toBeNull();
     expect(meleeReachOf(["Melee Attack Roll: +5, reach 5 ft.", "Melee Attack Roll: +7, reach 15 ft."])).toBe(15);
@@ -117,7 +118,7 @@ describe("reach: the rules' options", () => {
   const of = (name: string, reach = 5) => reachOf(bar.items.find((i) => i.key === `common:${name}`)!, reach);
 
   it("reach for attack options, 5 ft for Help and Stabilize, a thrown range for an improvised weapon, nothing for Dash", () => {
-    expect(of("Grapple", 10)!.bands).toEqual([{ kind: "reach", feet: 10, label: "Reach 10 ft" }]);
+    expect(of("Grapple", 10)!.bands).toEqual([{ kind: "reach", feet: 10, label: "Melee range 10 ft" }]);
     expect(of("Shove")!.bands.map((b) => b.kind)).toEqual(["reach"]);
     expect(of("Help")!.bands[0]!.feet).toBe(5);
     expect(of("Improvised Weapon")!.bands.map((b) => `${b.kind} ${b.feet}`)).toEqual(["reach 5", "range 20", "long 60"]);

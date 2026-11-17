@@ -72,8 +72,8 @@ export function reachOf(it: ReachSource, meleeReach = 5): Reach | null {
   // The rules' options (combatOptions.ts) say how far they reach in words; their reach is known.
   if (it.key.startsWith("common:")) {
     const name = it.key.slice("common:".length);
-    if (name === "Improvised Weapon") return finish([{ kind: "reach", feet: 5, label: "Reach 5 ft" }, { kind: "range", feet: 20, label: "Thrown: range 20 ft" }, { kind: "long", feet: 60, label: "Long range 60 ft: Disadvantage" }]);
-    if (COMMON_REACH.has(name)) return finish([{ kind: "reach", feet: meleeReach, label: `Reach ${ftLabel(meleeReach)}` }]);
+    if (name === "Improvised Weapon") return finish([{ kind: "reach", feet: 5, label: "Melee range 5 ft" }, { kind: "range", feet: 20, label: "Thrown: range 20 ft" }, { kind: "long", feet: 60, label: "Long range 60 ft: Disadvantage" }]);
+    if (COMMON_REACH.has(name)) return finish([{ kind: "reach", feet: meleeReach, label: `Melee range ${ftLabel(meleeReach)}` }]);
     if (COMMON_5FT.has(name)) return finish([{ kind: "reach", feet: 5, label: "Within 5 ft" }]);
     return null;
   }
@@ -84,7 +84,7 @@ export function reachOf(it: ReachSource, meleeReach = 5): Reach | null {
   // Weapon attacks: "reach 10 ft.", "range 80/320 ft.", "reach 5 ft. or range 20/60 ft." (thrown).
   const reach = new RegExp(`\\breach\\s+${NUM}${FT}`, "i").exec(text);
   const range = new RegExp(`\\brange\\s+${NUM}(?:\\s*/\\s*${NUM})?${FT}`, "i").exec(text);
-  if (reach) add({ kind: "reach", feet: Number(reach[1]), label: `Reach ${ftLabel(Number(reach[1]))}` });
+  if (reach) add({ kind: "reach", feet: Number(reach[1]), label: `Melee range ${ftLabel(Number(reach[1]))}` });
   if (range) {
     const normal = Number(range[1]);
     add({ kind: "range", feet: normal, label: `Range ${ftLabel(normal)}` });
@@ -116,8 +116,8 @@ export function reachOf(it: ReachSource, meleeReach = 5): Reach | null {
   const within = /\b(targets?|can see|of (its|your) choice|choose|a point|teleport|hurls?|throws?)\b/i.test(text) ? new RegExp(`\\bwithin\\s+${NUM}${FT}`, "i").exec(text) : null;
   if (within) return finish([{ kind: "range", feet: Number(within[1]), label: `Range ${ftLabel(Number(within[1]))}` }], area ? `${areaName(area)} at a point in range` : undefined);
   // The rules' options: "within reach", "within your reach", "leaves your reach", "within 5 feet" (handled above).
-  if (/\b(within (your )?reach|leaves your reach|to another space within your reach)\b/i.test(text)) {
-    return finish([{ kind: "reach", feet: meleeReach, label: `Reach ${ftLabel(meleeReach)}` }]);
+  if (/\b(within (your )?(reach|melee range)|leaves your (reach|melee range)|to another space within your (reach|melee range))\b/i.test(text)) {
+    return finish([{ kind: "reach", feet: meleeReach, label: `Melee range ${ftLabel(meleeReach)}` }]);
   }
   return null;
 }
@@ -211,7 +211,7 @@ export function isAim(x: unknown): x is Aim {
 }
 
 export const BAND_STYLE: Record<BandKind, { color: string; target: string }> = {
-  reach: { color: "#43a047", target: "in reach" },
+  reach: { color: "#43a047", target: "in melee range" },
   range: { color: "#1e88e5", target: "in range" },
   long: { color: "#fb8c00", target: "long range: Disadvantage" },
   area: { color: "#e53935", target: "caught in it" },
