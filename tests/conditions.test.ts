@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { addCondition, badgeText, conditionText, d20Penalty, durationText, expiredOnTurnChange, exhaustionLevel, removeCondition, speedPenalty } from "../src/core/conditions";
 import { applyHp } from "../src/core/hp";
-import { addStep, movedFeet, rewind, rewindTarget, snapToCell, speedLimit, startMovement } from "../src/core/movement";
+import { addStep, alternatingStep, diagonalsSoFar, movedFeet, rewind, rewindTarget, snapToCell, speedLimit, startMovement } from "../src/core/movement";
 import { newState, SHEET_KEY, SHEET_SCHEMA, STATE_KEY, type UnitSheet, type UnitState } from "../src/core/sheet";
 import { DND5E_2014, DND5E_2024 } from "../src/core/systems";
 import { addConditionTo, changeHp, encounterAction, expireConditions, removeConditionFrom, resolveConcentration } from "../src/core/tracker";
@@ -172,6 +172,26 @@ describe("movement tracker", () => {
     expect(speedLimit({ speed: { walk: 30, fly: 60 } })).toBe(60);
     expect(speedLimit({ speed: { walk: 30 } }, { dash: true })).toBe(60);
     expect(speedLimit({ speed: { walk: 30 } }, { penalty: 10, dash: true })).toBe(40);
+  });
+  it("alternating diagonals: 5/10 ft carries on across stops and straight moves (DMG example: 30 ft)", () => {
+    // 1 diagonal (5), 3 straight (15), 1 more diagonal (10) = 30 ft, as three separate stops.
+    let m = startMovement("u", 1, { x: 0, y: 0 });
+    for (const [dx, dy] of [[1, 1], [3, 0], [1, 1]] as const) {
+      const last = m.path[m.path.length - 1]!;
+      const s = alternatingStep(dx, dy, diagonalsSoFar(m));
+      m = addStep(m, { x: last.x + dx, y: last.y + dy }, s.feet, s.diagonals);
+    }
+    expect(m.segments).toEqual([5, 15, 10]);
+    expect(movedFeet(m)).toBe(30);
+    expect(diagonalsSoFar(m)).toBe(2);
+    // In one go: 3 diagonals = 5 + 10 + 5; after an odd count the next one costs 10.
+    expect(alternatingStep(3, -3, 0)).toEqual({ feet: 20, diagonals: 3 });
+    expect(alternatingStep(1, 1, 3)).toEqual({ feet: 10, diagonals: 1 });
+    expect(alternatingStep(2, 1, 0, 10)).toEqual({ feet: 20, diagonals: 1 });
+    // Rewind drops the diagonals of the segments it removes.
+    const r = rewind(m, 20);
+    expect(diagonalsSoFar(r.state)).toBe(1);
+    expect(rewind(m, 0).state.diagonals).toEqual([]);
   });
   it("snaps to the nearest cell centre", () => {
     expect(snapToCell({ x: 100, y: 20 }, 150)).toEqual({ x: 75, y: 75 });

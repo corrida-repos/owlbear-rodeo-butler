@@ -19,6 +19,8 @@ export interface MovementState {
   path: Vec2[];
   /** Feet of each segment (path[i] → path[i+1]), from the grid's measurement rules. */
   segments: number[];
+  /** Alternating-diagonal grids only: diagonal squares in each segment, so the 5/10 ft pattern carries on across stops. */
+  diagonals?: number[];
   dash: boolean;
 }
 
@@ -40,11 +42,29 @@ export function speedLimit(sheet: Pick<UnitSheet, "speed">, opts: { dash?: boole
   return opts.dash ? v * 2 : v;
 }
 
-/** Records a move to `to` that measured `feet`; ignores non-moves. */
-export function addStep(m: MovementState, to: Vec2, feet: number): MovementState {
+/** Records a move to `to` that measured `feet`; ignores non-moves. `diagonals`: diagonal squares in it (alternating grids). */
+export function addStep(m: MovementState, to: Vec2, feet: number, diagonals?: number): MovementState {
   const last = m.path[m.path.length - 1]!;
   if (Math.abs(last.x - to.x) < 1e-6 && Math.abs(last.y - to.y) < 1e-6) return m;
-  return { ...m, path: [...m.path, to], segments: [...m.segments, Math.max(0, feet)] };
+  const next: MovementState = { ...m, path: [...m.path, to], segments: [...m.segments, Math.max(0, feet)] };
+  if (diagonals !== undefined || m.diagonals) next.diagonals = [...(m.diagonals ?? m.segments.map(() => 0)), diagonals ?? 0];
+  return next;
+}
+
+/** Diagonal squares moved so far this turn (alternating grids). */
+export const diagonalsSoFar = (m: Pick<MovementState, "diagonals">) => (m.diagonals ?? []).reduce((s, d) => s + d, 0);
+
+/**
+ * DMG "Diagonal Movement" (the 5/10 rule): the first diagonal square counts 5 ft, the second 10 ft, and so on for the
+ * whole move, even with straight moves or stops in between. `dx`, `dy`: whole squares moved on each axis; `prior`:
+ * diagonal squares already moved this turn. Returns the feet and the diagonal squares in this move.
+ */
+export function alternatingStep(dx: number, dy: number, prior: number, feetPerCell = 5): { feet: number; diagonals: number } {
+  const ax = Math.abs(Math.round(dx)), ay = Math.abs(Math.round(dy));
+  const diag = Math.min(ax, ay), straight = Math.max(ax, ay) - diag;
+  let feet = straight * feetPerCell;
+  for (let k = 1; k <= diag; k++) feet += (prior + k) % 2 === 0 ? feetPerCell * 2 : feetPerCell;
+  return { feet, diagonals: diag };
 }
 
 /** Where Rewind goes: the last multiple of 5 ft below the distance moved (13 → 10; 10 → 5), not below 0. */
@@ -61,7 +81,7 @@ export function rewindTarget(moved: number): number {
 export function rewind(m: MovementState, target = rewindTarget(movedFeet(m))): { state: MovementState; position: Vec2 } {
   if (!m.segments.length || target <= 0) {
     const start = m.path[0]!;
-    return { state: { ...m, path: [start], segments: [] }, position: start };
+    return { state: { ...m, path: [start], segments: [], ...(m.diagonals ? { diagonals: [] } : {}) }, position: start };
   }
   let acc = 0;
   for (let i = 0; i < m.segments.length; i++) {
@@ -73,7 +93,9 @@ export function rewind(m: MovementState, target = rewindTarget(movedFeet(m))): {
       const exact = t >= 1 - 1e-6;
       const path = [...m.path.slice(0, i + 1), exact ? b : p];
       const segments = [...m.segments.slice(0, i), exact ? seg : round1(target - acc)];
-      return { state: { ...m, path, segments }, position: exact ? b : p };
+      const state: MovementState = { ...m, path, segments };
+      if (m.diagonals) state.diagonals = [...m.diagonals.slice(0, i), exact ? m.diagonals[i] ?? 0 : Math.round((m.diagonals[i] ?? 0) * t)];
+      return { state, position: exact ? b : p };
     }
     acc += seg;
   }

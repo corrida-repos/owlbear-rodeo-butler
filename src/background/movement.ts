@@ -5,7 +5,7 @@
  * move) can't race with the change events it causes. All Rewind / Dash requests, the GM's included, come here.
  */
 import OBR from "@owlbear-rodeo/sdk";
-import { addStep, MOVEMENT_KEY, readMovement, rewind, startMovement, type MovementState } from "../core/movement";
+import { addStep, alternatingStep, diagonalsSoFar, MOVEMENT_KEY, readMovement, rewind, startMovement, type MovementState } from "../core/movement";
 
 let mem: MovementState | null = null;
 let queue: Promise<unknown> = Promise.resolve();
@@ -20,6 +20,15 @@ function serial<T>(fn: () => Promise<T>): Promise<T> {
 async function feet(a: { x: number; y: number }, b: { x: number; y: number }): Promise<number> {
   const [cells, scale] = await Promise.all([OBR.scene.grid.getDistance(a, b), OBR.scene.grid.getScale()]);
   return cells * (scale.parsed?.multiplier ?? 5);
+}
+
+/** Square grids set to Alternating diagonals: the 5/10 ft count carries on across the turn's stops (DMG). */
+async function alternatingFeet(m: MovementState, a: { x: number; y: number }, b: { x: number; y: number }) {
+  const [measurement, type, dpi, scale] = await Promise.all([
+    OBR.scene.grid.getMeasurement().catch(() => "CHEBYSHEV"), OBR.scene.grid.getType().catch(() => "SQUARE"), OBR.scene.grid.getDpi(), OBR.scene.grid.getScale(),
+  ]);
+  if (measurement !== "ALTERNATING" || type !== "SQUARE" || !(dpi > 0)) return null;
+  return alternatingStep((b.x - a.x) / dpi, (b.y - a.y) / dpi, diagonalsSoFar(m), scale.parsed?.multiplier ?? 5);
 }
 
 async function save(m: MovementState | null) {
@@ -46,7 +55,8 @@ async function trackNow(meta: Record<string, unknown>, active: { id: string; rou
   if (!m) { m = startMovement(active.id, active.round, token.position); await save(m); return m; }
   const last = m.path[m.path.length - 1]!;
   if (last.x === token.position.x && last.y === token.position.y) { mem = m; return m; }
-  m = addStep(m, token.position, await feet(last, token.position));
+  const alt = await alternatingFeet(m, last, token.position);
+  m = alt ? addStep(m, token.position, alt.feet, alt.diagonals) : addStep(m, token.position, await feet(last, token.position));
   await save(m);
   return m;
 }
