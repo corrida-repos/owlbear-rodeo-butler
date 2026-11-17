@@ -10,6 +10,8 @@
  */
 import "../extension/devlog";
 import OBR, { buildShape, type Item, type KeyFilter } from "@owlbear-rodeo/sdk";
+import { openPlaced } from "../extension/popoverFrame";
+import { HP_POPOVER, INIT_POPOVER } from "../extension/popoverIds";
 import { controls, zeroHpPromptee } from "../core/card";
 import { ZERO_HP_TEXT } from "../core/hp";
 import { needsDeathSaves } from "../core/systems";
@@ -48,8 +50,6 @@ import { migrateSheet } from "../core/sheet";
 
 const icon = new URL("icon.svg", location.href).href;
 const RING_ID = `${BUTLER_NS}/active-ring`;
-const HP_POPOVER = `${BUTLER_NS}/hp`;
-const INIT_POPOVER = `${BUTLER_NS}/initiative`;
 
 const UNIT_FILTER: KeyFilter[] = [
   { key: "layer", value: "CHARACTER" },
@@ -115,7 +115,7 @@ async function createMenus() {
     onClick: async (ctx, elementId) => {
       logClick("initiative", ctx.items);
       await OBR.popover.close(INIT_POPOVER).catch(() => {});
-      await OBR.popover.open({ id: INIT_POPOVER, url: new URL(`initiative.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 360, height: 460, anchorElementId: elementId });
+      await openPlaced({ id: INIT_POPOVER, url: new URL(`initiative.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 360, height: 460, anchorElementId: elementId });
     },
   });
   // Change status: HP (damage, heal, temp, set) and every condition, Dead, Stable and Death Saves included, in one screen.
@@ -125,7 +125,7 @@ async function createMenus() {
     onClick: async (ctx, elementId) => {
       logClick("status", ctx.items);
       await OBR.popover.close(HP_POPOVER).catch(() => {});
-      await OBR.popover.open({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 340, height: 520, anchorElementId: elementId });
+      await openPlaced({ id: HP_POPOVER, url: new URL(`hp.html?ids=${ids(ctx.items).map(encodeURIComponent).join(",")}`, location.href).href, width: 340, height: 520, anchorElementId: elementId });
     },
   });
   await OBR.contextMenu.create({

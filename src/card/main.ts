@@ -8,6 +8,8 @@
  */
 import "../extension/devlog";
 import OBR, { type Item, type Player } from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
+import { CARD_POPOVER } from "../extension/cardPopover";
 import {
   abilityRows, cardAccess, challengeLine, combineModes, controls, editionText, initiativeRoll, portraitUrl, SECTIONS, shownName, skillRolls,
   speedLine, typeLine, unitName, type CardAccess, type StandardRoll,
@@ -478,6 +480,8 @@ function render() {
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
   window.scrollTo(0, scrollY);
 }
+
+installPopoverFrame(CARD_POPOVER, "Unit card");
 
 OBR.onReady(async () => {
   const [r, name] = await Promise.all([OBR.player.getRole(), OBR.player.getName()]);

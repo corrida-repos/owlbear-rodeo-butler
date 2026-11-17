@@ -8,6 +8,7 @@
  */
 import "../extension/devlog";
 import OBR from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
 import { cryptoRng } from "../core/dice";
 import { makeRoll, ROLL_CHANNEL, rollDestination, type Role, type RollMessage, type RollVisibility } from "../core/rolls";
 import { zeroHpUnits, type TrackerUnit } from "../core/tracker";
@@ -75,6 +76,8 @@ function render() {
   }
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
 }
+
+installPopoverFrame(ZERO_HP_POPOVER, "0 HP");
 
 OBR.onReady(async () => {
   const [r, name] = await Promise.all([OBR.player.getRole(), OBR.player.getName()]);

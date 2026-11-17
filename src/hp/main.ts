@@ -8,6 +8,8 @@
  */
 import "../extension/devlog";
 import OBR from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
+import { HP_POPOVER } from "../extension/popoverIds";
 import type { HpChange, LifeStatus } from "../core/hp";
 import { addConditionTo, changeHp, setLifeStatus, toggleConditionOn, trackerUnits, type HpReport, type TrackerUnit } from "../core/tracker";
 import { turnOrder } from "../core/encounter";
@@ -166,6 +168,8 @@ function render() {
   inp.value = results ? "" : val;
   if (focusWasOnInput || (!results && !openDetails && !document.activeElement?.closest(".panel"))) inp.focus();
 }
+
+installPopoverFrame(HP_POPOVER, "Change status");
 
 OBR.onReady(async () => {
   await initRoomSettings();

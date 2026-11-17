@@ -7,6 +7,8 @@
  */
 import "../extension/devlog";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
+import { WILD_POPOVER } from "../extension/wildShapePopover";
 import { controls, unitName } from "../core/card";
 import { SIZE_NAMES } from "../core/constants";
 import { convertMonster } from "../core/fivetools";
@@ -238,6 +240,8 @@ function render() {
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
 }
+
+installPopoverFrame(WILD_POPOVER, "Wild Shape");
 
 OBR.onReady(async () => {
   role = await OBR.player.getRole();

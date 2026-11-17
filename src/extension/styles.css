@@ -273,3 +273,10 @@ button.status-chip:disabled { cursor: default; }
 .ab-vis button { padding: 2px 8px; font-size: 11px; }
 .ab-reach { margin: 2px 0; }
 .ab-reach-toggle { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; white-space: nowrap; }
+/* Movable popovers (popoverFrame.ts): the bar on top of every Butler popover */
+.pop-bar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 8px; background: var(--panel); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); user-select: none; }
+.pop-grip { flex: 1; min-width: 0; cursor: grab; touch-action: none; height: 100%; display: flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-bar.dragging .pop-grip { cursor: grabbing; color: var(--accent); }
+button.pop-btn { background: transparent; color: var(--muted); border: none; padding: 0 6px; height: 22px; font-size: 12px; line-height: 1; }
+button.pop-btn:hover { color: var(--text); background: var(--bg); }
+body.pop-minimized { overflow: hidden; }

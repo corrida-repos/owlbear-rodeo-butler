@@ -17,6 +17,8 @@
 import "../extension/devlog";
 import { commonActionIcon } from "./icons";
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
+import { ACTIONS_POPOVER } from "../extension/actionsPopover";
 import { actionBar, ATTACK_KEY, barLayout, HELP_KEY, MAGIC_KEYS, TWF_KEY, COST_EXPLAINED, explain, filterCount, type ActionBar, type ActionItem, type BarFilter, type Cost } from "../core/actions";
 import { HOMEBREW_COSTS, HOMEBREW_LIMITS, type HomebrewCost } from "../core/homebrew";
 import { cardAccess, controls, editionText, portraitUrl, unitName } from "../core/card";
@@ -427,6 +429,8 @@ function render() {
   if (!item) { shownItems = []; hovered = null; }
   sendAim(true);
 }
+
+installPopoverFrame(ACTIONS_POPOVER, "Actions");
 
 OBR.onReady(async () => {
   role = await OBR.player.getRole();

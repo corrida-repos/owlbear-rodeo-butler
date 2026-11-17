@@ -5,6 +5,8 @@
  */
 import "../extension/devlog";
 import OBR from "@owlbear-rodeo/sdk";
+import { installPopoverFrame } from "../extension/popoverFrame";
+import { INIT_POPOVER } from "../extension/popoverIds";
 import { describeInitiative, fmtMod } from "../core/dice";
 import { rollInitiativeFor, setInEncounter, setInitiative, trackerView, type TrackerView, type TrackerUnit } from "../core/tracker";
 import { h, type Child } from "../extension/dom";
@@ -90,6 +92,8 @@ async function read() {
   const all = [...view.order, ...view.waiting, ...view.outside];
   units = ids.map((id) => all.find((u) => u.id === id)).filter((u): u is TrackerUnit => !!u);
 }
+
+installPopoverFrame(INIT_POPOVER, "Manage initiative");
 
 OBR.onReady(async () => {
   await initRoomSettings();
