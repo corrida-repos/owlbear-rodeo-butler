@@ -466,3 +466,30 @@ describe("homebrew actions", () => {
     expect(explain(flourish)).toEqual(["Twirl.", expect.stringMatching(/Bonus Action/), "Homebrew: added by the GM for this room."]);
   });
 });
+
+describe("Apply Poison (injury poisons)", () => {
+  const base = actionBar(brann.sheet).items;
+  const inv = (names: string[]) => names.map((n) => ({ name: n, text: "" }));
+  it("shows a Bonus Action (2024) when there's an injury poison and a Piercing or Slashing weapon", () => {
+    const s = { ...brann.sheet, inventory: inv(["Shortsword", "Serpent Venom ×2", "Basic Poison"]) };
+    const tiles = actionBar(s, "2024").items.filter((i) => i.name.startsWith("Apply "));
+    expect(tiles.map((t) => t.name)).toEqual(["Apply Serpent Venom ×2", "Apply Basic Poison"]);
+    expect(tiles[0]!.cost).toBe("bonus");
+    expect(tiles[0]!.text).toMatch(/DC 11 Constitution saving throw.*\[3d6\]/);
+    expect(tiles[0]!.text).toMatch(/you have: Shortsword/);
+  });
+  it("2014: an action under Use an Object, with the 2014 numbers", () => {
+    const s = { ...brann.sheet, inventory: inv(["Dagger", "Wyvern Poison"]) };
+    const t = actionBar(s, "2014").items.find((i) => i.name === "Apply Wyvern Poison")!;
+    expect(t.cost).toBe("action");
+    expect(t.under).toBe("common:Use an Object");
+    expect(t.text).toMatch(/DC 15/);
+  });
+  it("doesn't show without a poison, without a weapon that can carry it, or for ingested poisons", () => {
+    expect(base.some((i) => i.name.startsWith("Apply "))).toBe(false);
+    const club = { ...brann.sheet, actions: [], inventory: inv(["Club", "Serpent Venom"]) };
+    expect(actionBar(club).items.some((i) => i.name.startsWith("Apply "))).toBe(false);
+    const ingested = { ...brann.sheet, inventory: inv(["Dagger", "Assassin's Blood"]) };
+    expect(actionBar(ingested).items.some((i) => i.name.startsWith("Apply "))).toBe(false);
+  });
+});

@@ -10,7 +10,7 @@
 import { parseChips, rollSegments, type RollSegment } from "./chips";
 import { combatOptions, dmgBadge, dmgLabel, type OptionGroup } from "./combatOptions";
 import type { HomebrewAction } from "./homebrew";
-import { baseName, itemInfo, LIGHT_WEAPONS, lightWeaponCount, weaponIn } from "./items";
+import { baseName, itemInfo, LIGHT_WEAPONS, lightWeaponCount, poisonsToApply, weaponIn } from "./items";
 import type { SheetEntry, UnitSheet } from "./sheet";
 
 /** What using an entry costs. "longer": a casting time of a minute or more; "none": passive or unknown. */
@@ -304,6 +304,20 @@ export function itemActions(sheet: Pick<UnitSheet, "inventory">, rules: "2024" |
   return out;
 }
 
+/** "Apply Poison": an injury poison in the inventory and a Piercing or Slashing weapon to coat. 2024: a Bonus Action;
+ *  2014: an action (Use an Object). */
+export function poisonActions(sheet: Pick<UnitSheet, "inventory" | "actions">, rules: "2024" | "2014"): ActionItem[] {
+  const o2024 = rules === "2024";
+  return poisonsToApply(sheet, rules).map((p) => ({
+    key: `inventory:Apply Poison:${p.label}`, name: `Apply ${p.label}${p.quantity > 1 ? ` ×${p.quantity}` : ""}`,
+    text: `${o2024 ? "As a Bonus Action" : "As an action"}, coat a weapon or up to three pieces of ammunition with ${p.poison} (you have: ${p.weapons.join(", ")}). ${p.text} The dose is used up.`,
+    section: "inventory" as const, category: "item" as const, cost: o2024 ? "bonus" as const : "action" as const,
+    ...(o2024 ? {} : { under: itemKeys(rules).utilize }),
+    costNote: o2024 ? "Bonus Action (injury poison)" : "Action (injury poison)",
+    summary: summaryOf(p.text, true),
+  }));
+}
+
 // ------------------------------------------------------------------ the bar
 
 export interface ActionBar { items: ActionItem[]; legendary: number; attacks: number; dualWielder?: boolean }
@@ -340,7 +354,7 @@ export function actionBar(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opt
     .filter((it) => !conds || ((!it.ifCondition || conds.has(it.ifCondition)) && (!it.unlessCondition || !conds.has(it.unlessCondition))))
     .map((it) =>
     it.key === ATTACK_KEY && attacks > 1 ? { ...it, summary: `${attacks} attacks` } : it);
-  const all = [...items, ...itemActions(sheet, rules), ...common];
+  const all = [...items, ...itemActions(sheet, rules), ...poisonActions(sheet, rules), ...common];
   // What the sheet rules out: Magic with no spells, magic items or magical actions (a wolf); Cast a Spell with no
   // spells; drinking a potion with none; Two-Weapon Fighting without two Light weapons (unless Dual Wielder).
   const usesOf = (key: string) => all.some((it) => it.key !== key && parentKey(it, all) === key);

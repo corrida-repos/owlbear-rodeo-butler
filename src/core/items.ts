@@ -107,3 +107,60 @@ export function lightWeaponCount(sheet: { inventory: SheetEntry[]; actions: Shee
   if (sheet.inventory.length) return fromInventory;
   return new Set(sheet.actions.map((a) => weaponIn(a.name)).filter((w) => w && LIGHT_WEAPONS.includes(w))).size;
 }
+
+// ------------------------------------------------------------------ injury poisons
+
+/**
+ * Poisons applied to a weapon or ammunition (DMG "Injury" poisons, and the PHB's Basic Poison), with what a hit does,
+ * by edition. 2024: applying one is a Bonus Action (DMG 2024 "Poison"; PHB 2024 Basic Poison); 2014: an action.
+ */
+export const INJURY_POISONS: { name: RegExp; label: string; text: Record<"2024" | "2014", string> }[] = [
+  { name: /^(basic poison|poison,? basic)\b/i, label: "Basic Poison", text: {
+    "2024": "Coat one weapon or up to three pieces of ammunition. A creature that takes Piercing or Slashing damage from it takes an extra [1d4] Poison damage. Potent for 1 minute or until its damage is dealt.",
+    "2014": "Coat one slashing or piercing weapon or up to three pieces of ammunition. A creature hit by it makes a DC 10 Constitution saving throw or takes [1d4] poison damage. Potent for 1 minute.",
+  } },
+  { name: /^serpent venom\b/i, label: "Serpent Venom", text: {
+    "2024": "A creature that takes Piercing or Slashing damage from the coated weapon makes a DC 11 Constitution saving throw, taking 10 ([3d6]) Poison damage on a failed save or half as much on a success.",
+    "2014": "A creature hit by the coated weapon makes a DC 11 Constitution saving throw, taking 10 ([3d6]) poison damage on a failed save, or half as much on a success.",
+  } },
+  { name: /^wyvern poison\b/i, label: "Wyvern Poison", text: {
+    "2024": "A creature that takes Piercing or Slashing damage from the coated weapon makes a DC 14 Constitution saving throw, taking 24 ([7d6]) Poison damage on a failed save or half as much on a success.",
+    "2014": "A creature hit by the coated weapon makes a DC 15 Constitution saving throw, taking 24 ([7d6]) poison damage on a failed save, or half as much on a success.",
+  } },
+  { name: /^purple worm poison\b/i, label: "Purple Worm Poison", text: {
+    "2024": "A creature that takes Piercing or Slashing damage from the coated weapon makes a DC 21 Constitution saving throw, taking 35 ([10d6]) Poison damage on a failed save or half as much on a success.",
+    "2014": "A creature hit by the coated weapon makes a DC 19 Constitution saving throw, taking 42 ([12d6]) poison damage on a failed save, or half as much on a success.",
+  } },
+  { name: /^(lolth's sting|drow poison)\b/i, label: "Lolth's Sting", text: {
+    "2024": "A creature that takes Piercing or Slashing damage from the coated weapon makes a DC 13 Constitution saving throw or has the Poisoned condition for 1 hour; failing by 5 or more also makes it Unconscious while Poisoned this way (it wakes if it takes damage or is shaken awake with an action).",
+    "2014": "A creature hit by the coated weapon makes a DC 13 Constitution saving throw or is poisoned for 1 hour; failing by 5 or more also leaves it unconscious while poisoned this way (it wakes if it takes damage or is shaken awake with an action).",
+  } },
+];
+
+/** Weapons that only deal Bludgeoning damage (an injury poison needs Piercing or Slashing). */
+const BLUDGEONING_ONLY = ["Club", "Greatclub", "Light Hammer", "Mace", "Quarterstaff", "Flail", "Maul", "Warhammer", "Sling", "Net"];
+
+/** The injury poisons in the inventory and the weapons they can coat (Piercing or Slashing; the sheet's weapon attacks
+ *  count for creatures without an inventory of weapons). Nothing when either is missing. */
+export function poisonsToApply(sheet: { inventory: SheetEntry[]; actions: SheetEntry[] }, rules: "2024" | "2014"): { poison: string; label: string; quantity: number; weapons: string[]; text: string }[] {
+  const weapons = new Set<string>();
+  for (const e of sheet.inventory) {
+    const info = itemInfo(e);
+    const w = weaponIn(e.name);
+    if (info.kind === "weapon" && (!w || !BLUDGEONING_ONLY.includes(w))) weapons.add(baseName(e.name));
+    if (/^(Arrows?|Crossbow Bolts?|Bolts?|Blowgun Needles?|Needles?)\b/i.test(baseName(e.name))) weapons.add(baseName(e.name));
+  }
+  for (const a of sheet.actions) {
+    const w = weaponIn(a.name);
+    if (w && !BLUDGEONING_ONLY.includes(w) && /\b(Piercing|Slashing)\b/i.test(a.text)) weapons.add(baseName(a.name));
+  }
+  if (!weapons.size) return [];
+  const out: { poison: string; label: string; quantity: number; weapons: string[]; text: string }[] = [];
+  for (const e of sheet.inventory) {
+    const n = baseName(e.name);
+    const p = INJURY_POISONS.find((x) => x.name.test(n));
+    if (!p || out.some((o) => o.label === p.label)) continue;
+    out.push({ poison: n, label: p.label, quantity: itemInfo(e).quantity ?? 1, weapons: [...weapons], text: p.text[rules] });
+  }
+  return out;
+}

@@ -81,5 +81,5 @@ G1 → G2 → G3 → G9 → G10 → G5 → G6 → G7 → G4 → G8 (small and se
 | G6 | planned | |
 | G7 | planned | |
 | G8 | planned | |
-| G9 | planned | |
+| G9 | done | unit tests (2024 Bonus Action, 2014 action, no weapon / ingested poison) |
 | G10 | planned | |
