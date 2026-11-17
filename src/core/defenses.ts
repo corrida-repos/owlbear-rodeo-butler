@@ -54,3 +54,16 @@ export function immuneToCondition(defenses: UnitSheet["defenses"] | undefined, k
   if (!defenses?.conditionImmune || key === "custom") return false;
   return new RegExp(`\\b${key}\\b`, "i").test(defenses.conditionImmune);
 }
+
+/** Several damage parts of one hit ("5 Slashing + 3 Fire") after the defenses, type by type; untyped parts as they are. */
+export function hitAgainst(defenses: UnitSheet["defenses"] | undefined, parts: { amount: number; type?: string }[]): { amount: number; notes: string[] } {
+  let amount = 0;
+  const notes: string[] = [];
+  for (const p of parts) {
+    if (!p.type) { amount += Math.max(0, Math.floor(p.amount)); continue; }
+    const r = damageAgainst(defenses, p.amount, p.type);
+    amount += r.amount;
+    if (r.note && !notes.includes(r.note)) notes.push(r.note);
+  }
+  return { amount, notes };
+}

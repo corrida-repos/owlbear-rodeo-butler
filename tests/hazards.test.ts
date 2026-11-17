@@ -66,3 +66,12 @@ describe("hazard damage and the creature's defenses", async () => {
     expect(ooze.text).toMatch(/Immune to Poisoned\.$/);
   });
 });
+
+describe("defenses for chase complications and mob rolls", async () => {
+  const { hitAgainst } = await import("../src/core/defenses");
+  it("one hit with several damage types: each type on its own, untyped as it is", () => {
+    // A flame tongue hit (5 Slashing + 7 Fire) on a creature resistant to Fire.
+    expect(hitAgainst({ resist: "Fire" }, [{ amount: 5, type: "Slashing" }, { amount: 7, type: "Fire" }])).toEqual({ amount: 8, notes: ["Resistance to Fire"] });
+    expect(hitAgainst({ immune: "Slashing" }, [{ amount: 5, type: "Slashing" }, { amount: 4 }])).toEqual({ amount: 4, notes: ["Immunity to Slashing"] });
+  });
+});

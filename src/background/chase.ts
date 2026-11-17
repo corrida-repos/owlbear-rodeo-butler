@@ -9,6 +9,7 @@ import {
   type ChaseState,
 } from "../core/chase";
 import { skillBonus } from "../core/combatOptions";
+import { damageAgainst, immuneToCondition } from "../core/defenses";
 import { addCondition, exhaustionLevel, type TurnPoint } from "../core/conditions";
 import { fmtMod } from "../core/dice";
 import type { MovementState } from "../core/movement";
@@ -64,19 +65,26 @@ export async function chaseTurnEnded(ended: TurnPoint, next: TurnPoint, prevMove
         saveText = ` ${ABILITY_NAMES[best]} save ${r.total} vs DC ${comp.save.dc}: ${failed ? "fails" : "succeeds"}.`;
       }
       let dmg: number | undefined;
+      let defNote = "";
+      const skipped: string[] = [];
       if (failed) {
         if (comp.fail.damage) {
-          dmg = (await gmRoll(comp.fail.damage, `${comp.fail.damageType ?? ""} damage · chase complication`.trim(), { unit: { id: target.id, name: target.name }, kind: "damage", visibility: vis })).total;
+          const raw = (await gmRoll(comp.fail.damage, `${comp.fail.damageType ?? ""} damage · chase complication`.trim(), { unit: { id: target.id, name: target.name }, kind: "damage", visibility: vis })).total;
+          // The target's Resistances, Vulnerabilities and Immunities (see core/defenses.ts).
+          const adj = damageAgainst(target.sheet.defenses, raw, comp.fail.damageType ?? "");
+          dmg = adj.amount;
+          if (adj.note) defNote = ` (${adj.note})`;
           await changeHp(obrGateway, [target.id], { kind: "damage", amount: dmg }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
         }
         const fresh = trackerView(await obrGateway.getItems(), await OBR.scene.getMetadata());
         const t = [...fresh.order, ...fresh.waiting, ...fresh.outside].find((u) => u.id === target.id) ?? target;
         let state = t.state;
-        if (comp.fail.prone) state = { ...state, ...addCondition(state, "prone") };
-        if (comp.fail.blindedThisTurn) state = { ...state, ...addCondition(state, "blinded", { duration: { kind: "turn", turnOf: target.id, at: "end" }, now: ended, note: "chase: Speed halved while Blinded this way" }) };
+        if (comp.fail.prone) { if (immuneToCondition(target.sheet.defenses, "prone")) skipped.push("Prone"); else state = { ...state, ...addCondition(state, "prone") }; }
+        if (comp.fail.blindedThisTurn && immuneToCondition(target.sheet.defenses, "blinded")) skipped.push("Blinded");
+        else if (comp.fail.blindedThisTurn) state = { ...state, ...addCondition(state, "blinded", { duration: { kind: "turn", turnOf: target.id, at: "end" }, now: ended, note: "chase: Speed halved while Blinded this way" }) };
         if (state !== t.state) await obrGateway.patchMetadata([{ id: target.id, key: STATE_KEY, patch: { conditions: state.conditions } }]);
       }
-      say(`Chase (d12 ${d12.total}, after ${me.name}): ${comp.text} ${target.name} is affected.${saveText}${failed ? ` ${target.name} ${failText(comp, dmg)}.` : ""}`);
+      say(`Chase (d12 ${d12.total}, after ${me.name}): ${comp.text} ${target.name} is affected.${saveText}${failed ? ` ${target.name} ${failText(comp, dmg)}${defNote}.${skipped.length ? ` Immune to ${skipped.join(", ")}.` : ""}` : ""}`);
     } else if (comp) say(`Chase (d12 ${d12.total}): ${comp.text} Nobody after ${me.name} to affect.`);
   }
 

@@ -4,6 +4,8 @@
  * Effect estimate for fights without a map.
  */
 import { attackProfile } from "../core/actions";
+import { damageAgainst, hitAgainst } from "../core/defenses";
+import { DAMAGE_TYPES } from "../core/objects";
 import { averageOf, mobResult, targetsInArea, type AreaShape, type MobMode } from "../core/mob";
 import { ABILITIES, ABILITY_NAMES, saveBonus, type Ability } from "../core/sheet";
 import { changeHp, type TrackerUnit } from "../core/tracker";
@@ -13,10 +15,10 @@ import { roomSettings, roomSystem } from "./roomSettings";
 
 interface MobUi {
   group: string; count: number | null; kind: "attack" | "save"; actionName: string; targetId: string; ac: number | null;
-  mode: MobMode; ability: Ability; dc: number; damage: string; half: boolean;
+  mode: MobMode; ability: Ability; dc: number; damage: string; dtype: string; half: boolean;
   areaShape: AreaShape; areaSize: number; areaWidth: number; spread: "" | "spread" | "bunched"; d3: number;
 }
-const st: MobUi = { group: "", count: null, kind: "attack", actionName: "", targetId: "", ac: null, mode: "normal", ability: "dex", dc: 13, damage: "", half: true,
+const st: MobUi = { group: "", count: null, kind: "attack", actionName: "", targetId: "", ac: null, mode: "normal", ability: "dex", dc: 13, damage: "", dtype: "", half: true,
   areaShape: "sphere", areaSize: 20, areaWidth: 5, spread: "", d3: 2 };
 let last = "";
 
@@ -62,10 +64,12 @@ export function mobPanel(units: TrackerUnit[]): Child {
       h("label", { className: "small" }, "Target ", sel(st.targetId, [["", "(type an AC)"], ...units.filter((u) => !u.dead && u.sheet.name !== st.group).map((u): [string, string] => [u.id, `${u.name} (AC ${u.ac})`])], (v) => { st.targetId = v; st.ac = null; })),
       h("label", { className: "small" }, "AC ", h("input", { type: "number", className: "num", value: String(ac), onchange: (e: Event) => { st.ac = num((e.target as HTMLInputElement).value, 15); rerender(); } }))));
     if (atk) {
-      const total = r.successes * avg;
+      // Each hit is its own instance: the target's defenses apply per hit, type by type.
+      const perHit = target ? hitAgainst(target.sheet.defenses, dmg.map((d) => ({ amount: averageOf(d.formula), type: d.type }))) : { amount: avg, notes: [] as string[] };
+      const total = r.successes * perHit.amount;
       body.push(h("div", { className: "panel tight" },
         h("div", {}, h("strong", {}, `${r.successes} of ${count} hit`), ` · roll needed ${r.rollNeeded} (AC ${ac} − ${atk.p.bonus}) · table: ${r.fraction}`),
-        h("div", { className: "small" }, dmg.length ? `Average damage ${avg} per hit (${dmg.map((d) => `${d.formula}${d.type ? ` ${d.type}` : ""}`).join(" + ")}) → ${total} damage` : "No damage dice on this attack."),
+        h("div", { className: "small" }, dmg.length ? `Average damage ${avg} per hit (${dmg.map((d) => `${d.formula}${d.type ? ` ${d.type}` : ""}`).join(" + ")}) → ${total} damage${perHit.notes.length ? ` (${perHit.amount} per hit after ${perHit.notes.join("; ")})` : ""}` : "No damage dice on this attack."),
         target && total > 0 ? h("button", { className: "small", onclick: action(async () => {
           await changeHp(obrGateway, [target.id], { kind: "damage", amount: total }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
           last = `${target.name} took ${total} damage from ${r.successes} ${st.group} hits.`;
@@ -75,19 +79,24 @@ export function mobPanel(units: TrackerUnit[]): Child {
     const bonus = sheet ? saveBonus(sheet, st.ability) : 0;
     const r = mobResult(count, st.dc, bonus, st.mode);
     const dmg = st.damage.trim() ? (/d/i.test(st.damage) ? averageOf(st.damage) : Math.max(0, Math.floor(num(st.damage, 0)))) : 0;
+    const defs = sheet?.defenses;
+    const full = st.dtype ? damageAgainst(defs, dmg, st.dtype) : { amount: dmg, note: "" };
+    const halfDmg = st.dtype ? damageAgainst(defs, Math.floor(dmg / 2), st.dtype).amount : Math.floor(dmg / 2);
     const failed = members.slice(0, count).slice(0, r.failures), saved = members.slice(0, count).slice(r.failures);
     body.push(h("div", { className: "row wrap" },
       h("label", { className: "small" }, "Save ", sel(st.ability, ABILITIES.map((a) => [a, `${ABILITY_NAMES[a]} (${bonus >= 0 && a === st.ability ? "+" : ""}${a === st.ability ? bonus : saveBonus(sheet!, a)})`]), (v) => { st.ability = v as Ability; })),
       h("label", { className: "small" }, "DC ", h("input", { type: "number", className: "num", value: String(st.dc), onchange: (e: Event) => { st.dc = num((e.target as HTMLInputElement).value, 13); rerender(); } })),
       h("label", { className: "small" }, "Damage ", h("input", { type: "text", className: "num", placeholder: "28 or 8d6", value: st.damage, onchange: (e: Event) => { st.damage = (e.target as HTMLInputElement).value; rerender(); } })),
+      h("select", { title: "Damage type (applies the monsters' Resistances, Vulnerabilities and Immunities)", onchange: (e: Event) => { st.dtype = (e.target as HTMLSelectElement).value; rerender(); } },
+        h("option", { value: "" }, "type"), ...DAMAGE_TYPES.map((t) => h("option", { value: t, selected: st.dtype === t }, t))),
       h("label", { className: "small" }, h("input", { type: "checkbox", checked: st.half, onchange: (e: Event) => { st.half = (e.target as HTMLInputElement).checked; rerender(); } }), "half on a success")));
     body.push(h("div", { className: "panel tight" },
       h("div", {}, h("strong", {}, `${r.successes} of ${count} succeed`), ` · roll needed ${r.rollNeeded} (DC ${st.dc} − ${bonus}) · table: ${r.fraction}`),
-      dmg ? h("div", { className: "small" }, `${r.failures} take ${dmg}${st.half ? `, ${r.successes} take ${Math.floor(dmg / 2)}` : ", the rest take none"}${/d/i.test(st.damage) ? ` (average of ${st.damage})` : ""}.`) : null,
+      dmg ? h("div", { className: "small" }, `${r.failures} take ${full.amount}${st.half ? `, ${r.successes} take ${halfDmg}` : ", the rest take none"}${/d/i.test(st.damage) ? ` (average of ${st.damage})` : ""}${full.note ? ` · ${full.note}` : ""}.`) : null,
       dmg ? h("button", { className: "small", onclick: action(async () => {
         const opts = { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() };
-        if (failed.length) await changeHp(obrGateway, failed.map((u) => u.id), { kind: "damage", amount: dmg }, opts);
-        if (st.half && saved.length && dmg >= 2) await changeHp(obrGateway, saved.map((u) => u.id), { kind: "damage", amount: Math.floor(dmg / 2) }, opts);
+        if (failed.length && full.amount) await changeHp(obrGateway, failed.map((u) => u.id), { kind: "damage", amount: full.amount }, opts);
+        if (st.half && saved.length && halfDmg) await changeHp(obrGateway, saved.map((u) => u.id), { kind: "damage", amount: halfDmg }, opts);
         last = `Applied: ${failed.map((u) => u.name).join(", ") || "nobody"} failed${st.half && saved.length ? `; ${saved.map((u) => u.name).join(", ")} took half` : ""}.`;
       }) }, "Apply to the group") : null));
   }
