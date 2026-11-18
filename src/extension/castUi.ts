@@ -4,16 +4,16 @@
  */
 import OBR from "@owlbear-rodeo/sdk";
 import { controls } from "../core/card";
-import { CASTS_KEY, readCasts, targetLine, upsertCast, type CastRecord, type CastTarget } from "../core/cast";
+import { CASTS_KEY, givesConditions, readCasts, targetLine, type CastRecord, type CastTarget } from "../core/cast";
 import { d20Penalty } from "../core/conditions";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { makeRoll, ROLL_CHANNEL, rollDestination } from "../core/rolls";
 import { ABILITY_NAMES, saveBonus } from "../core/sheet";
-import { changeHp, type TrackerUnit } from "../core/tracker";
+import type { TrackerUnit } from "../core/tracker";
 import { action, h, type Child } from "./dom";
-import { obrGateway } from "./obrGateway";
+import { applyCast } from "./castApply";
 import { sendRequest } from "./requests";
-import { roomSettings, roomSystem } from "./roomSettings";
+import { roomSystem } from "./roomSettings";
 
 export interface PendingSave { rec: CastRecord; target: CastTarget; unit: TrackerUnit }
 
@@ -56,21 +56,16 @@ const saveAll = async (list: CastRecord[]) => OBR.scene.setMetadata({ [CASTS_KEY
 export function castResultsPanel(units: TrackerUnit[], meta: Record<string, unknown>): Child {
   const casts = readCasts(meta);
   if (!casts.length) return null;
-  const apply = (rec: CastRecord, ids: string[]) => action(async () => {
-    const opts = { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() };
-    for (const t of rec.targets) if (ids.includes(t.id) && !t.applied && t.damage > 0) await changeHp(obrGateway, [t.id], { kind: "damage", amount: t.damage }, opts);
-    const fresh = readCasts(await OBR.scene.getMetadata());
-    const cur = fresh.find((c) => c.id === rec.id) ?? rec;
-    await saveAll(upsertCast(fresh, { ...cur, targets: cur.targets.map((t) => (ids.includes(t.id) && t.outcome !== "awaiting-save" ? { ...t, applied: true } : t)) }));
-  });
+  const apply = (rec: CastRecord, ids: string[]) => action(async () => { await applyCast(rec, ids); });
   return h("div", { className: "panel small stack tight" }, h("strong", {}, "Spell and attack results"),
     ...casts.slice().reverse().map((rec) => {
       const ready = rec.targets.filter((t) => !t.applied && t.outcome !== "awaiting-save");
       return h("div", { className: "dm-item", style: "flex-direction:column; align-items:stretch" },
         h("div", { className: "row between" },
-          h("span", {}, h("strong", {}, `${rec.caster.name}: ${rec.spell}`), rec.kind === "save" ? ` · DC ${rec.dc} ${ABILITY_NAMES[rec.ability ?? "dex"]}` : ""),
+          h("span", {}, h("strong", {}, `${rec.caster.name}: ${rec.spell}`), rec.slotLevel ? ` (level ${rec.slotLevel} slot)` : "", rec.kind === "save" ? ` · DC ${rec.dc} ${ABILITY_NAMES[rec.ability ?? "dex"]}` : "",
+            rec.conditions?.length ? ` · ${rec.conditions.map((c) => c.key[0]!.toUpperCase() + c.key.slice(1)).join(", ")}${rec.kind === "save" ? " on a failure" : rec.kind === "attack" ? " on a hit" : ""}` : ""),
           h("span", { className: "row" },
-            ready.some((t) => t.damage > 0) ? h("button", { className: "small", onclick: apply(rec, ready.map((t) => t.id)) }, "Apply all") : null,
+            ready.some((t) => t.damage > 0 || (rec.conditions?.length && givesConditions(t.outcome))) ? h("button", { className: "small", onclick: apply(rec, ready.map((t) => t.id)) }, "Apply all") : null,
             h("button", { className: "icon tiny", title: "Dismiss", onclick: action(async () => saveAll(readCasts(await OBR.scene.getMetadata()).filter((c) => c.id !== rec.id))) }, "✕"))),
         ...rec.targets.map((t) => h("div", { className: "row between" },
           h("span", { className: t.applied ? "muted" : "" }, targetLine(rec, t)),
@@ -79,6 +74,6 @@ export function castResultsPanel(units: TrackerUnit[], meta: Record<string, unkn
               const u = units.find((x) => x.id === t.id);
               if (u) await rollPendingSave({ rec, target: t, unit: u }, "GM");
             }) }, "Roll for them")
-            : !t.applied && t.damage > 0 ? h("button", { className: "secondary small", onclick: apply(rec, [t.id]) }, `Apply ${t.damage}`) : null)));
+            : !t.applied && (t.damage > 0 || (rec.conditions?.length && givesConditions(t.outcome))) ? h("button", { className: "secondary small", onclick: apply(rec, [t.id]) }, t.damage > 0 ? `Apply ${t.damage}` : "Apply") : null)));
     }));
 }

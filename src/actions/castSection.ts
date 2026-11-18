@@ -9,7 +9,7 @@ import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import type { ActionItem } from "../core/actions";
 import { readAoe } from "../core/aoe";
 import { combineModes, editionText, unitName } from "../core/card";
-import { attackOutcome, castPlan, type CastRecord, type CastTarget } from "../core/cast";
+import { attackOutcome, castPlan, conditionsIn, lowestSlot, slotsLeft, slotTable, upcastDamage, type CastRecord, type CastTarget } from "../core/cast";
 import { d20Penalty } from "../core/conditions";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { bandFor, gridFeet, type Measurement, type Reach } from "../core/reach";
@@ -20,7 +20,7 @@ import { readUnit } from "../core/unit";
 import { placedAreas, unitsInArea } from "../extension/aoeItems";
 import { h, type Child } from "../extension/dom";
 import { sendRequest } from "../extension/requests";
-import { roomSystem } from "../extension/roomSettings";
+import { roomSettings, roomSystem } from "../extension/roomSettings";
 
 export interface CastCtx {
   item: Item;
@@ -40,6 +40,30 @@ let cache: { key: string; sig: string; list: Candidate[] } | null = null;
 let computing = "";
 const picked = new Set<string>();
 let pickedFor = "";
+/** The slot level picked per entry ("free" = no slot, e.g. a once-a-day use). */
+const levelPick = new Map<string, number | "free">();
+
+/** The levels this spell can be cast at, with slots left, and the one picked (lowest with a slot left by default). */
+function slotChoice(ctx: CastCtx, it: ActionItem) {
+  if (!it.spellLevel) return null;
+  const u = readUnit(ctx.item.metadata);
+  if (!u) return null;
+  const table = slotTable(u.sheet, u.state);
+  const known = Object.keys(table).length > 0;
+  const levels = [...Array(10 - it.spellLevel).keys()].map((k) => k + it.spellLevel!).filter((l) => !known || table[l]);
+  const def = known ? lowestSlot(table, it.spellLevel) ?? "free" : it.spellLevel;
+  const picked = levelPick.get(it.key) ?? def;
+  return { table, known, levels, picked: picked === "free" ? "free" as const : picked, anyUsed: Object.values(table).some((t) => t.used > 0) };
+}
+
+function levelSelect(ctx: CastCtx, it: ActionItem): Child {
+  const c = slotChoice(ctx, it);
+  if (!c) return null;
+  return h("select", { title: "Spell slot level (higher slots add the spell's extra dice)", onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; levelPick.set(it.key, v === "free" ? "free" : Number(v)); ctx.render(); } },
+    ...c.levels.map((l) => h("option", { value: String(l), selected: c.picked === l }, `Level ${l} slot${c.known ? ` (${slotsLeft(c.table, l)} of ${c.table[l]!.max} left)` : ""}`)),
+    h("option", { value: "free", selected: c.picked === "free" }, "No slot (a free use)"));
+}
+
 /** The last cast's result, shown in the strip (the full panel's note is hidden while aiming). */
 let stripNote = "";
 
@@ -83,8 +107,15 @@ async function pickArea(ctx: CastCtx, it: ActionItem) {
 
 async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
   const u = readUnit(ctx.item.metadata);
-  const plan = castPlan(editionText(it.text, roomSystem().rules));
-  if (!u || !plan) return;
+  const text = editionText(it.text, roomSystem().rules);
+  const base = castPlan(text);
+  if (!u || !base) return;
+  const slot = slotChoice(ctx, it);
+  const slotLevel = slot && slot.picked !== "free" ? slot.picked : undefined;
+  const up = slotLevel ? upcastDamage(text, base.damage, slotLevel) : { damage: base.damage };
+  const plan = { ...base, damage: up.damage };
+  const reveal = roomSettings().revealHits || ctx.role === "GM";
+  const conditions = conditionsIn(text);
   const targets = (cache?.list ?? []).filter((c) => picked.has(c.id));
   if (!targets.length) { ctx.setNote("Pick at least one target."); ctx.render(); return; }
   const by = { id: ctx.me.id, name: ctx.me.name, role: ctx.role };
@@ -103,7 +134,8 @@ async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
   const clicked: RollMode = ev.shiftKey ? "advantage" : ev.ctrlKey || ev.metaKey ? "disadvantage" : "normal";
   const rec: CastRecord = {
     id: globalThis.crypto.randomUUID(), at: new Date().toISOString(), caster: unit, spell: it.name, kind: plan.kind, half: plan.half,
-    ...(plan.dc !== undefined ? { dc: plan.dc } : {}), ...(plan.ability ? { ability: plan.ability } : {}), targets: [],
+    ...(plan.dc !== undefined ? { dc: plan.dc } : {}), ...(plan.ability ? { ability: plan.ability } : {}),
+    ...(conditions.length ? { conditions } : {}), ...(slotLevel ? { slotLevel } : {}), targets: [],
   };
   const lines: string[] = [];
   if (plan.kind === "attack") {
@@ -112,11 +144,15 @@ async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
       // Long range: Disadvantage.
       const mode = combineModes(clicked, t.long ? "disadvantage" : undefined);
       const atk = await roll(`1d20${fmtMod((plan.bonus ?? 0) + penalty)}`, `${it.name} · attack vs ${t.name}`, "attack", mode);
+      // The GM's client decides the hit against the target's AC; the caster only sees it when the room allows.
       const outcome = attackOutcome(atk.total, atk.natural, t.ac);
-      const target: CastTarget = { id: t.id, name: t.name, party: t.party, outcome, roll: atk.total, damage: 0 };
-      if (outcome !== "miss" && plan.damage.length) target.rolled = await rollDamage(outcome === "crit", t.name);
+      const target: CastTarget = { id: t.id, name: t.name, party: t.party, outcome, roll: atk.total, ...(atk.natural !== undefined ? { natural: atk.natural } : {}), damage: 0 };
+      const rollIt = reveal ? outcome !== "miss" : atk.natural !== 1;
+      if (rollIt && plan.damage.length) target.rolled = await rollDamage(atk.natural === 20, reveal ? t.name : `${t.name} (if it hits)`);
       rec.targets.push(target);
-      lines.push(`${t.name}: ${outcome === "crit" ? "critical hit" : outcome}${target.rolled ? ` (${target.rolled.reduce((s, p) => s + p.amount, 0)} damage)` : ""}`);
+      lines.push(reveal
+        ? `${t.name}: ${outcome === "crit" ? "critical hit" : outcome}${target.rolled ? ` (${target.rolled.reduce((s, p) => s + p.amount, 0)} damage)` : ""}`
+        : `${t.name}: attack ${atk.total}${atk.natural === 20 ? " (natural 20)" : atk.natural === 1 ? " (natural 1)" : ""}`);
     }
   } else {
     if (plan.damage.length) rec.rolled = await rollDamage();
@@ -127,7 +163,8 @@ async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
       : `${total} damage to ${targets.map((t) => t.name).join(", ")}`);
   }
   await sendRequest({ type: "cast", unitId: ctx.item.id, record: rec }, ctx.role);
-  ctx.setNote(`${it.name}: ${lines.join("; ")}. The GM applies the damage from the Tracker.`);
+  if (up.extra) lines.push(`cast at level ${slotLevel} (${up.extra})`);
+  ctx.setNote(`${it.name}: ${lines.join("; ")}.${reveal ? "" : " The GM's Butler checks the hits."} ${roomSettings().autoApplyCasts ? "Damage is applied automatically." : "The GM applies the damage from the Tracker."}`);
   stripNote = `${it.name}: ${lines.join("; ")}.`;
   picked.clear();
   ctx.render();
@@ -146,8 +183,13 @@ export function castSection(ctx: CastCtx, it: ActionItem): Child {
     : plan.kind === "save" ? `DC ${plan.dc} ${ABILITY_NAMES[plan.ability ?? "dex"]} save for each target${plan.damage.length ? `, damage rolled once (${plan.half ? "half" : "none"} on a success)` : ""}`
       : "Damage to each target";
   const isSpell = it.category === "spell";
+  const conds = conditionsIn(editionText(it.text, roomSystem().rules));
+  const slot = slotChoice(ctx, it);
   return h("div", { className: "panel tight small stack tight" },
-    h("div", {}, h("strong", {}, isSpell ? "Cast it" : "Use it"), ` · ${what}`),
+    h("div", {}, h("strong", {}, isSpell ? "Cast it" : "Use it"), ` · ${what}`,
+      conds.length ? ` · ${conds.map((c) => c.key[0]!.toUpperCase() + c.key.slice(1)).join(", ")} ${plan.kind === "save" ? "on a failure" : plan.kind === "attack" ? "on a hit" : ""}` : ""),
+    slot ? h("div", { className: "row" }, levelSelect(ctx, it),
+      slot.known && slot.anyUsed ? h("button", { className: "secondary small", title: "A Long Rest: every spell slot comes back", onclick: () => void sendRequest({ type: "slots-reset", unitId: ctx.item.id }, ctx.role).then(() => { ctx.setNote("Spell slots back (Long Rest)."); ctx.render(); }) }, "↺ Slots back (Long Rest)") : null) : null,
     list.length ? h("div", { className: "row wrap" },
       h("button", { className: "secondary small", onclick: () => { picked.clear(); for (const c of list) if (c.band) picked.add(c.id); ctx.render(); } }, "Everyone in range"),
       h("button", { className: "secondary small", title: "Everyone in the area you placed for it", onclick: () => void pickArea(ctx, it) }, "Everyone in its area"),
@@ -189,6 +231,7 @@ export function castStrip(ctx: CastCtx, it: ActionItem): HTMLElement | null {
       : h("div", { className: "muted" }, "Reading who's on the map…"),
     stripNote ? h("div", { className: "ok" }, stripNote) : null,
     h("div", { className: "row" },
+      levelSelect(ctx, it),
       h("button", { className: "secondary small", onclick: () => { picked.clear(); stripNote = ""; for (const c of list) if (c.band) picked.add(c.id); ctx.render(); } }, "Everyone in range"),
       h("button", { className: "small", disabled: !picked.size, title: plan.kind === "attack" ? "Shift: Advantage · Ctrl/⌘: Disadvantage" : "",
         onclick: (ev: MouseEvent) => void cast(ctx, it, ev).catch((e) => { ctx.setNote(`Cast failed: ${e instanceof Error ? e.message : String(e)}`); ctx.render(); }) },

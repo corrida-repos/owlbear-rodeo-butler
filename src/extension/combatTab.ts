@@ -150,6 +150,10 @@ function renderSettings(): Child {
         : "Action bars include the DMG's optional action options (Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature)"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().handheld, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ handheld: (e.target as HTMLInputElement).checked }))() }),
       "Handheld management: action bars include Don or Doff a Shield, Equip or Unequip a Weapon (5.5E) and the notes on drawing weapons and swapping spellcasting foci with your free object interaction"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoApplyCasts, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoApplyCasts: (e.target as HTMLInputElement).checked }))() }),
+      "Apply damage and conditions from spells and attacks cast on the action bar automatically (otherwise they wait in the Tracker for you to apply)"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().revealHits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ revealHits: (e.target as HTMLInputElement).checked }))() }),
+      "Players see whether their attacks from the action bar hit (this hints at the target's AC; off: Butler checks hits for you and players only see their rolls)"),
     h("div", { className: "small muted", style: "margin-top:4px" }, "Homebrew actions: add them with ＋ Homebrew on any unit's action bar; they show for every unit in the room."));
 }
 

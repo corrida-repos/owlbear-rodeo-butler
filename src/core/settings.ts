@@ -18,9 +18,14 @@ export interface RoomSettings {
   /** Handheld management (off by default) shows on action bars: Don or Doff a Shield, Equip or Unequip a Weapon (5.5E), and the notes on
    *  drawing weapons and spellcasting foci in Attack, Magic and Interact with an Object. */
   handheld: boolean;
+  /** Spells and attacks cast from the action bar apply their damage and conditions as soon as they're resolved
+   *  (otherwise they wait in the Tracker for the GM). Off by default. */
+  autoApplyCasts: boolean;
+  /** Players see whether their attacks from the action bar hit (it tells them roughly the target's AC). On by default. */
+  revealHits: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -31,6 +36,8 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     autoDeadAtZero: typeof s.autoDeadAtZero === "boolean" ? s.autoDeadAtZero : DEFAULT_SETTINGS.autoDeadAtZero,
     dmgOptions: typeof s.dmgOptions === "boolean" ? s.dmgOptions : DEFAULT_SETTINGS.dmgOptions,
     handheld: typeof s.handheld === "boolean" ? s.handheld : DEFAULT_SETTINGS.handheld,
+    autoApplyCasts: typeof s.autoApplyCasts === "boolean" ? s.autoApplyCasts : DEFAULT_SETTINGS.autoApplyCasts,
+    revealHits: typeof s.revealHits === "boolean" ? s.revealHits : DEFAULT_SETTINGS.revealHits,
   };
 }
 

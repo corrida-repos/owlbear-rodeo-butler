@@ -122,6 +122,8 @@ export interface UnitState {
   portraitUrl?: string;
   /** Name players see until the GM reveals the unit. */
   alias?: string;
+  /** Spell slots used per level (cast from the action bar), over what the sheet says was used; cleared by a Long Rest. */
+  slotsUsed?: Record<string, number>;
   /** The light the unit carries or sheds (a torch, the Light cantrip…), see vision.ts. */
   light?: { key: string; bright?: number; dim?: number };
 }

@@ -50,3 +50,32 @@ describe("cast requests", async () => {
     expect(isPlayerRequest({ ...base, type: "cast-save", castId: "c", total: "x" })).toBe(false);
   });
 });
+
+describe("upcasting, spell slots and conditions", async () => {
+  const { upcastDamage, slotTable, slotsLeft, lowestSlot, conditionsIn } = await import("../src/core/cast");
+  it("adds the spell's per-level dice for a higher slot (2024 and 2014 wording)", () => {
+    const fb2024 = "Using a Higher-Level Spell Slot. The damage increases by 1d6 for each spell slot level above 3.";
+    expect(upcastDamage(fb2024, [{ formula: "8d6", type: "Fire" }], 5)).toEqual({ damage: [{ formula: "10d6", type: "Fire" }], extra: "+2d6" });
+    expect(upcastDamage(fb2024, [{ formula: "8d6", type: "Fire" }], 3).damage[0]!.formula).toBe("8d6");
+    const ice = "At Higher Levels. When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d10 for each slot level above 1st.";
+    expect(upcastDamage(ice, [{ formula: "1d10", type: "Piercing" }, { formula: "2d6", type: "Cold" }], 3).damage).toEqual([{ formula: "3d10", type: "Piercing" }, { formula: "2d6", type: "Cold" }]);
+    expect(upcastDamage("No scaling.", [{ formula: "1d8" }], 9).extra).toBeUndefined();
+  });
+  it("reads slots from a D&D Beyond sheet and a stat block, with what's been used", () => {
+    const pc = { traits: [], actions: [], spells: [{ name: "Spellcasting — Wizard", text: "Intelligence; spell save DC 15. Slots: L1 4 (1 used), L2 3, L3 2." }] };
+    expect(slotTable(pc)).toEqual({ 1: { max: 4, used: 1 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 0 } });
+    const t = slotTable(pc, { slotsUsed: { 3: 2 } });
+    expect(slotsLeft(t, 3)).toBe(0);
+    expect(lowestSlot(t, 3)).toBeNull();
+    expect(lowestSlot(t, 1)).toBe(1);
+    const mage = { traits: [], actions: [], spells: [{ name: "Level 3 (3 slots)", text: "Fireball, Counterspell" }] };
+    expect(slotTable(mage)).toEqual({ 3: { max: 3, used: 0 } });
+  });
+  it("finds the conditions a spell gives and their durations", () => {
+    expect(conditionsIn("On a failed save, the target has the Frightened condition until the end of your next turn.")).toEqual([{ key: "frightened", until: "caster-end" }]);
+    expect(conditionsIn("must succeed on a Wisdom saving throw or be frightened for 1 minute.")).toEqual([{ key: "frightened", rounds: 10 }]);
+    expect(conditionsIn("A creature that fails is pushed 10 feet and is knocked Prone.")).toEqual([{ key: "prone" }]);
+    expect(conditionsIn("You have Immunity to the Charmed condition.")).toEqual([]);
+    expect(conditionsIn("Each creature takes 8d6 Fire damage.")).toEqual([]);
+  });
+});

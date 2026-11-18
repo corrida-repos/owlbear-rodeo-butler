@@ -29,7 +29,7 @@ import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./mov
 import { chaseTurnEnded } from "./chase";
 import { resetAreas, updateAreas } from "./aoe";
 import { resetHazards, watchHazards } from "./hazards";
-import { receiveCast, receiveCastSave } from "./casts";
+import { receiveCast, receiveCastSave, resetSlots } from "./casts";
 import { pendingSaves } from "../extension/castUi";
 import { resetOverlays, updateOverlays } from "./overlays";
 import { resetVision, updateVision } from "./vision";
@@ -337,6 +337,11 @@ async function handleRequest(req: unknown) {
         // The caster's id and name come from the token, not the request.
         const line = await receiveCast({ ...req.record, caster: { id: req.unitId, name } });
         await notify(line);
+        break;
+      }
+      case "slots-reset": {
+        await resetSlots(req.unitId);
+        await notify(`${name}'s spell slots are back.`);
         break;
       }
       case "cast-save": {
