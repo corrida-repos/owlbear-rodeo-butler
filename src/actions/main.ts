@@ -29,6 +29,7 @@ import { isSurprised, SURPRISED_TEXT } from "../core/systems";
 import { areaOf } from "../core/reach";
 import { placeTemplate } from "../extension/aoeItems";
 import { castSection, castStrip } from "./castSection";
+import { costlyMaterial, materialWarning } from "../core/components";
 import { pendingSaves, pendingSavesBox } from "../extension/castUi";
 import { trackerUnits } from "../core/tracker";
 import { cryptoRng, fmtMod } from "../core/dice";
@@ -273,7 +274,7 @@ function tile(it: ActionItem): HTMLElement {
   const color = it.key === ATTACK_KEY ? "act" : it.cost === "bonus" ? "bonus" : "accent";
   return h("button", {
     className: `tile cost-${it.cost}${selected === it.key ? " sel" : ""}${rv ? ` is-reveal is-reveal-${cssKey(rv)} reveal-color-${color}${isOpen(rv) ? " open" : ""}` : ""}`,
-    title: `${it.name}${it.sourceLabel ? ` · ${it.sourceLabel}` : ""}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}${rv ? ` · hover or click for its options (${reveals[rv]!.length})` : ""}`,
+    title: `${it.name}${it.category === "spell" && costlyMaterial(it.name, it.text, roomSystem().rules) ? " · ⚠ costly Material component (no focus or pouch)" : ""}${it.sourceLabel ? ` · ${it.sourceLabel}` : ""}${it.cost !== "none" ? ` · ${COST_LABEL[it.cost]}` : ""}${it.costNote ? ` (${it.costNote})` : ""}${rv ? ` · hover or click for its options (${reveals[rv]!.length})` : ""}`,
     onclick: () => {
       if (rv) { if (selected !== it.key) { revealPinned.add(rv); revealOpen.add(rv); } else { revealPinned.delete(rv); revealOpen.delete(rv); } }
       selected = selected === it.key ? null : it.key; render();
@@ -288,7 +289,8 @@ function tile(it: ActionItem): HTMLElement {
   h("span", { className: "ticon", "aria-hidden": "true" }, commonActionIcon(it) ?? icon),
   h("span", { className: "tname" }, it.name),
   it.summary ? h("span", { className: "tsum" }, ...withChips(it, it.summary, true)) : null,
-  it.concentration ? h("span", { className: "tconc", title: "Concentration" }, "◎") : null);
+  it.concentration ? h("span", { className: "tconc", title: "Concentration" }, "◎") : null,
+  it.category === "spell" && costlyMaterial(it.name, it.text, roomSystem().rules) ? h("span", { className: "tmat", title: "Costly or consumed Material component: a focus or component pouch can't replace it" }, "💎") : null);
 }
 
 function lastRollLine(it: ActionItem): Child {
@@ -310,6 +312,7 @@ function detail(it: ActionItem, bar: ActionBar): Child {
         it.cost !== "none" ? h("span", { className: `small cost-text cost-${it.cost}` }, ` ${COST_GLYPH[it.cost]} ${COST_LABEL[it.cost]}`) : null),
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
     reachLine(it),
+    materialLine(it),
     areaButton(it),
     item ? castSection(castCtx(it), it) : null,
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
@@ -331,6 +334,12 @@ function areaButton(it: ActionItem): Child {
   return h("div", { className: "row small" }, h("button", { className: "secondary small", title: "Drag it into place; squares it covers by at least half are highlighted",
     onclick: () => void placeTemplate({ shape: a.shape, size: a.size, label: `${it.name} (${a.size} ft)` }, a.selfCentred ? itemId : undefined).then(() => { note = "Area placed: drag it into place (rotate a Cone or Line with Owlbear's handle). DM Tools lists who's in it."; render(); }, showErr) },
     `◎ Place the ${a.size}-ft ${a.shape} on the map`));
+}
+
+/** A spell whose Material component a focus or component pouch can't replace (it has a cost, or it's consumed). */
+function materialLine(it: ActionItem): Child {
+  const w = it.category === "spell" ? materialWarning(it.name, it.text, roomSystem().rules) : null;
+  return w ? h("div", { className: "small warn ab-material" }, `⚠ ${w}`) : null;
 }
 
 /** What the Cast box and strip need (castSection.ts). */

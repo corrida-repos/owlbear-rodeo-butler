@@ -561,9 +561,12 @@ function spellEntries(c: any, ctx: TplCtx, flags: string[]): ListEntry[] {
     const time = castingTime(d.activation);
     const tags = [time.label, d.concentration ? "Concentration" : "", d.ritual ? "Ritual" : "", range].filter(Boolean).join(", ");
     const lvl = d.level === 0 ? "Cantrip" : `Level ${d.level}`;
+    // Components, so the action bar can warn about a costly or consumed Material component.
+    const comps = (d.components ?? []).map((c: number) => ({ 1: "V", 2: "S", 3: "M" } as Record<number, string>)[c]).filter(Boolean);
+    const material = comps.includes("M") && d.componentsDescription ? ` Material: ${String(d.componentsDescription).replace(/\.\s*$/, "")}.` : "";
     const entry: ListEntry = {
       name: `${prefix}${d.name} (${lvl})`,
-      text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${htmlToText(d.description || d.snippet)}`.trim(),
+      text: `${parts.length ? parts.join("; ") + ". " : ""}${tags ? `[${tags}] ` : ""}${comps.length ? `Components: ${comps.join(", ")}.${material} ` : ""}${htmlToText(d.description || d.snippet)}`.trim(),
     };
     if (time.cost) entry.cost = time.cost;
     if (time.cost === "longer" || (time.cost === "reaction" && d.castingTimeDescription)) entry.costNote = time.cost === "longer" ? time.label : `Reaction: ${d.castingTimeDescription}`;

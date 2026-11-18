@@ -8,6 +8,7 @@
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import type { ActionItem } from "../core/actions";
 import { readAoe } from "../core/aoe";
+import { costlyMaterial, materialWarning } from "../core/components";
 import { combineModes, editionText, unitName } from "../core/card";
 import { attackOutcome, castPlan, conditionsIn, slotLevels, upcastDamage, type CastRecord, type CastTarget } from "../core/cast";
 import { d20Penalty } from "../core/conditions";
@@ -226,6 +227,7 @@ export function castStrip(ctx: CastCtx, it: ActionItem): HTMLElement | null {
         onclick: () => { if (picked.has(c.id)) picked.delete(c.id); else picked.add(c.id); ctx.render(); },
       }, `${c.name} ${c.feet}ft${c.long ? " (dis)" : ""}`)))
       : h("div", { className: "muted" }, "Reading who's on the map…"),
+    it.category === "spell" && costlyMaterial(it.name, it.text, roomSystem().rules) ? h("div", { className: "warn", title: materialWarning(it.name, it.text, roomSystem().rules) ?? "" }, `⚠ Needs ${costlyMaterial(it.name, it.text, roomSystem().rules)} (no focus or pouch)`) : null,
     stripNote ? h("div", { className: "ok" }, stripNote) : null,
     h("div", { className: "row" },
       levelSelect(ctx, it),
