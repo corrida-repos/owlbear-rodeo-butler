@@ -9,7 +9,7 @@ import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import type { ActionItem } from "../core/actions";
 import { readAoe } from "../core/aoe";
 import { combineModes, editionText, unitName } from "../core/card";
-import { attackOutcome, castPlan, conditionsIn, lowestSlot, slotsLeft, slotTable, upcastDamage, type CastRecord, type CastTarget } from "../core/cast";
+import { attackOutcome, castPlan, conditionsIn, slotLevels, upcastDamage, type CastRecord, type CastTarget } from "../core/cast";
 import { d20Penalty } from "../core/conditions";
 import { cryptoRng, fmtMod } from "../core/dice";
 import { bandFor, gridFeet, type Measurement, type Reach } from "../core/reach";
@@ -40,28 +40,26 @@ let cache: { key: string; sig: string; list: Candidate[] } | null = null;
 let computing = "";
 const picked = new Set<string>();
 let pickedFor = "";
-/** The slot level picked per entry ("free" = no slot, e.g. a once-a-day use). */
-const levelPick = new Map<string, number | "free">();
+/** The slot level picked per entry. */
+const levelPick = new Map<string, number>();
 
-/** The levels this spell can be cast at, with slots left, and the one picked (lowest with a slot left by default). */
+/** The levels this spell can be cast at (the caster's slot levels from the sheet, else every level up to 9), and the
+ *  one picked (the spell's own level by default). Butler doesn't track spent slots. */
 function slotChoice(ctx: CastCtx, it: ActionItem) {
   if (!it.spellLevel) return null;
   const u = readUnit(ctx.item.metadata);
   if (!u) return null;
-  const table = slotTable(u.sheet, u.state);
-  const known = Object.keys(table).length > 0;
-  const levels = [...Array(10 - it.spellLevel).keys()].map((k) => k + it.spellLevel!).filter((l) => !known || table[l]);
-  const def = known ? lowestSlot(table, it.spellLevel) ?? "free" : it.spellLevel;
-  const picked = levelPick.get(it.key) ?? def;
-  return { table, known, levels, picked: picked === "free" ? "free" as const : picked, anyUsed: Object.values(table).some((t) => t.used > 0) };
+  const have = slotLevels(u.sheet).filter((l) => l >= it.spellLevel!);
+  const levels = have.length ? (have.includes(it.spellLevel) ? have : [it.spellLevel, ...have]) : [...Array(10 - it.spellLevel).keys()].map((k) => k + it.spellLevel!);
+  const picked = levelPick.get(it.key) ?? it.spellLevel;
+  return { levels, picked };
 }
 
 function levelSelect(ctx: CastCtx, it: ActionItem): Child {
   const c = slotChoice(ctx, it);
-  if (!c) return null;
-  return h("select", { title: "Spell slot level (higher slots add the spell's extra dice)", onchange: (e: Event) => { const v = (e.target as HTMLSelectElement).value; levelPick.set(it.key, v === "free" ? "free" : Number(v)); ctx.render(); } },
-    ...c.levels.map((l) => h("option", { value: String(l), selected: c.picked === l }, `Level ${l} slot${c.known ? ` (${slotsLeft(c.table, l)} of ${c.table[l]!.max} left)` : ""}`)),
-    h("option", { value: "free", selected: c.picked === "free" }, "No slot (a free use)"));
+  if (!c || c.levels.length < 2) return null;
+  return h("select", { title: "Spell slot level: a higher slot adds the spell's extra dice (spend the slot on your sheet)", onchange: (e: Event) => { levelPick.set(it.key, Number((e.target as HTMLSelectElement).value)); ctx.render(); } },
+    ...c.levels.map((l) => h("option", { value: String(l), selected: c.picked === l }, `Cast at level ${l}`)));
 }
 
 /** The last cast's result, shown in the strip (the full panel's note is hidden while aiming). */
@@ -111,7 +109,7 @@ async function cast(ctx: CastCtx, it: ActionItem, ev: MouseEvent) {
   const base = castPlan(text);
   if (!u || !base) return;
   const slot = slotChoice(ctx, it);
-  const slotLevel = slot && slot.picked !== "free" ? slot.picked : undefined;
+  const slotLevel = slot?.picked;
   const up = slotLevel ? upcastDamage(text, base.damage, slotLevel) : { damage: base.damage };
   const plan = { ...base, damage: up.damage };
   const reveal = roomSettings().revealHits || ctx.role === "GM";
@@ -188,8 +186,7 @@ export function castSection(ctx: CastCtx, it: ActionItem): Child {
   return h("div", { className: "panel tight small stack tight" },
     h("div", {}, h("strong", {}, isSpell ? "Cast it" : "Use it"), ` · ${what}`,
       conds.length ? ` · ${conds.map((c) => c.key[0]!.toUpperCase() + c.key.slice(1)).join(", ")} ${plan.kind === "save" ? "on a failure" : plan.kind === "attack" ? "on a hit" : ""}` : ""),
-    slot ? h("div", { className: "row" }, levelSelect(ctx, it),
-      slot.known && slot.anyUsed ? h("button", { className: "secondary small", title: "A Long Rest: every spell slot comes back", onclick: () => void sendRequest({ type: "slots-reset", unitId: ctx.item.id }, ctx.role).then(() => { ctx.setNote("Spell slots back (Long Rest)."); ctx.render(); }) }, "↺ Slots back (Long Rest)") : null) : null,
+    slot && slot.levels.length > 1 ? h("div", { className: "row" }, levelSelect(ctx, it)) : null,
     list.length ? h("div", { className: "row wrap" },
       h("button", { className: "secondary small", onclick: () => { picked.clear(); for (const c of list) if (c.band) picked.add(c.id); ctx.render(); } }, "Everyone in range"),
       h("button", { className: "secondary small", title: "Everyone in the area you placed for it", onclick: () => void pickArea(ctx, it) }, "Everyone in its area"),

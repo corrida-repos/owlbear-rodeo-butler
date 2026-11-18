@@ -4,11 +4,11 @@
  * Damage waits in the Tracker for the GM to apply.
  */
 import OBR from "@owlbear-rodeo/sdk";
-import { attackOutcome, CASTS_KEY, damageFor, readCasts, resolveSave, slotsLeft, slotTable, targetLine, upsertCast, type CastRecord } from "../core/cast";
+import { attackOutcome, CASTS_KEY, damageFor, readCasts, resolveSave, targetLine, upsertCast, type CastRecord } from "../core/cast";
 import { applyCast } from "../extension/castApply";
 import { d20Penalty } from "../core/conditions";
 import { fmtMod } from "../core/dice";
-import { ABILITY_NAMES, saveBonus, STATE_KEY } from "../core/sheet";
+import { ABILITY_NAMES, saveBonus } from "../core/sheet";
 import { trackerView, type TrackerUnit } from "../core/tracker";
 import { gmRoll } from "../extension/gmRoll";
 import { obrGateway } from "../extension/obrGateway";
@@ -44,25 +44,11 @@ export async function receiveCast(rec: CastRecord): Promise<string> {
       return { ...resolved, damage: d.amount, ...(d.notes.length ? { notes: d.notes } : {}) };
     }) };
   }
-  // The slot: spent from the caster (as long as it has one at that level).
-  let slotNote = "";
-  const caster = unit(rec.caster.id);
-  if (r.slotLevel && caster) {
-    const t = slotTable(caster.sheet, caster.state);
-    if (slotsLeft(t, r.slotLevel) > 0) {
-      await obrGateway.patchMetadata([{ id: caster.id, key: STATE_KEY, patch: { slotsUsed: { ...(caster.state.slotsUsed ?? {}), [r.slotLevel]: (t[r.slotLevel]?.used ?? 0) + 1 } } }]);
-      slotNote = ` Level ${r.slotLevel} slot spent (${slotsLeft(t, r.slotLevel) - 1} left).`;
-    } else if (t[r.slotLevel]) slotNote = ` ${caster.name} had no level ${r.slotLevel} slot left.`;
-  }
+  const slotNote = r.slotLevel ? ` (level ${r.slotLevel} slot)` : "";
   await save(r);
   if (roomSettings().autoApplyCasts) await applyCast(r, r.targets.map((t) => t.id));
   const waiting = r.targets.filter((t) => t.outcome === "awaiting-save").map((t) => t.name);
-  return `${r.caster.name} → ${r.spell}: ${r.targets.filter((t) => t.outcome !== "awaiting-save").map((t) => targetLine(r, t)).join("; ") || "no results yet"}${waiting.length ? `. Waiting for ${waiting.join(", ")} to save.` : ""}${slotNote} ${roomSettings().autoApplyCasts ? "Applied." : "Apply it in the Tracker."}`;
-}
-
-/** A Long Rest: the caster's spell slots come back. */
-export async function resetSlots(unitId: string) {
-  await obrGateway.patchMetadata([{ id: unitId, key: STATE_KEY, patch: { slotsUsed: Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((l) => [l, 0])) } }]);
+  return `${r.caster.name} → ${r.spell}${slotNote}: ${r.targets.filter((t) => t.outcome !== "awaiting-save").map((t) => targetLine(r, t)).join("; ") || "no results yet"}${waiting.length ? `. Waiting for ${waiting.join(", ")} to save.` : ""} ${roomSettings().autoApplyCasts ? "Applied." : "Apply it in the Tracker."}`;
 }
 
 /** A party member's save against a cast. */

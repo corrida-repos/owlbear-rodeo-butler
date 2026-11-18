@@ -65,7 +65,7 @@ export interface CastRecord {
   rolled?: { amount: number; type?: string }[];
   /** Conditions the spell gives (on a failed save, a hit, or always), with how long they last. */
   conditions?: CastCondition[];
-  /** The spell slot level used (spent from the caster when the GM's client receives it). */
+  /** The spell slot level it was cast with (shown; slots aren't tracked). */
   slotLevel?: number;
   targets: CastTarget[];
 }
@@ -137,34 +137,21 @@ export function upcastDamage(text: string, damage: DamagePart[], castLevel: numb
   return { damage: out, extra: `+${n}d${die}` };
 }
 
-// ------------------------------------------------------------------ spell slots
+// ------------------------------------------------------------------ spell slot levels
 
-export interface SlotInfo { max: number; used: number }
-
-/** Spell slots per level from the sheet: D&D Beyond's "Slots: L1 4 (1 used), L2 3" or a stat block's "Level 3 (2 slots)". */
-export function slotTable(sheet: Pick<UnitSheet, "traits" | "spells" | "actions">, state?: { slotsUsed?: Record<string, number> }): Record<number, SlotInfo> {
-  const out: Record<number, SlotInfo> = {};
+/**
+ * The slot levels the caster has, from the sheet (D&D Beyond's "Slots: L1 4, L2 3" or a stat block's "Level 3 (2 slots)"),
+ * to offer upcasting. Butler doesn't track which slots are spent: the table does.
+ */
+export function slotLevels(sheet: Pick<UnitSheet, "traits" | "spells" | "actions">): number[] {
+  const out = new Set<number>();
   for (const e of [...sheet.traits, ...sheet.spells, ...sheet.actions]) {
     const slots = /Slots:\s*([^.]*)/.exec(e.text)?.[1];
-    if (slots) for (const m of slots.matchAll(/L(\d)\s+(\d+)(?:\s*\((\d+) used\))?/g)) {
-      const lvl = Number(m[1]);
-      const cur = out[lvl] ?? { max: 0, used: 0 };
-      out[lvl] = { max: cur.max + Number(m[2]), used: cur.used + Number(m[3] ?? 0) };
-    }
+    if (slots) for (const m of slots.matchAll(/L(\d)\s+(\d+)/g)) if (Number(m[2]) > 0) out.add(Number(m[1]));
     const lv = /^Level (\d) \((\d+) slots?\)$/.exec(e.name);
-    if (lv) out[Number(lv[1])] = { max: Number(lv[2]), used: 0 };
+    if (lv && Number(lv[2]) > 0) out.add(Number(lv[1]));
   }
-  for (const [k, v] of Object.entries(state?.slotsUsed ?? {})) if (out[Number(k)]) out[Number(k)]!.used = Math.max(0, Math.min(out[Number(k)]!.max, v));
-  return out;
-}
-
-/** Slots left at a level (0 when unknown or spent). */
-export const slotsLeft = (t: Record<number, SlotInfo>, level: number) => Math.max(0, (t[level]?.max ?? 0) - (t[level]?.used ?? 0));
-
-/** The lowest slot level at or above `level` with a slot left, or null. */
-export function lowestSlot(t: Record<number, SlotInfo>, level: number): number | null {
-  for (let l = Math.max(1, level); l <= 9; l++) if (slotsLeft(t, l) > 0) return l;
-  return null;
+  return [...out].sort((a, b) => a - b);
 }
 
 // ------------------------------------------------------------------ conditions
