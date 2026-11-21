@@ -1,13 +1,13 @@
 /**
  * The GM's "Loot" panel on a dead monster's or NPC's card (see core/loot.ts). The loot is rolled the first time the GM
- * sees the dead unit's card and kept on the unit, however it died (prompt, auto-dead setting, status change). Themed
- * treasure is offered as buttons (one roll per monster; "Any" lets the GM pick). Posting sends a public note to the
+ * sees the dead unit's card and kept on the unit, however it died (prompt, auto-dead setting, status change). Coins are
+ * always rolled; themed treasure is offered as buttons (one roll per monster; "Any" lets the GM pick). Posting sends a public note to the
  * roll log; nothing is added to anyone's inventory.
  */
 import OBR from "@owlbear-rodeo/sdk";
 import { cryptoRng } from "../core/dice";
 import {
-  addRolled, lootEligible, lootFields, lootPostText, markPosted, planLoot, removeLine, rollCoins, rollMagicItem,
+  addRolled, lootEligible, lootFields, lootPostText, markPosted, planLoot, removeLine, rollMagicItem,
   type LootRules, type LootSource, type Theme, type UnitLoot,
 } from "../core/loot";
 import { makeNote, ROLL_CHANNEL, type Role } from "../core/rolls";
@@ -75,7 +75,6 @@ export function lootPanel(ctx: LootPanelCtx, sheet: UnitSheet, state: UnitState)
   const act = (fn: () => Promise<unknown>) => () => void fn().catch(ctx.report);
   const cr = sheet.cr;
   const rollTheme = (t: Theme) => act(() => save(ctx.unitId, addRolled(loot, rollMagicItem(t, cr, cryptoRng), t)));
-  const rollMoney = act(() => save(ctx.unitId, addRolled(loot, rollCoins(cr, ctx.rules, cryptoRng), "coins")));
   const reroll = act(async () => save(ctx.unitId, planLoot(await lootSource(sheet), ctx.rules, cryptoRng)));
   const unposted = loot.lines.filter((l) => !l.posted).map((l) => l.id);
 
@@ -83,10 +82,7 @@ export function lootPanel(ctx: LootPanelCtx, sheet: UnitSheet, state: UnitState)
   if (loot.themes.length) {
     offers.push(h("div", { className: "small" }, loot.any ? "Treasure: Any. Pick a theme to roll a magic item:" : "Treasure line offers a magic item roll:"));
     offers.push(h("div", { className: "row" },
-      ...loot.themes.map((t) => h("button", { className: "secondary small", onclick: rollTheme(t), title: `Roll on the 2024 DMG ${t} tables (rarity by CR)` }, `🎲 ${t}`)),
-      loot.coins ? h("button", { className: "secondary small", onclick: rollMoney, title: "Roll on the DMG Individual Treasure table for its CR" }, "🎲 Coins") : null));
-  } else if (loot.coins) {
-    offers.push(h("div", { className: "row" }, h("button", { className: "secondary small", onclick: rollMoney }, "🎲 Coins")));
+      ...loot.themes.map((t) => h("button", { className: "secondary small", onclick: rollTheme(t), title: `Roll on the 2024 DMG ${t} tables (rarity by CR)` }, `🎲 ${t}`))));
   }
 
   const partySelect = ctx.party.length ? h("select", { onchange: (e: Event) => { takenBy = (e.target as HTMLSelectElement).value; } },

@@ -61,15 +61,25 @@ describe("planLoot", () => {
     expect(new Set(l.lines.map((x) => x.id)).size).toBe(l.lines.length);
   });
 
-  it("Treasure: Any lets the GM pick any theme, or coins", () => {
+  it("Treasure: Any (Bandit Captain) has money and lets the GM pick any theme", () => {
     const l = planLoot({ cr: 2, treasure: ["any"], gear: ["Scimitar"] }, "2024", seededRng(2));
     expect(l.any).toBe(true);
-    expect(l.coins).toBe(true);
     expect(l.themes).toEqual([...THEMES]);
-    expect(l.lines.map((x) => x.kind)).toEqual(["gear"]);
+    expect(l.lines.map((x) => x.kind)).toEqual(["gear", "coins"]);
+    expect(l.lines[1]!.text).toMatch(/^\d+ gp$/);
   });
 
-  it("a 2024 creature whose book lists no treasure gets nothing", () => {
+  it("every themed Treasure line comes with money", () => {
+    for (const t of ["arcana", "armaments", "implements", "relics"]) {
+      expect(planLoot({ cr: 12, type: "Fiend", treasure: [t] }, "2024", seededRng(5)).lines.map((x) => x.kind)).toEqual(["coins"]);
+    }
+  });
+
+  it("an empty Treasure line still has money unless it's a beast-like creature", () => {
+    expect(planLoot({ cr: 5, type: "Undead", treasure: [] }, "2024", seededRng(3)).lines.map((x) => x.kind)).toEqual(["coins"]);
+  });
+
+  it("a 2024 beast whose book lists no treasure gets nothing", () => {
     const l = planLoot({ cr: 0.25, type: "Beast", treasure: [] }, "2024", seededRng(3));
     expect(l.lines).toEqual([]);
     expect(l.themes).toEqual([]);
@@ -131,14 +141,12 @@ describe("GM choices", () => {
     const l = addRolled(base, item, "Armaments");
     expect(l.themes).toEqual([]);
     expect(l.any).toBeUndefined();
-    expect(l.coins).toBe(true);
     expect(l.lines.at(-1)!.id).toBe("x1");
   });
 
-  it("a listed theme is used up; coins too", () => {
+  it("a listed theme is used up", () => {
     const l = addRolled({ lines: [], themes: ["Arcana", "Relics"] }, item, "Arcana");
     expect(l.themes).toEqual(["Relics"]);
-    expect(addRolled(base, rollCoins(2, "2024", seededRng(1), "c"), "coins").coins).toBeUndefined();
   });
 
   it("removing and posting lines", () => {

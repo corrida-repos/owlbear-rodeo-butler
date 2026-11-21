@@ -1,11 +1,11 @@
 /**
  * Suggested loot for a dead monster or NPC (never a party member or a D&D Beyond character).
  *  - Gear: what the 2024 Monster Manual stat block lists as Gear. Always found on the body.
- *  - Coins: the DMG Individual Treasure table for the creature's CR. 2024 stat blocks get coins when their Treasure
- *    line says Individual; creatures without a Treasure line (2014 books, homebrew) get them unless they're a kind of
- *    creature that carries nothing (Beast, Ooze, Plant…). 5E rooms roll on the 2014 table, 5.5E rooms on the 2024 one.
+ *  - Coins: the DMG Individual Treasure table for the creature's CR, for every creature with a Treasure line, and for
+ *    those without one unless they're a kind of creature that carries nothing (Beast, Ooze, Plant…). 5E rooms roll on
+ *    the 2014 table, 5.5E rooms on the 2024 one.
  *  - Magic items: themed Treasure lines (Arcana, Armaments, Implements, Relics) offer a roll on that 2024 DMG table; the
- *    GM decides whether to roll. "Any" lets the GM pick the theme (or coins). The rarity uses the DMG Magic Item
+ *    GM decides whether to roll. "Any" lets the GM pick the theme. The rarity uses the DMG Magic Item
  *    Rarities table, reading the creature's CR band (0–4, 5–10, 11–16, 17+) as the table's level band.
  * Rolled once when the unit dies and kept on the unit (state.loot), so the card shows the same loot every time.
  */
@@ -34,10 +34,8 @@ export interface UnitLoot {
   lines: LootLine[];
   /** Magic item tables the GM can roll on. */
   themes: Theme[];
-  /** The Treasure line says Any: the GM picks a theme (or coins). */
+  /** The Treasure line says Any: the GM picks a theme. */
   any?: true;
-  /** A coin roll the GM can still make (Treasure: Any, no Individual). */
-  coins?: true;
   /** Why there's little or nothing: "Beasts carry no treasure." */
   note?: string;
 }
@@ -66,20 +64,16 @@ export function planLoot(sheet: LootSource, rules: LootRules, rng: Rng): UnitLoo
   const lines: LootLine[] = (sheet.gear ?? []).map((g) => ({ id: ids(), kind: "gear", text: g, detail: "Gear (stat block)" }));
   const tags = sheet.treasure?.map((t) => t.toLowerCase());
   const out: UnitLoot = { lines, themes: [] };
-  if (!tags) {
+  // Without a Treasure line (or with an empty one), only creatures that could carry money have some.
+  if (!tags?.length) {
     const t = sheet.type?.trim() ?? "";
     if (NO_TREASURE.test(t)) out.note = `${t.replace(/\s*\(.*\)$/, "")} creatures usually carry no treasure.`;
     else lines.push(rollCoins(sheet.cr, rules, rng, ids()));
     return out;
   }
-  if (!tags.length) { out.note = "Its stat block lists no treasure."; return out; }
-  if (tags.includes("individual")) lines.push(rollCoins(sheet.cr, rules, rng, ids()));
+  lines.push(rollCoins(sheet.cr, rules, rng, ids()));
   out.themes = THEMES.filter((th) => tags.includes(th.toLowerCase()));
-  if (tags.includes("any")) {
-    out.any = true;
-    out.themes = [...THEMES];
-    if (!tags.includes("individual")) out.coins = true;
-  }
+  if (tags.includes("any")) { out.any = true; out.themes = [...THEMES]; }
   return out;
 }
 
@@ -137,10 +131,9 @@ export function rollMagicItem(theme: Theme, cr: number | undefined, rng: Rng, id
   return { id, kind: "item", text: `${name} (${rarity})`, detail: `2024 DMG ${theme} – ${rarity}: rarity d100 ${rRoll} (CR ${b}), item d100 ${iRoll}` };
 }
 
-/** Adds a rolled line; picking a theme or coins uses up that offer (one roll per monster). */
-export function addRolled(loot: UnitLoot, line: LootLine, used: Theme | "coins"): UnitLoot {
+/** Adds a rolled magic item; picking a theme uses up that offer (one roll per monster). */
+export function addRolled(loot: UnitLoot, line: LootLine, used: Theme): UnitLoot {
   const lines = [...loot.lines, line];
-  if (used === "coins") { const { coins: _, ...rest } = loot; return { ...rest, lines }; }
   // "Any" offers every theme but stands for one roll: picking one ends the choice.
   const { any: _, ...rest } = loot;
   return { ...rest, lines, themes: loot.any ? [] : loot.themes.filter((t) => t !== used) };
