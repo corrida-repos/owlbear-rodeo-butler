@@ -13,7 +13,7 @@
  */
 import { rollFormula, type Rng } from "./dice";
 import { xpForCr } from "./combat";
-import { THEME_TABLES } from "./lootTables";
+import { GEMSTONES, THEME_TABLES } from "./lootTables";
 import type { UnitSheet, UnitState } from "./sheet";
 
 export const THEMES = ["Arcana", "Armaments", "Implements", "Relics"] as const;
@@ -23,7 +23,7 @@ export type Rarity = (typeof RARITIES)[number];
 
 export interface LootLine {
   id: string;
-  kind: "gear" | "coins" | "item";
+  kind: "gear" | "coins" | "gems" | "item";
   /** "Scimitar", "11 gp", "Cloak of Billowing (Common)". */
   text: string;
   /** How it was worked out, for the GM. */
@@ -71,10 +71,10 @@ export function planLoot(sheet: LootSource, economy: Economy, rng: Rng): UnitLoo
   if (!tags?.length) {
     const t = sheet.type?.trim() ?? "";
     if (NO_TREASURE.test(t)) out.note = `${t.replace(/\s*\(.*\)$/, "")} creatures usually carry no treasure.`;
-    else lines.push(rollPurse(sheet.cr, economy, rng, ids()));
+    else lines.push(...rollPurse(sheet.cr, economy, rng, ids));
     return out;
   }
-  lines.push(rollPurse(sheet.cr, economy, rng, ids()));
+  lines.push(...rollPurse(sheet.cr, economy, rng, ids));
   out.themes = THEMES.filter((th) => tags.includes(th.toLowerCase()));
   if (tags.includes("any")) { out.any = true; out.themes = [...THEMES]; }
   return out;
@@ -168,19 +168,74 @@ export const coinValueGp = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.r
 const crText = (cr: number) => (cr === 0.125 ? "1/8" : cr === 0.25 ? "1/4" : cr === 0.5 ? "1/2" : String(cr));
 const gpText = (v: number) => (v >= 100 ? Math.round(v).toLocaleString("en-US") : v >= 10 ? v.toFixed(0) : v.toFixed(1));
 
-/** The monster's purse: its expected share (expectedPurse), varied by 4d6 ÷ 14 (×0.3–×1.7), in a mix of coins. */
-export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, id = idMaker(rng)()): LootLine {
+/** Purses worth more than this hold part of their value in gemstones (lighter than coins). */
+export const GEM_THRESHOLD_GP = 500;
+const GEM_VALUES = [5000, 1000, 500, 100, 50, 10] as const;
+export type GemValue = (typeof GEM_VALUES)[number];
+export interface Gem { value: GemValue; name: string }
+
+/**
+ * A large purse's split: coins keep 100 gp plus 15–35% of the rest as spending money, but no more than 1,500–4,000 gp
+ * (3–8 lb of platinum); the rest is gemstones from the 2024 DMG tables, the most valuable that fit, now and then one
+ * size smaller for variety (while there are fewer than eight). Whatever is left under 50 gp goes back to the coins.
+ * Purses up to GEM_THRESHOLD_GP are all coins.
+ */
+export function splitGems(valueGp: number, rng: Rng): { coinsGp: number; gems: Gem[] } {
+  if (valueGp <= GEM_THRESHOLD_GP) return { coinsGp: valueGp, gems: [] };
+  const coinsGp = Math.min(100 + (valueGp - 100) * (0.15 + 0.2 * rng()), 1500 + 2500 * rng());
+  let rest = valueGp - coinsGp;
+  const gems: Gem[] = [];
+  while (rest >= 50) {
+    let i = GEM_VALUES.findIndex((v) => v <= rest);
+    if (gems.length < 8 && GEM_VALUES[i + 1]! >= 50 && rng() < 0.3) i++;
+    const value = GEM_VALUES[i]!;
+    const names = GEMSTONES[value];
+    gems.push({ value, name: names[Math.floor(rng() * names.length)]! });
+    rest -= value;
+  }
+  return { coinsGp: coinsGp + rest, gems };
+}
+
+/** "Blue sapphire (1,000 gp), 2 × Pearl (100 gp)": alike stones grouped, most valuable first. */
+export function gemText(gems: Gem[]): string {
+  const groups = new Map<string, { gem: Gem; n: number }>();
+  for (const g of gems) {
+    const key = `${g.value}|${g.name}`;
+    const cur = groups.get(key);
+    if (cur) cur.n++; else groups.set(key, { gem: g, n: 1 });
+  }
+  return [...groups.values()].sort((a, b) => b.gem.value - a.gem.value || a.gem.name.localeCompare(b.gem.name))
+    .map(({ gem, n }) => `${n > 1 ? `${n} × ` : ""}${gem.name} (${gem.value.toLocaleString("en-US")} gp${n > 1 ? " each" : ""})`).join(", ");
+}
+
+const weightText = (lb: number) => (lb < 1 ? "under 1 lb" : `${Math.round(lb * 10) / 10} lb`);
+
+/**
+ * The monster's purse: its expected share (expectedPurse), varied by 4d6 ÷ 14 (×0.3–×1.7), in light coins, with part of
+ * a large purse held as gemstones (a second line).
+ */
+export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, ids: () => string = idMaker(rng)): LootLine[] {
   const expected = expectedPurse(cr, e);
   const r = rollFormula("4d6", rng);
-  const coins = coinMix(expected * r.total / 14, rng);
+  const total = expected * r.total / 14;
+  const split = splitGems(total, rng);
+  const coins = coinMix(split.coinsGp, rng);
+  const gemsGp = split.gems.reduce((v, g) => v + g.value, 0);
   const level = economyLevel(cr, e);
   const who = e.partyLevel !== undefined ? `a level ${level} party of ${Math.max(1, Math.round(e.partySize ?? 4))}` : `a level ${level} party of 4 (CR used as the level: no party in the scene)`;
-  return {
-    id, kind: "coins", text: coinText(coins),
-    detail: `Worth ${gpText(coinValueGp(coins))} gp (${coinWeightLb(coins) < 1 ? "under 1 lb" : `${Math.round(coinWeightLb(coins) * 10) / 10} lb`}). Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
+  const coinLine: LootLine = {
+    id: ids(), kind: "coins", text: coinText(coins),
+    detail: `Worth ${gpText(coinValueGp(coins))} gp (${weightText(coinWeightLb(coins))})${gemsGp ? `; the purse's other ${gemsGp.toLocaleString("en-US")} gp is in gemstones` : ""}. `
+      + `Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
       + `whose coin at this level is ~${gpText(partyIncome(level).hoardsAndQuests)} gp from hoards and quests plus ${Math.round(PURSE_SHARE * 100)}% from monsters, `
       + `shared by XP; varied by 4d6 (${r.dice.join(" + ")} = ${r.total}) ÷ 14`,
   };
+  if (!split.gems.length) return [coinLine];
+  return [coinLine, {
+    id: ids(), kind: "gems", text: `Gems: ${gemText(split.gems)}`,
+    detail: `${split.gems.length} gemstone${split.gems.length > 1 ? "s" : ""} worth ${gemsGp.toLocaleString("en-US")} gp (2024 DMG gemstone tables)`
+      + `${gemsGp >= 500 ? `, carried instead of ${weightText(gemsGp / 10 / 50)} of platinum` : ""}`,
+  }];
 }
 
 /** DMG Magic Item Rarities: the highest d100 roll for each rarity, per band (0 = never). */

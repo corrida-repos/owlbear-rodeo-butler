@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
+  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gemText, splitGems, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
   partyIncome, planLoot, rarityFor, removeLine, rollMagicItem, rollPurse, THEMES, RARITIES, type Economy,
 } from "../src/core/loot";
-import { THEME_TABLES } from "../src/core/lootTables";
+import { GEMSTONES, THEME_TABLES } from "../src/core/lootTables";
 import { makeNote, rollText } from "../src/core/rolls";
 
 const L5: Economy = { partyLevel: 5, partySize: 4 };
@@ -107,11 +107,21 @@ describe("planLoot", () => {
   });
 });
 
+/** A purse's worth from its lines: "63 pp, 6 gp" plus "Gems: 2 × Ruby (5,000 gp each), Onyx (50 gp)". */
+function purseValue(lines: { kind: string; text: string }[]): number {
+  let v = 0;
+  for (const l of lines) {
+    if (l.kind === "coins") v += coinValueGp(Object.fromEntries(l.text.split(", ").map((p) => { const [c, k] = p.split(" "); return [k, Number(c!.replace(/,/g, ""))]; })));
+    if (l.kind === "gems") for (const m of l.text.matchAll(/(?:(\d+) × )?[^,(]+\(([\d,]+) gp/g)) v += Number(m[1] ?? 1) * Number(m[2]!.replace(/,/g, ""));
+  }
+  return v;
+}
+
 describe("money", () => {
   const average = (cr: number, e: Economy, n = 2000) => {
     const rng = seededRng(11);
     let sum = 0;
-    for (let i = 0; i < n; i++) sum += coinValueGp(Object.fromEntries(rollPurse(cr, e, rng).text.split(", ").map((p) => { const [c, k] = p.split(" "); return [k, Number(c!.replace(/,/g, ""))]; })));
+    for (let i = 0; i < n; i++) sum += purseValue(rollPurse(cr, e, rng));
     return sum / n;
   };
 
@@ -174,10 +184,47 @@ describe("money", () => {
     expect(coinMix(1234.4, rng)).toEqual({ pp: 123, gp: 4 });
   });
 
+  it("small purses are all coins", () => {
+    expect(splitGems(500, seededRng(1))).toEqual({ coinsGp: 500, gems: [] });
+    for (let s = 0; s < 50; s++) expect(rollPurse(1, L5, seededRng(s)).map((l) => l.kind)).toEqual(["coins"]);
+  });
+
+  it("a large purse holds part of its value in 2024 DMG gemstones", () => {
+    const allNames = new Set(Object.values(GEMSTONES).flat());
+    for (let s = 0; s < 200; s++) {
+      const rng = seededRng(s);
+      const v = 501 + rng() * rng() * 400000;
+      const { coinsGp, gems } = splitGems(v, rng);
+      expect(coinsGp + gems.reduce((a, g) => a + g.value, 0)).toBeCloseTo(v, 6);
+      // Coins: at least 100 gp of spending money, never more than 4,000 gp (8 lb of platinum).
+      expect(coinsGp).toBeGreaterThanOrEqual(100);
+      expect(coinsGp).toBeLessThanOrEqual(4050);
+      expect(gems.length).toBeGreaterThan(0);
+      for (const g of gems) {
+        expect(g.value).toBeGreaterThanOrEqual(50);
+        expect(GEMSTONES[g.value]).toContain(g.name);
+        expect(allNames.has(g.name)).toBe(true);
+      }
+      // Most valuable stones that fit: never several smaller stones where one bigger would do, beyond the variety steps.
+      if (v > 20000) expect(gems.filter((g) => g.value === 5000).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("gems are grouped, most valuable first, and the purse adds up", () => {
+    expect(gemText([{ value: 100, name: "Jet" }, { value: 5000, name: "Ruby" }, { value: 100, name: "Jet" }, { value: 50, name: "Onyx" }]))
+      .toBe("Ruby (5,000 gp), 2 × Jet (100 gp each), Onyx (50 gp)");
+    const lines = rollPurse(17, { partyLevel: 17, partySize: 4 }, seededRng(2));
+    expect(lines.map((l) => l.kind)).toEqual(["coins", "gems"]);
+    expect(lines[1]!.text).toMatch(/^Gems: /);
+    expect(lines[0]!.detail).toMatch(/the purse's other [\d,]+ gp is in gemstones/);
+    expect(lines[1]!.detail).toMatch(/gemstones? worth [\d,]+ gp \(2024 DMG gemstone tables\)/);
+    expect(new Set(lines.map((l) => l.id)).size).toBe(2);
+  });
+
   it("says how the money was worked out", () => {
-    const d = rollPurse(2, { partyLevel: 3, partySize: 4 }, seededRng(1)).detail!;
+    const d = rollPurse(2, { partyLevel: 3, partySize: 4 }, seededRng(1))[0]!.detail!;
     expect(d).toMatch(/^Worth [\d.,]+ gp \((under 1|[\d.]+) lb\)\. Expected [\d.,]+ gp for CR 2 against a level 3 party of 4, whose coin at this level is ~1,864 gp from hoards and quests plus 20% from monsters/);
-    expect(rollPurse(2, {}, seededRng(1)).detail).toMatch(/CR used as the level: no party in the scene/);
+    expect(rollPurse(2, {}, seededRng(1))[0]!.detail).toMatch(/CR used as the level: no party in the scene/);
   });
 });
 
