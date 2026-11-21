@@ -25,6 +25,7 @@ import { parseHpInput } from "../core/hp";
 import { addConditionTo, changeHp, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
 import { zeroHpSection } from "../extension/zeroHp";
 import { lootPanel } from "../extension/lootPanel";
+import type { Economy } from "../core/loot";
 import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
@@ -111,10 +112,15 @@ function zeroHpPanel(state: UnitState): Child {
 let sceneUnits: { id: string; name: string }[] = [];
 /** Party members' names, for the loot panel's "taken by". */
 let partyNames: string[] = [];
+/** The party's average level and size (members with a level), for the loot panel's money. */
+let partyEconomy: Economy = {};
 async function refreshSceneUnits() {
   const items = await obrGateway.getItems();
   const units = trackerUnits(items);
-  partyNames = units.filter((u) => u.party && !u.dead).map((u) => u.name);
+  const party = units.filter((u) => u.party && !u.dead);
+  partyNames = party.map((u) => u.name);
+  const levels = party.map((u) => u.sheet.level).filter((l): l is number => typeof l === "number" && l > 0);
+  partyEconomy = levels.length ? { partyLevel: levels.reduce((a, b) => a + b, 0) / levels.length, partySize: party.length } : {};
   const order = turnOrder(units);
   sceneUnits = [...order, ...units.filter((u) => !order.includes(u))].map((u) => ({ id: u.id, name: u.name }));
 }
@@ -138,7 +144,7 @@ function wildShapePanel(state: UnitState): Child {
 
 function lootCardPanel(info: ItemInfo, sheet: UnitSheet, state: UnitState): Child {
   return lootPanel({
-    unitId: itemId, role, me, rules: roomSystem().rules, party: partyNames,
+    unitId: itemId, role, me, economy: partyEconomy, party: partyNames,
     publicName: state.alias?.trim() || unitName(info, sheet, state),
     report: showErr,
   }, sheet, state);

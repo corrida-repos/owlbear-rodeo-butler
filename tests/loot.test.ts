@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, coinScale, gearName, inferGear, lootEligible, lootFields, lootPostText, markPosted, planLoot, rarityFor, removeLine, rollCoins, rollMagicItem,
-  THEMES, RARITIES,
+  addRolled, band, coinMix, coinValueGp, expectedPurse, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
+  partyIncome, planLoot, rarityFor, removeLine, rollMagicItem, rollPurse, THEMES, RARITIES, type Economy,
 } from "../src/core/loot";
-import { INDIVIDUAL_2014, INDIVIDUAL_2024, THEME_TABLES } from "../src/core/lootTables";
+import { THEME_TABLES } from "../src/core/lootTables";
 import { makeNote, rollText } from "../src/core/rolls";
 
+const L5: Economy = { partyLevel: 5, partySize: 4 };
 const goblin = { cr: 0.25, type: "Fey (Goblinoid)", treasure: ["implements", "individual"], gear: ["Leather Armor", "Scimitar", "Shield", "Shortbow"] };
 
 describe("who gets loot", () => {
@@ -39,49 +40,40 @@ describe("generated tables", () => {
       for (const row of rows) expect(row.name).not.toMatch(/[{}@|]/);
     }
   });
-  it("individual treasure covers CR 0–30 in both editions", () => {
-    for (const t of [INDIVIDUAL_2014, INDIVIDUAL_2024]) {
-      expect(t.map((b) => [b.crMin, b.crMax])).toEqual([[0, 4], [5, 10], [11, 16], [17, 30]]);
-      for (const b of t) expect(b.rows[b.rows.length - 1]!.max).toBe(100);
-    }
-  });
 });
 
 describe("planLoot", () => {
   it("2024 Goblin Warrior: its gear, individual coins and an Implements roll offered", () => {
-    const l = planLoot(goblin, "2024", seededRng(1));
+    const l = planLoot(goblin, L5, seededRng(1));
     expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(goblin.gear);
     const coins = l.lines.find((x) => x.kind === "coins")!;
-    // 3d6 gp scaled to CR 1/4 (× 0.5): 2–9 gp.
-    const gp = Number(/^(\d+) gp$/.exec(coins.text)![1]);
-    expect(gp).toBeGreaterThanOrEqual(1);
-    expect(gp).toBeLessThanOrEqual(9);
-    expect(coins.detail).toMatch(/2024 DMG Individual Treasure, CR 0–4: 3d6/);
+    expect(coins.text).toMatch(/^[\d,]+ (pp|gp|ep|sp|cp)(, [\d,]+ (pp|gp|ep|sp|cp))*$/);
+    expect(coins.detail).toMatch(/^Worth .* gp\. Expected .* gp for CR 1\/4 against a level 5 party of 4/);
     expect(l.themes).toEqual(["Implements"]);
     expect(l.any).toBeUndefined();
     expect(new Set(l.lines.map((x) => x.id)).size).toBe(l.lines.length);
   });
 
   it("Treasure: Any (Bandit Captain) has money and lets the GM pick any theme", () => {
-    const l = planLoot({ cr: 2, treasure: ["any"], gear: ["Scimitar"] }, "2024", seededRng(2));
+    const l = planLoot({ cr: 2, treasure: ["any"], gear: ["Scimitar"] }, L5, seededRng(2));
     expect(l.any).toBe(true);
     expect(l.themes).toEqual([...THEMES]);
     expect(l.lines.map((x) => x.kind)).toEqual(["gear", "coins"]);
-    expect(l.lines[1]!.text).toMatch(/^\d+ gp$/);
+    expect(l.lines[1]!.text).toMatch(/\d+ gp/);
   });
 
   it("every themed Treasure line comes with money", () => {
     for (const t of ["arcana", "armaments", "implements", "relics"]) {
-      expect(planLoot({ cr: 12, type: "Fiend", treasure: [t] }, "2024", seededRng(5)).lines.map((x) => x.kind)).toEqual(["coins"]);
+      expect(planLoot({ cr: 12, type: "Fiend", treasure: [t] }, L5, seededRng(5)).lines.map((x) => x.kind)).toEqual(["coins"]);
     }
   });
 
   it("an empty Treasure line still has money unless it's a beast-like creature", () => {
-    expect(planLoot({ cr: 5, type: "Undead", treasure: [] }, "2024", seededRng(3)).lines.map((x) => x.kind)).toEqual(["coins"]);
+    expect(planLoot({ cr: 5, type: "Undead", treasure: [] }, L5, seededRng(3)).lines.map((x) => x.kind)).toEqual(["coins"]);
   });
 
   it("a 2024 beast whose book lists no treasure gets nothing", () => {
-    const l = planLoot({ cr: 0.25, type: "Beast", treasure: [] }, "2024", seededRng(3));
+    const l = planLoot({ cr: 0.25, type: "Beast", treasure: [] }, L5, seededRng(3));
     expect(l.lines).toEqual([]);
     expect(l.themes).toEqual([]);
     expect(l.note).toMatch(/no treasure/);
@@ -92,7 +84,7 @@ describe("planLoot", () => {
       cr: 0.25, type: "Humanoid (Goblinoid)", flags: ["AC source: leather armor, shield."],
       actions: [{ name: "Scimitar", text: "" }, { name: "Shortbow", text: "" }, { name: "Bite", text: "" }, { name: "Multiattack", text: "" }],
     };
-    const l = planLoot(goblin2014, "2014", seededRng(6));
+    const l = planLoot(goblin2014, L5, seededRng(6));
     expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(["Leather Armor", "Shield", "Scimitar", "Shortbow"]);
     expect(l.lines[0]!.detail).toMatch(/from its armor and attacks/);
     expect(inferGear({ acNote: "studded leather", actions: [{ name: "Longsword (Two-Handed)", text: "" }, { name: "Longsword", text: "" }, { name: "Bone Bow", text: "" }] }))
@@ -102,62 +94,90 @@ describe("planLoot", () => {
   });
 
   it("a stat block's Gear line wins over inferred gear", () => {
-    const l = planLoot({ ...goblin, actions: [{ name: "Dagger", text: "" }] }, "2024", seededRng(6));
+    const l = planLoot({ ...goblin, actions: [{ name: "Dagger", text: "" }] }, L5, seededRng(6));
     expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(goblin.gear);
   });
 
-  it("without a Treasure line: beasts carry nothing, others roll coins on the room's edition table", () => {
-    expect(planLoot({ cr: 1, type: "Swarm of Tiny Beasts" }, "2014", seededRng(4)).lines).toEqual([]);
-    expect(planLoot({ cr: 1, type: "Ooze" }, "2014", seededRng(4)).note).toMatch(/Ooze/);
-    const l = planLoot({ cr: 3, type: "Humanoid (Human)" }, "2014", seededRng(4));
+  it("without a Treasure line: beasts carry nothing, others carry money", () => {
+    expect(planLoot({ cr: 1, type: "Swarm of Tiny Beasts" }, L5, seededRng(4)).lines).toEqual([]);
+    expect(planLoot({ cr: 1, type: "Ooze" }, L5, seededRng(4)).note).toMatch(/Ooze/);
+    const l = planLoot({ cr: 3, type: "Humanoid (Human)" }, L5, seededRng(4));
     expect(l.lines).toHaveLength(1);
-    expect(l.lines[0]!.detail).toMatch(/^2014 DMG Individual Treasure, CR 0–4 \(d100 \d+\)/);
-    expect(l.lines[0]!.text).toMatch(/^\d+ (cp|sp|ep|gp|pp)$/);
+    expect(l.lines[0]!.kind).toBe("coins");
+  });
+});
+
+describe("money", () => {
+  const average = (cr: number, e: Economy, n = 2000) => {
+    const rng = seededRng(11);
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += coinValueGp(Object.fromEntries(rollPurse(cr, e, rng).text.split(", ").map((p) => { const [c, k] = p.split(" "); return [k, Number(c!.replace(/,/g, ""))]; })));
+    return sum / n;
+  };
+
+  it("the party's coin per level: a 2024 DMG hoard per session plus a quest reward, purses on top", () => {
+    expect(hoardValue(2.5)).toBeCloseTo(500, 5);
+    expect(hoardValue(7.5)).toBeCloseTo(4400, 5);
+    expect(hoardValue(13.5)).toBeCloseTo(36000, 5);
+    expect(hoardValue(18.5)).toBeCloseTo(330000, 5);
+    for (let l = 2; l <= 20; l++) expect(hoardValue(l)).toBeGreaterThan(hoardValue(l - 1));
+    const i3 = partyIncome(3);
+    expect(i3.hoardsAndQuests).toBeCloseTo(hoardValue(3) * 3, 5); // two sessions and one quest
+    expect(i3.purses / (i3.purses + i3.hoardsAndQuests)).toBeCloseTo(0.2, 5);
+  });
+
+  it("a purse is the monster's XP share of the purses found over the level, never more than a hoard", () => {
+    // Level 5, party of 4: 1,483 gp hoards × 3 → 4,450; purses 1,112; XP over level 5 is 7,500 each, 30,000 in all.
+    expect(expectedPurse(5, L5)).toBeCloseTo(1800 * partyIncome(5).purses / 30000, 5);
+    expect(expectedPurse(2, { partyLevel: 5, partySize: 8 })).toBeCloseTo(expectedPurse(2, L5) / 2, 5);
+    expect(expectedPurse(30, { partyLevel: 3, partySize: 4 })).toBe(hoardValue(3));
+  });
+
+  it("grows with CR, and a weak monster carries little whatever the party's level", () => {
+    const crs = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 11, 13, 16, 17, 20, 24, 30];
+    const atOwnLevel = crs.map((cr) => expectedPurse(cr));
+    for (let i = 1; i < crs.length; i++) expect(atOwnLevel[i]!, `CR ${crs[i]}`).toBeGreaterThan(atOwnLevel[i - 1]!);
+    expect(expectedPurse(0.25)).toBeGreaterThan(2);
+    expect(expectedPurse(0.25)).toBeLessThan(10);
+    expect(expectedPurse(0.125, { partyLevel: 15, partySize: 4 })).toBeLessThan(15);
+    // Against the same party, a tougher monster carries more.
+    for (const [lo, hi] of [[0.25, 1], [1, 5], [5, 10]]) expect(expectedPurse(hi!, L5)).toBeGreaterThan(expectedPurse(lo!, L5));
+  });
+
+  it("rolled purses average about the expected value", () => {
+    for (const cr of [0.25, 2, 10]) {
+      const avg = average(cr, L5);
+      expect(avg / expectedPurse(cr, L5), `CR ${cr}`).toBeGreaterThan(0.85);
+      expect(avg / expectedPurse(cr, L5), `CR ${cr}`).toBeLessThan(1.15);
+    }
+  });
+
+  it("coins come in believable mixes", () => {
+    const rng = seededRng(5);
+    const kinds = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const v = 0.5 + rng() * 20000;
+      const c = coinMix(v, rng);
+      const ks = Object.keys(c);
+      ks.forEach((k) => kinds.add(k));
+      expect(ks.length).toBeGreaterThanOrEqual(1);
+      expect(ks.length).toBeLessThanOrEqual(3);
+      expect(Math.abs(coinValueGp(c) - v) / v, `value ${v}`).toBeLessThan(0.1);
+      // Copper never piles up in a rich purse, and the smallest coin is just change.
+      if (v > 100) expect(c.cp ?? 0).toBe(0);
+    }
+    expect([...kinds].sort()).toEqual(["cp", "ep", "gp", "pp", "sp"]);
+    expect(Object.keys(coinMix(0.05, rng))).toEqual(["cp"]);
+  });
+
+  it("says how the money was worked out", () => {
+    const d = rollPurse(2, { partyLevel: 3, partySize: 4 }, seededRng(1)).detail!;
+    expect(d).toMatch(/^Worth [\d.,]+ gp\. Expected [\d.,]+ gp for CR 2 against a level 3 party of 4, whose coin at this level is ~1,864 gp from hoards and quests plus 20% from monsters/);
+    expect(rollPurse(2, {}, seededRng(1)).detail).toMatch(/CR used as the level: no party in the scene/);
   });
 });
 
 describe("rolls", () => {
-  const GP: Record<string, number> = { pp: 10, gp: 1, ep: 0.5, sp: 0.1, cp: 0.01 };
-  const gpOf = (text: string) => text.split(", ").reduce((v, p) => { const [n, k] = p.split(" "); return v + Number(n!.replace(/,/g, "")) * GP[k!]!; }, 0);
-  const average = (cr: number, rules: "2024" | "2014") => {
-    const rng = seededRng(11);
-    let sum = 0;
-    for (let i = 0; i < 2000; i++) sum += gpOf(rollCoins(cr, rules, rng).text);
-    return sum / 2000;
-  };
-
-  it("money grows with CR, with no jump at the DMG's band edges", () => {
-    for (const rules of ["2024", "2014"] as const) {
-      const crs = [0, 0.25, 1, 2, 3, 4, 5, 6, 8, 10, 11, 13, 16, 17, 20, 24];
-      const avgs = crs.map((cr) => average(cr, rules));
-      for (let i = 1; i < avgs.length; i++) expect(avgs[i]!, `${rules} CR ${crs[i]} vs ${crs[i - 1]}`).toBeGreaterThan(avgs[i - 1]!);
-      // Neighbouring CRs across a band edge differ by well under the DMG's 9× step.
-      for (const [lo, hi] of [[4, 5], [10, 11], [16, 17]]) expect(average(hi!, rules) / average(lo!, rules)).toBeLessThan(2);
-    }
-  });
-
-  it("each band's average stays at its middle CR", () => {
-    expect(coinScale(2, "2024")).toBeCloseTo(1, 5);
-    expect(coinScale(7.5, "2024")).toBeCloseTo(1, 5);
-    expect(coinScale(20, "2024")).toBeCloseTo(1, 5);
-    expect(average(2, "2024")).toBeGreaterThan(9);
-    expect(average(2, "2024")).toBeLessThan(11.5);
-    expect(coinScale(30, "2024")).toBe(coinScale(24, "2024"));
-  });
-
-  it("small amounts become smaller coins, and the roll is explained", () => {
-    const c = rollCoins(0, "2024", seededRng(3));
-    expect(c.text).toMatch(/^\d+ (gp|sp|cp)$/);
-    expect(c.detail).toMatch(/3d6 → .* = \d+ gp; × 0\.\d\d for CR 0$/);
-  });
-
-  it("2014 coins can mix denominations with multipliers", () => {
-    const seen = new Set<string>();
-    for (let s = 0; s < 60; s++) seen.add(rollCoins(7, "2014", seededRng(s)).text.split(", ").map((p) => p.split(" ")[1]).join("+"));
-    expect([...seen].some((x) => x.includes("+"))).toBe(true);
-    for (const x of seen) expect(x).toMatch(/^(cp|sp|ep|gp|pp)(\+(cp|sp|ep|gp|pp))?$/);
-  });
-
   it("magic items come from the theme's table, at a rarity the CR band allows", () => {
     for (let s = 0; s < 50; s++) {
       const low = rollMagicItem("Arcana", 1, seededRng(s));
@@ -178,7 +198,7 @@ describe("rolls", () => {
 });
 
 describe("GM choices", () => {
-  const base = planLoot({ cr: 2, treasure: ["any"] }, "2024", seededRng(9));
+  const base = planLoot({ cr: 2, treasure: ["any"] }, L5, seededRng(9));
   const item = rollMagicItem("Armaments", 2, seededRng(9), "x1");
 
   it("picking a theme for Any ends the choice (one roll per monster)", () => {

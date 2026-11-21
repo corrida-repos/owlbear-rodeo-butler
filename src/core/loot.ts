@@ -1,30 +1,32 @@
 /**
  * Suggested loot for a dead monster or NPC (never a party member or a D&D Beyond character).
- *  - Gear: what the 2024 Monster Manual stat block lists as Gear. Always found on the body.
- *  - Coins: the DMG Individual Treasure table for the creature's CR, for every creature with a Treasure line, and for
- *    those without one unless they're a kind of creature that carries nothing (Beast, Ooze, Plant…). 5E rooms roll on
- *    the 2014 table, 5.5E rooms on the 2024 one.
+ *  - Gear: what the 2024 Monster Manual stat block lists as Gear, or (no Gear line) the armor its AC names and the
+ *    weapons it attacks with.
+ *  - Money: a purse in a mix of coins, sized from the party's economy (see expectedPurse): the coin a party of its level
+ *    finds (2024 DMG: a hoard per session, quest rewards worth a hoard at the party's level), of which monster purses
+ *    are a share, divided among monsters by XP. Every creature with a Treasure line has one, and those without one
+ *    unless they're a kind of creature that carries nothing (Beast, Ooze, Plant…).
  *  - Magic items: themed Treasure lines (Arcana, Armaments, Implements, Relics) offer a roll on that 2024 DMG table; the
  *    GM decides whether to roll. "Any" lets the GM pick the theme. The rarity uses the DMG Magic Item
  *    Rarities table, reading the creature's CR band (0–4, 5–10, 11–16, 17+) as the table's level band.
  * Rolled once when the unit dies and kept on the unit (state.loot), so the card shows the same loot every time.
  */
 import { rollFormula, type Rng } from "./dice";
-import { INDIVIDUAL_2014, INDIVIDUAL_2024, THEME_TABLES, type CoinKey, type IndividualBand } from "./lootTables";
+import { xpForCr } from "./combat";
+import { THEME_TABLES } from "./lootTables";
 import type { UnitSheet, UnitState } from "./sheet";
 
 export const THEMES = ["Arcana", "Armaments", "Implements", "Relics"] as const;
 export type Theme = (typeof THEMES)[number];
 export const RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Legendary"] as const;
 export type Rarity = (typeof RARITIES)[number];
-export type LootRules = "2024" | "2014";
 
 export interface LootLine {
   id: string;
   kind: "gear" | "coins" | "item";
   /** "Scimitar", "11 gp", "Cloak of Billowing (Common)". */
   text: string;
-  /** How it was rolled, for the GM: "Individual Treasure, CR 0–4: 3d6 → 4 + 3 + 4". */
+  /** How it was worked out, for the GM. */
   detail?: string;
   /** Posted to the roll log. */
   posted?: true;
@@ -59,7 +61,7 @@ const NO_TREASURE = /^(swarm of \w+ )?(beast|ooze|plant|construct|elemental)s?\b
 /** The facts loot depends on; `treasure`/`gear` may come from the book when the token predates them (see card). */
 export type LootSource = Pick<UnitSheet, "cr" | "type" | "treasure" | "gear"> & Partial<Pick<UnitSheet, "actions" | "acNote" | "flags">>;
 
-export function planLoot(sheet: LootSource, rules: LootRules, rng: Rng): UnitLoot {
+export function planLoot(sheet: LootSource, economy: Economy, rng: Rng): UnitLoot {
   const ids = idMaker(rng);
   const gear = sheet.gear ?? inferGear(sheet);
   const lines: LootLine[] = gear.map((g) => ({ id: ids(), kind: "gear", text: g, detail: sheet.gear ? "Gear (stat block)" : "Carried (from its armor and attacks)" }));
@@ -69,95 +71,122 @@ export function planLoot(sheet: LootSource, rules: LootRules, rng: Rng): UnitLoo
   if (!tags?.length) {
     const t = sheet.type?.trim() ?? "";
     if (NO_TREASURE.test(t)) out.note = `${t.replace(/\s*\(.*\)$/, "")} creatures usually carry no treasure.`;
-    else lines.push(rollCoins(sheet.cr, rules, rng, ids()));
+    else lines.push(rollPurse(sheet.cr, economy, rng, ids()));
     return out;
   }
-  lines.push(rollCoins(sheet.cr, rules, rng, ids()));
+  lines.push(rollPurse(sheet.cr, economy, rng, ids()));
   out.themes = THEMES.filter((th) => tags.includes(th.toLowerCase()));
   if (tags.includes("any")) { out.any = true; out.themes = [...THEMES]; }
   return out;
 }
 
+export type CoinKey = "cp" | "sp" | "ep" | "gp" | "pp";
 const COIN_ORDER: CoinKey[] = ["pp", "gp", "ep", "sp", "cp"];
 /** Copper pieces per coin. */
 const CP: Record<CoinKey, number> = { pp: 1000, gp: 100, ep: 50, sp: 10, cp: 1 };
 
-/** "4d6*100" → rolled, multiplied. */
-function rollCoinFormula(f: string, rng: Rng): { total: number; text: string } {
-  const [dice, mult] = f.split("*");
-  const r = rollFormula(dice!, rng);
-  const m = mult ? Number(mult) : 1;
-  return { total: r.total * m, text: `${dice} → ${r.dice.join(" + ")}${m !== 1 ? ` × ${m}` : ""}` };
+/** The party the loot is for: its average level and size (from the scene's party members; see the card). */
+export interface Economy { partyLevel?: number; partySize?: number }
+
+/** PHB experience points needed for each level (index 0 = level 1). */
+const LEVEL_XP = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+/** XP a character earns while at `level` (level 20 keeps earning at the 19→20 pace). */
+const xpDuringLevel = (level: number) => (level >= 20 ? 50000 : LEVEL_XP[level]! - LEVEL_XP[level - 1]!);
+
+/** 2024 DMG Random Treasure Hoard averages (GP), placed at the middle level of each tier. */
+const HOARD_ANCHORS: [number, number][] = [[2.5, 500], [7.5, 4400], [13.5, 36000], [18.5, 330000]];
+
+/** Average hoard (GP) for a party of this level: the DMG's tier averages, joined by a smooth (log-linear) curve. */
+export function hoardValue(level: number): number {
+  const l = Math.min(20, Math.max(1, level));
+  let i = HOARD_ANCHORS.findIndex(([at]) => l <= at);
+  i = i <= 0 ? 1 : i;
+  if (l > HOARD_ANCHORS[HOARD_ANCHORS.length - 1]![0]) i = HOARD_ANCHORS.length - 1;
+  const [a, av] = HOARD_ANCHORS[i - 1]!, [z, zv] = HOARD_ANCHORS[i]!;
+  return Math.exp(Math.log(av) + (Math.log(zv) - Math.log(av)) * (l - a) / (z - a));
 }
 
-/** Average of "4d6*100". */
-function formulaAverage(f: string): number {
-  const [dice, mult] = f.split("*");
-  const m = /^(\d+)d(\d+)$/.exec(dice!.trim());
-  return (m ? Number(m[1]) * (Number(m[2]) + 1) / 2 : Number(dice)) * (mult ? Number(mult) : 1);
+/** Sessions to gain a level: one each for levels 1 and 2 (they go fast), two after that. */
+export const sessionsAtLevel = (level: number) => (level <= 2 ? 1 : 2);
+/** Quest rewards per level (the DMG's Quest Rewards: one hoard roll at the characters' level). */
+export const QUESTS_PER_LEVEL = 1;
+/** Share of all the coin a party finds that comes from what monsters carry; the rest is hoards and quest rewards. */
+export const PURSE_SHARE = 0.2;
+
+/** Coin a party finds while at this level: a hoard per session plus quest rewards, and monster purses on top. */
+export function partyIncome(level: number): { hoardsAndQuests: number; purses: number } {
+  const hoardsAndQuests = hoardValue(level) * (sessionsAtLevel(level) + QUESTS_PER_LEVEL);
+  return { hoardsAndQuests, purses: hoardsAndQuests * PURSE_SHARE / (1 - PURSE_SHARE) };
 }
 
-/** A band's average value in gp (d100 rows weighted by their chance). */
-function bandAverageGp(b: IndividualBand): number {
-  return b.rows.reduce((sum, r) => sum + (r.max - r.min + 1) / 100
-    * Object.entries(r.coins).reduce((v, [k, f]) => v + formulaAverage(f!) * CP[k as CoinKey] / 100, 0), 0);
+/** The level loot is pitched at: the party's average level, else (no party in the scene) the monster's CR. */
+export function economyLevel(cr: number | undefined, e: Economy = {}): number {
+  const l = e.partyLevel ?? Math.round(cr ?? 1);
+  return Math.min(20, Math.max(1, Math.round(l)));
 }
-
-function pickBand(table: IndividualBand[], cr: number | undefined): IndividualBand {
-  const c = Math.max(0, cr ?? 0);
-  return table.find((b) => c >= b.crMin && c <= b.crMax) ?? (c > 30 ? table[table.length - 1]! : table[0]!);
-}
-
-/** CRs above this get the same money (the curve would otherwise run past a whole DMG hoard). */
-const MAX_SCALED_CR = 24;
 
 /**
- * The DMG gives every CR in a band the same dice, so a CR 4 and a CR 0 carry the same and CR 5 jumps ninefold.
- * Butler keeps each band's average at the band's middle CR (2, 7.5, 13.5, 20) and follows a smooth curve between them
- * (log-linear, continued past both ends), so money grows steadily with CR. Returns the factor for this CR's roll.
+ * What a monster carries on average (GP): its share of the purses the party finds over a level, in proportion to its
+ * XP. Purse = monster XP × purse income ÷ (XP the whole party earns over the level). Never more than one hoard.
  */
-export function coinScale(cr: number | undefined, rules: LootRules): number {
-  const table = rules === "2014" ? INDIVIDUAL_2014 : INDIVIDUAL_2024;
-  const anchors = table.map((b) => ({ cr: b.crMax >= 30 ? 20 : (b.crMin + b.crMax) / 2, ln: Math.log(bandAverageGp(b)) }));
-  const c = Math.min(MAX_SCALED_CR, Math.max(0, cr ?? 0));
-  let i = anchors.findIndex((a) => c <= a.cr);
-  i = i <= 0 ? 1 : i;
-  if (c > anchors[anchors.length - 1]!.cr) i = anchors.length - 1;
-  const a = anchors[i - 1]!, z = anchors[i]!;
-  const target = Math.exp(a.ln + (z.ln - a.ln) * (c - a.cr) / (z.cr - a.cr));
-  return target / bandAverageGp(pickBand(table, cr));
+export function expectedPurse(cr: number | undefined, e: Economy = {}): number {
+  const level = economyLevel(cr, e);
+  const size = Math.max(1, Math.round(e.partySize ?? 4));
+  const xp = xpForCr(cr ?? 0) || 10;
+  const perXp = partyIncome(level).purses / (xpDuringLevel(level) * size);
+  return Math.min(hoardValue(level), xp * perXp);
 }
 
-/** Scales an amount of one coin; too little for that coin is counted in smaller coins ("0.4 gp" → "4 sp"). */
-function scaleCoin(amount: number, coin: CoinKey, factor: number): { k: CoinKey; n: number } | null {
-  const cp = amount * CP[coin] * factor;
-  for (const k of COIN_ORDER.slice(COIN_ORDER.indexOf(coin)).filter((x) => x !== "ep")) {
-    if (cp >= CP[k]) return { k, n: Math.round(cp / CP[k]) };
+/**
+ * Splits a value into a believable purse: most of it (70–95%) in the largest coin worth having ten of, most of the rest
+ * in the next smaller coin, and loose change (under a hundred pieces) in the one below that, if any. Electrum turns up
+ * now and then in place of silver. Returns counts per coin; their value is the asked value, give or take the change.
+ */
+export function coinMix(valueGp: number, rng: Rng): Partial<Record<CoinKey, number>> {
+  const cp = Math.max(1, Math.round(valueGp * 100));
+  const plain: CoinKey[] = ["pp", "gp", "sp", "cp"];
+  const m = plain.findIndex((k) => cp / CP[k] >= 10);
+  const start = m < 0 ? 3 : m;
+  const coins = plain.slice(start, start + (rng() < 0.3 ? 2 : 3));
+  if (coins.includes("sp") && rng() < 0.15) coins[coins.indexOf("sp")] = "ep";
+  const out: Partial<Record<CoinKey, number>> = {};
+  const shares = [0.7 + 0.25 * rng(), 0.75 + 0.2 * rng()];
+  // Fill from the smallest coin up: loose change first (capped), so the bigger coins absorb the rest exactly.
+  const plan = coins.map((k, i) => ({ k, share: shares[i] ?? 1 }));
+  const amounts = plan.map(() => 0);
+  let rest = cp;
+  plan.forEach((p, i) => { amounts[i] = i === plan.length - 1 ? rest : Math.floor(rest * p.share); rest -= amounts[i]!; });
+  for (let i = plan.length - 1; i >= 0; i--) {
+    const k = plan[i]!.k;
+    const isChange = i === plan.length - 1 && i > 0;
+    let n = i === 0 ? Math.round(amounts[i]! / CP[k]) : Math.floor(amounts[i]! / CP[k]);
+    if (isChange && n > 99) n = 10 + Math.floor(rng() * 90);
+    const leftover = amounts[i]! - n * CP[k];
+    if (i > 0) amounts[i - 1]! += leftover;
+    if (n > 0) out[k] = n;
   }
-  return cp >= 0.5 ? { k: "cp", n: 1 } : null;
+  if (!Object.keys(out).length) out.cp = 1;
+  return out;
 }
+
+export const coinText = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.filter((k) => c[k]).map((k) => `${c[k]!.toLocaleString("en-US")} ${k}`).join(", ");
+export const coinValueGp = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.reduce((v, k) => v + (c[k] ?? 0) * CP[k] / 100, 0);
 
 const crText = (cr: number) => (cr === 0.125 ? "1/8" : cr === 0.25 ? "1/4" : cr === 0.5 ? "1/2" : String(cr));
+const gpText = (v: number) => (v >= 100 ? Math.round(v).toLocaleString("en-US") : v >= 10 ? v.toFixed(0) : v.toFixed(1));
 
-/** A roll on the DMG Individual Treasure table for this CR, scaled so money follows the CR (see coinScale). */
-export function rollCoins(cr: number | undefined, rules: LootRules, rng: Rng, id = idMaker(rng)()): LootLine {
-  const b = pickBand(rules === "2014" ? INDIVIDUAL_2014 : INDIVIDUAL_2024, cr);
-  const d100 = b.rows.length > 1 ? rollFormula("1d100", rng).total : undefined;
-  const row = d100 === undefined ? b.rows[0]! : b.rows.find((r) => d100 >= r.min && d100 <= r.max)!;
-  const parts = COIN_ORDER.filter((k) => row.coins[k]).map((k) => ({ k, ...rollCoinFormula(row.coins[k]!, rng) }));
-  const factor = coinScale(cr, rules);
-  const found = new Map<CoinKey, number>();
-  for (const p of parts) {
-    const s = scaleCoin(p.total, p.k, factor);
-    if (s) found.set(s.k, (found.get(s.k) ?? 0) + s.n);
-  }
-  if (!found.size) found.set("cp", 1);
-  const label = `${rules === "2014" ? "2014" : "2024"} DMG Individual Treasure, CR ${b.crMax >= 30 ? `${b.crMin}+` : `${b.crMin}–${b.crMax}`}`;
-  const rolled = parts.map((p) => `${p.text} = ${p.total.toLocaleString("en-US")} ${p.k}`).join("; ");
+/** The monster's purse: its expected share (expectedPurse), varied by 4d6 ÷ 14 (×0.3–×1.7), in a mix of coins. */
+export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, id = idMaker(rng)()): LootLine {
+  const expected = expectedPurse(cr, e);
+  const r = rollFormula("4d6", rng);
+  const coins = coinMix(expected * r.total / 14, rng);
+  const level = economyLevel(cr, e);
+  const who = e.partyLevel !== undefined ? `a level ${level} party of ${Math.max(1, Math.round(e.partySize ?? 4))}` : `a level ${level} party of 4 (CR used as the level: no party in the scene)`;
   return {
-    id, kind: "coins",
-    text: COIN_ORDER.filter((k) => found.has(k)).map((k) => `${found.get(k)!.toLocaleString("en-US")} ${k}`).join(", "),
-    detail: `${label}${d100 !== undefined ? ` (d100 ${d100})` : ""}: ${rolled}; × ${factor < 10 ? factor.toFixed(2) : Math.round(factor)} for CR ${crText(cr ?? 0)}`,
+    id, kind: "coins", text: coinText(coins),
+    detail: `Worth ${gpText(coinValueGp(coins))} gp. Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
+      + `whose coin at this level is ~${gpText(partyIncome(level).hoardsAndQuests)} gp from hoards and quests plus ${Math.round(PURSE_SHARE * 100)}% from monsters, `
+      + `shared by XP; varied by 4d6 (${r.dice.join(" + ")} = ${r.total}) ÷ 14`,
   };
 }
 

@@ -8,7 +8,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import { cryptoRng } from "../core/dice";
 import {
   addRolled, lootEligible, lootFields, lootPostText, markPosted, planLoot, removeLine, rollMagicItem,
-  type LootRules, type LootSource, type Theme, type UnitLoot,
+  type Economy, type LootSource, type Theme, type UnitLoot,
 } from "../core/loot";
 import { makeNote, ROLL_CHANNEL, type Role } from "../core/rolls";
 import { STATE_KEY, type UnitSheet, type UnitState } from "../core/sheet";
@@ -23,7 +23,8 @@ export interface LootPanelCtx {
   me: { id: string; name: string };
   /** The name players know the unit by (its alias, if the GM set one). */
   publicName: string;
-  rules: LootRules;
+  /** The party's average level and size, for how much money monsters carry. */
+  economy: Economy;
   /** Party members' names, for "taken by". */
   party: string[];
   report: (err: unknown) => void;
@@ -52,7 +53,7 @@ function ensureRolled(ctx: LootPanelCtx, sheet: UnitSheet) {
   rolling.add(ctx.unitId);
   void (async () => {
     const src = await lootSource(sheet);
-    await save(ctx.unitId, planLoot(src, ctx.rules, cryptoRng));
+    await save(ctx.unitId, planLoot(src, ctx.economy, cryptoRng));
   })().catch(ctx.report).finally(() => rolling.delete(ctx.unitId));
 }
 
@@ -75,7 +76,7 @@ export function lootPanel(ctx: LootPanelCtx, sheet: UnitSheet, state: UnitState)
   const act = (fn: () => Promise<unknown>) => () => void fn().catch(ctx.report);
   const cr = sheet.cr;
   const rollTheme = (t: Theme) => act(() => save(ctx.unitId, addRolled(loot, rollMagicItem(t, cr, cryptoRng), t)));
-  const reroll = act(async () => save(ctx.unitId, planLoot(await lootSource(sheet), ctx.rules, cryptoRng)));
+  const reroll = act(async () => save(ctx.unitId, planLoot(await lootSource(sheet), ctx.economy, cryptoRng)));
   const unposted = loot.lines.filter((l) => !l.posted).map((l) => l.id);
 
   const offers: Child[] = [];
