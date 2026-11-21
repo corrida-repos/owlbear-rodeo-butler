@@ -57,11 +57,12 @@ export function lootEligible(sheet: Pick<UnitSheet, "kind">, state: Pick<UnitSta
 const NO_TREASURE = /^(swarm of \w+ )?(beast|ooze|plant|construct|elemental)s?\b/i;
 
 /** The facts loot depends on; `treasure`/`gear` may come from the book when the token predates them (see card). */
-export type LootSource = Pick<UnitSheet, "cr" | "type" | "treasure" | "gear">;
+export type LootSource = Pick<UnitSheet, "cr" | "type" | "treasure" | "gear"> & Partial<Pick<UnitSheet, "actions" | "acNote" | "flags">>;
 
 export function planLoot(sheet: LootSource, rules: LootRules, rng: Rng): UnitLoot {
   const ids = idMaker(rng);
-  const lines: LootLine[] = (sheet.gear ?? []).map((g) => ({ id: ids(), kind: "gear", text: g, detail: "Gear (stat block)" }));
+  const gear = sheet.gear ?? inferGear(sheet);
+  const lines: LootLine[] = gear.map((g) => ({ id: ids(), kind: "gear", text: g, detail: sheet.gear ? "Gear (stat block)" : "Carried (from its armor and attacks)" }));
   const tags = sheet.treasure?.map((t) => t.toLowerCase());
   const out: UnitLoot = { lines, themes: [] };
   // Without a Treasure line (or with an empty one), only creatures that could carry money have some.
@@ -78,6 +79,8 @@ export function planLoot(sheet: LootSource, rules: LootRules, rng: Rng): UnitLoo
 }
 
 const COIN_ORDER: CoinKey[] = ["pp", "gp", "ep", "sp", "cp"];
+/** Copper pieces per coin. */
+const CP: Record<CoinKey, number> = { pp: 1000, gp: 100, ep: 50, sp: 10, cp: 1 };
 
 /** "4d6*100" → rolled, multiplied. */
 function rollCoinFormula(f: string, rng: Rng): { total: number; text: string } {
@@ -87,22 +90,74 @@ function rollCoinFormula(f: string, rng: Rng): { total: number; text: string } {
   return { total: r.total * m, text: `${dice} → ${r.dice.join(" + ")}${m !== 1 ? ` × ${m}` : ""}` };
 }
 
+/** Average of "4d6*100". */
+function formulaAverage(f: string): number {
+  const [dice, mult] = f.split("*");
+  const m = /^(\d+)d(\d+)$/.exec(dice!.trim());
+  return (m ? Number(m[1]) * (Number(m[2]) + 1) / 2 : Number(dice)) * (mult ? Number(mult) : 1);
+}
+
+/** A band's average value in gp (d100 rows weighted by their chance). */
+function bandAverageGp(b: IndividualBand): number {
+  return b.rows.reduce((sum, r) => sum + (r.max - r.min + 1) / 100
+    * Object.entries(r.coins).reduce((v, [k, f]) => v + formulaAverage(f!) * CP[k as CoinKey] / 100, 0), 0);
+}
+
 function pickBand(table: IndividualBand[], cr: number | undefined): IndividualBand {
   const c = Math.max(0, cr ?? 0);
   return table.find((b) => c >= b.crMin && c <= b.crMax) ?? (c > 30 ? table[table.length - 1]! : table[0]!);
 }
 
-/** A roll on the DMG Individual Treasure table for this CR. */
+/** CRs above this get the same money (the curve would otherwise run past a whole DMG hoard). */
+const MAX_SCALED_CR = 24;
+
+/**
+ * The DMG gives every CR in a band the same dice, so a CR 4 and a CR 0 carry the same and CR 5 jumps ninefold.
+ * Butler keeps each band's average at the band's middle CR (2, 7.5, 13.5, 20) and follows a smooth curve between them
+ * (log-linear, continued past both ends), so money grows steadily with CR. Returns the factor for this CR's roll.
+ */
+export function coinScale(cr: number | undefined, rules: LootRules): number {
+  const table = rules === "2014" ? INDIVIDUAL_2014 : INDIVIDUAL_2024;
+  const anchors = table.map((b) => ({ cr: b.crMax >= 30 ? 20 : (b.crMin + b.crMax) / 2, ln: Math.log(bandAverageGp(b)) }));
+  const c = Math.min(MAX_SCALED_CR, Math.max(0, cr ?? 0));
+  let i = anchors.findIndex((a) => c <= a.cr);
+  i = i <= 0 ? 1 : i;
+  if (c > anchors[anchors.length - 1]!.cr) i = anchors.length - 1;
+  const a = anchors[i - 1]!, z = anchors[i]!;
+  const target = Math.exp(a.ln + (z.ln - a.ln) * (c - a.cr) / (z.cr - a.cr));
+  return target / bandAverageGp(pickBand(table, cr));
+}
+
+/** Scales an amount of one coin; too little for that coin is counted in smaller coins ("0.4 gp" → "4 sp"). */
+function scaleCoin(amount: number, coin: CoinKey, factor: number): { k: CoinKey; n: number } | null {
+  const cp = amount * CP[coin] * factor;
+  for (const k of COIN_ORDER.slice(COIN_ORDER.indexOf(coin)).filter((x) => x !== "ep")) {
+    if (cp >= CP[k]) return { k, n: Math.round(cp / CP[k]) };
+  }
+  return cp >= 0.5 ? { k: "cp", n: 1 } : null;
+}
+
+const crText = (cr: number) => (cr === 0.125 ? "1/8" : cr === 0.25 ? "1/4" : cr === 0.5 ? "1/2" : String(cr));
+
+/** A roll on the DMG Individual Treasure table for this CR, scaled so money follows the CR (see coinScale). */
 export function rollCoins(cr: number | undefined, rules: LootRules, rng: Rng, id = idMaker(rng)()): LootLine {
   const b = pickBand(rules === "2014" ? INDIVIDUAL_2014 : INDIVIDUAL_2024, cr);
   const d100 = b.rows.length > 1 ? rollFormula("1d100", rng).total : undefined;
   const row = d100 === undefined ? b.rows[0]! : b.rows.find((r) => d100 >= r.min && d100 <= r.max)!;
   const parts = COIN_ORDER.filter((k) => row.coins[k]).map((k) => ({ k, ...rollCoinFormula(row.coins[k]!, rng) }));
+  const factor = coinScale(cr, rules);
+  const found = new Map<CoinKey, number>();
+  for (const p of parts) {
+    const s = scaleCoin(p.total, p.k, factor);
+    if (s) found.set(s.k, (found.get(s.k) ?? 0) + s.n);
+  }
+  if (!found.size) found.set("cp", 1);
   const label = `${rules === "2014" ? "2014" : "2024"} DMG Individual Treasure, CR ${b.crMax >= 30 ? `${b.crMin}+` : `${b.crMin}–${b.crMax}`}`;
+  const rolled = parts.map((p) => `${p.text} = ${p.total.toLocaleString("en-US")} ${p.k}`).join("; ");
   return {
     id, kind: "coins",
-    text: parts.map((p) => `${p.total.toLocaleString("en-US")} ${p.k}`).join(", "),
-    detail: `${label}${d100 !== undefined ? ` (d100 ${d100})` : ""}: ${parts.map((p) => `${p.text} ${p.k}`).join("; ")}`,
+    text: COIN_ORDER.filter((k) => found.has(k)).map((k) => `${found.get(k)!.toLocaleString("en-US")} ${k}`).join(", "),
+    detail: `${label}${d100 !== undefined ? ` (d100 ${d100})` : ""}: ${rolled}; × ${factor < 10 ? factor.toFixed(2) : Math.round(factor)} for CR ${crText(cr ?? 0)}`,
   };
 }
 
@@ -160,6 +215,42 @@ export function gearName(g: unknown): string | null {
   const name = ref.split("|")[0]!.trim().replace(/\b([a-z])/g, (c: string) => c.toUpperCase()).replace(/\b(Of|The|And)\b/g, (w: string) => w.toLowerCase());
   const q = Number((g as any)?.quantity);
   return q > 1 ? `${name} ×${q}` : name;
+}
+
+/** PHB weapons (2014 and 2024, firearms included) and armor, for creatures whose stat block has no Gear line. */
+const WEAPONS = [
+  "Club", "Dagger", "Greatclub", "Handaxe", "Javelin", "Light Hammer", "Mace", "Quarterstaff", "Sickle", "Spear", "Dart", "Light Crossbow",
+  "Shortbow", "Sling", "Battleaxe", "Flail", "Glaive", "Greataxe", "Greatsword", "Halberd", "Lance", "Longsword", "Maul", "Morningstar",
+  "Pike", "Rapier", "Scimitar", "Shortsword", "Trident", "War Pick", "Warhammer", "Whip", "Blowgun", "Hand Crossbow", "Heavy Crossbow",
+  "Longbow", "Musket", "Pistol", "Net",
+];
+/** Longest names first, so "Studded Leather" wins over "Leather" and "Half Plate" over "Plate". */
+const ARMOR: [RegExp, string][] = ([
+  ["studded leather( armor)?", "Studded Leather Armor"], ["half plate( armor)?", "Half Plate Armor"], ["chain shirt", "Chain Shirt"],
+  ["chain mail", "Chain Mail"], ["scale mail", "Scale Mail"], ["ring mail", "Ring Mail"], ["splint( armor)?", "Splint Armor"],
+  ["breastplate", "Breastplate"], ["padded( armor)?", "Padded Armor"], ["leather( armor)?", "Leather Armor"], ["hide( armor)?", "Hide Armor"],
+  ["plate( armor)?", "Plate Armor"], ["shields?", "Shield"],
+] as [string, string][]).map(([re, name]) => [new RegExp(`\\b${re}\\b`, "i"), name]);
+
+/** Armor named in a text ("leather armor, shield"), each piece once. */
+function armorIn(text: string): string[] {
+  let rest = text;
+  const out: string[] = [];
+  for (const [re, name] of ARMOR) if (re.test(rest)) { out.push(name); rest = rest.replace(re, " "); }
+  return out;
+}
+
+/** "Scimitar", "Longsword (Two-Handed)", "Spear (Melee)" → the weapon; "Bite", "Bone Bow", "Multiattack" → none. */
+function weaponOf(action: string): string | undefined {
+  const base = action.replace(/\s*\(.*?\)\s*/g, " ").replace(/\s*\+\d+$/, "").trim().toLowerCase();
+  return WEAPONS.find((w) => w.toLowerCase() === base);
+}
+
+/** What a creature without a Gear line visibly carries: the armor its AC names and the weapons it attacks with. */
+export function inferGear(sheet: Partial<Pick<UnitSheet, "actions" | "acNote" | "flags">>): string[] {
+  const acText = [sheet.acNote ?? "", ...(sheet.flags ?? []).filter((f) => f.startsWith("AC source:"))].join(", ");
+  const weapons = (sheet.actions ?? []).map((a) => weaponOf(a.name)).filter((w): w is string => !!w);
+  return [...new Set([...armorIn(acText), ...weapons])];
 }
 
 /** The 5etools fields loot reads, from a raw monster: `treasure` and `gear`. 2024 Monster Manual creatures without a

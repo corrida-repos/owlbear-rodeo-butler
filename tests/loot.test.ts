@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, gearName, lootEligible, lootFields, lootPostText, markPosted, planLoot, rarityFor, removeLine, rollCoins, rollMagicItem,
+  addRolled, band, coinScale, gearName, inferGear, lootEligible, lootFields, lootPostText, markPosted, planLoot, rarityFor, removeLine, rollCoins, rollMagicItem,
   THEMES, RARITIES,
 } from "../src/core/loot";
 import { INDIVIDUAL_2014, INDIVIDUAL_2024, THEME_TABLES } from "../src/core/lootTables";
@@ -52,9 +52,10 @@ describe("planLoot", () => {
     const l = planLoot(goblin, "2024", seededRng(1));
     expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(goblin.gear);
     const coins = l.lines.find((x) => x.kind === "coins")!;
+    // 3d6 gp scaled to CR 1/4 (× 0.5): 2–9 gp.
     const gp = Number(/^(\d+) gp$/.exec(coins.text)![1]);
-    expect(gp).toBeGreaterThanOrEqual(3);
-    expect(gp).toBeLessThanOrEqual(18);
+    expect(gp).toBeGreaterThanOrEqual(1);
+    expect(gp).toBeLessThanOrEqual(9);
     expect(coins.detail).toMatch(/2024 DMG Individual Treasure, CR 0–4: 3d6/);
     expect(l.themes).toEqual(["Implements"]);
     expect(l.any).toBeUndefined();
@@ -86,6 +87,25 @@ describe("planLoot", () => {
     expect(l.note).toMatch(/no treasure/);
   });
 
+  it("without a Gear line, gear comes from its armor and weapon attacks", () => {
+    const goblin2014 = {
+      cr: 0.25, type: "Humanoid (Goblinoid)", flags: ["AC source: leather armor, shield."],
+      actions: [{ name: "Scimitar", text: "" }, { name: "Shortbow", text: "" }, { name: "Bite", text: "" }, { name: "Multiattack", text: "" }],
+    };
+    const l = planLoot(goblin2014, "2014", seededRng(6));
+    expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(["Leather Armor", "Shield", "Scimitar", "Shortbow"]);
+    expect(l.lines[0]!.detail).toMatch(/from its armor and attacks/);
+    expect(inferGear({ acNote: "studded leather", actions: [{ name: "Longsword (Two-Handed)", text: "" }, { name: "Longsword", text: "" }, { name: "Bone Bow", text: "" }] }))
+      .toEqual(["Studded Leather Armor", "Longsword"]);
+    expect(inferGear({ flags: ["AC source: half plate, shield."] })).toEqual(["Half Plate Armor", "Shield"]);
+    expect(inferGear({ flags: ["AC source: natural armor."], actions: [{ name: "Claw", text: "" }] })).toEqual([]);
+  });
+
+  it("a stat block's Gear line wins over inferred gear", () => {
+    const l = planLoot({ ...goblin, actions: [{ name: "Dagger", text: "" }] }, "2024", seededRng(6));
+    expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(goblin.gear);
+  });
+
   it("without a Treasure line: beasts carry nothing, others roll coins on the room's edition table", () => {
     expect(planLoot({ cr: 1, type: "Swarm of Tiny Beasts" }, "2014", seededRng(4)).lines).toEqual([]);
     expect(planLoot({ cr: 1, type: "Ooze" }, "2014", seededRng(4)).note).toMatch(/Ooze/);
@@ -97,14 +117,38 @@ describe("planLoot", () => {
 });
 
 describe("rolls", () => {
-  it("2024 high-CR coins are platinum in hundreds", () => {
-    for (let s = 0; s < 20; s++) {
-      const t = rollCoins(20, "2024", seededRng(s)).text;
-      const pp = Number(/^([\d,]+) pp$/.exec(t)![1]!.replace(/,/g, ""));
-      expect(pp % 100).toBe(0);
-      expect(pp).toBeGreaterThanOrEqual(200);
-      expect(pp).toBeLessThanOrEqual(1600);
+  const GP: Record<string, number> = { pp: 10, gp: 1, ep: 0.5, sp: 0.1, cp: 0.01 };
+  const gpOf = (text: string) => text.split(", ").reduce((v, p) => { const [n, k] = p.split(" "); return v + Number(n!.replace(/,/g, "")) * GP[k!]!; }, 0);
+  const average = (cr: number, rules: "2024" | "2014") => {
+    const rng = seededRng(11);
+    let sum = 0;
+    for (let i = 0; i < 2000; i++) sum += gpOf(rollCoins(cr, rules, rng).text);
+    return sum / 2000;
+  };
+
+  it("money grows with CR, with no jump at the DMG's band edges", () => {
+    for (const rules of ["2024", "2014"] as const) {
+      const crs = [0, 0.25, 1, 2, 3, 4, 5, 6, 8, 10, 11, 13, 16, 17, 20, 24];
+      const avgs = crs.map((cr) => average(cr, rules));
+      for (let i = 1; i < avgs.length; i++) expect(avgs[i]!, `${rules} CR ${crs[i]} vs ${crs[i - 1]}`).toBeGreaterThan(avgs[i - 1]!);
+      // Neighbouring CRs across a band edge differ by well under the DMG's 9× step.
+      for (const [lo, hi] of [[4, 5], [10, 11], [16, 17]]) expect(average(hi!, rules) / average(lo!, rules)).toBeLessThan(2);
     }
+  });
+
+  it("each band's average stays at its middle CR", () => {
+    expect(coinScale(2, "2024")).toBeCloseTo(1, 5);
+    expect(coinScale(7.5, "2024")).toBeCloseTo(1, 5);
+    expect(coinScale(20, "2024")).toBeCloseTo(1, 5);
+    expect(average(2, "2024")).toBeGreaterThan(9);
+    expect(average(2, "2024")).toBeLessThan(11.5);
+    expect(coinScale(30, "2024")).toBe(coinScale(24, "2024"));
+  });
+
+  it("small amounts become smaller coins, and the roll is explained", () => {
+    const c = rollCoins(0, "2024", seededRng(3));
+    expect(c.text).toMatch(/^\d+ (gp|sp|cp)$/);
+    expect(c.detail).toMatch(/3d6 → .* = \d+ gp; × 0\.\d\d for CR 0$/);
   });
 
   it("2014 coins can mix denominations with multipliers", () => {
