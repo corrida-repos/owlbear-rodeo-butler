@@ -24,6 +24,7 @@ import { displayConditions, isDead, needsDeathSaves } from "../core/systems";
 import { parseHpInput } from "../core/hp";
 import { addConditionTo, changeHp, removeConditionFrom, resolveConcentration, reviveUnits } from "../core/tracker";
 import { zeroHpSection } from "../extension/zeroHp";
+import { lootPanel } from "../extension/lootPanel";
 import { conditionText, d20Penalty, durationText, EXHAUSTION_2014, speedPenalty } from "../core/conditions";
 import { turnOrder } from "../core/encounter";
 import { trackerUnits } from "../core/tracker";
@@ -108,9 +109,12 @@ function zeroHpPanel(state: UnitState): Child {
 
 /** Units in the scene by id, for duration texts and the "until X's turn" choices. */
 let sceneUnits: { id: string; name: string }[] = [];
+/** Party members' names, for the loot panel's "taken by". */
+let partyNames: string[] = [];
 async function refreshSceneUnits() {
   const items = await obrGateway.getItems();
   const units = trackerUnits(items);
+  partyNames = units.filter((u) => u.party && !u.dead).map((u) => u.name);
   const order = turnOrder(units);
   sceneUnits = [...order, ...units.filter((u) => !order.includes(u))].map((u) => ({ id: u.id, name: u.name }));
 }
@@ -130,6 +134,14 @@ function wildShapePanel(state: UnitState): Child {
     h("span", { className: "row" },
       h("button", { className: "secondary small", onclick: open }, "Change"),
       h("button", { className: "small", onclick: revert }, "Revert")));
+}
+
+function lootCardPanel(info: ItemInfo, sheet: UnitSheet, state: UnitState): Child {
+  return lootPanel({
+    unitId: itemId, role, me, rules: roomSystem().rules, party: partyNames,
+    publicName: state.alias?.trim() || unitName(info, sheet, state),
+    report: showErr,
+  }, sheet, state);
 }
 
 let addOpen = false;
@@ -377,7 +389,7 @@ function rollLog(): Child {
     h("summary", {}, `Roll log (${log.length})`),
     log.length ? h("ul", { className: "plain small log" }, ...log.slice(0, 25).map((m) =>
       h("li", { className: mine.includes(m) ? "" : "muted" },
-        h("strong", {}, String(m.total)), ` ${m.unit?.name ?? m.by.name} · ${m.label}${m.crit ? " (crit)" : ""}`,
+        m.note ? null : h("strong", {}, String(m.total)), m.note ? m.label : ` ${m.unit?.name ?? m.by.name} · ${m.label}${m.crit ? " (crit)" : ""}`,
         m.natural === 20 ? " · nat 20" : m.natural === 1 ? " · nat 1" : "", m.visibility === "private" ? " · private" : "",
         h("span", { className: "muted" }, ` (${m.by.name})`))))
       : h("div", { className: "small muted" }, "No rolls yet this session."));
@@ -466,7 +478,7 @@ function render() {
       nodes.push(header(info, u.sheet, u.state, access));
       if (access === "full") {
         
-        nodes.push(statsBar(u.sheet, u.state), wildShapePanel(u.state), zeroHpPanel(u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), visionCardPanel(u.sheet, u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
+        nodes.push(statsBar(u.sheet, u.state), wildShapePanel(u.state), zeroHpPanel(u.state), lootCardPanel(info, u.sheet, u.state), concentrationPanel(u.sheet, u.state), conditionsPanel(u.state), visionCardPanel(u.sheet, u.state), rollControls(), abilities(u.sheet), infoLines(u.sheet), ...sections(u.sheet), editPanel(info, u.state));
         if (u.sheet.flags.length && role === "GM") nodes.push(h("details", { className: "panel small" }, h("summary", {}, `Notes (${u.sheet.flags.length})`), h("ul", { className: "plain" }, ...u.sheet.flags.map((f) => h("li", {}, f)))));
       } else {
         nodes.push(h("div", { className: "panel small muted" }, "You can see this unit's name and conditions. Its stats belong to the GM (or another player)."));

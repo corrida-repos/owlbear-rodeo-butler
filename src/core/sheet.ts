@@ -5,6 +5,7 @@
  * Kept under two keys so frequent state writes stay small and don't collide with sheet edits.
  * Rollable text uses the chip syntax `[1d20+4]` (see fivetools.ts diceChip).
  */
+import type { UnitLoot } from "./loot";
 import type { ItemInfo } from "./items";
 import { BUTLER_NS, SIZE_CELLS } from "./constants";
 import type { InitiativeRoll, Provenance, StatblockInitiative } from "./schema";
@@ -64,6 +65,10 @@ export interface UnitSheet {
   legendary: SheetEntry[];
   spells: SheetEntry[];
   inventory: SheetEntry[];
+  /** 2024 Monster Manual Treasure line ("individual", "arcana", "any"…); [] when the book lists none (loot.ts). */
+  treasure?: string[];
+  /** 2024 Monster Manual Gear: "Scimitar", "Arrow ×20" (loot.ts). */
+  gear?: string[];
   /** Coins the character carries (D&D Beyond). */
   currency?: Coins;
   /** Armor, weapon and tool proficiencies (D&D Beyond). */
@@ -124,6 +129,8 @@ export interface UnitState {
   alias?: string;
   /** The light the unit carries or sheds (a torch, the Light cantrip…), see vision.ts. */
   light?: { key: string; bright?: number; dim?: number };
+  /** Suggested loot, rolled once when a monster or NPC dies (loot.ts). */
+  loot?: UnitLoot;
 }
 
 export const abilityMod = (score: number) => Math.floor((score - 10) / 2);

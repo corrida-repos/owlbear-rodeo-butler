@@ -15,7 +15,7 @@ export function renderRollLog(): Child {
     h("summary", {}, `Roll log (${log.length})`),
     log.length
       ? h("ul", { className: "plain small log", style: "margin-top:6px" }, ...log.map((m) =>
-        h("li", {}, h("strong", {}, String(m.total)), ` ${m.unit?.name ?? m.by.name} · ${m.label}${m.crit ? " (crit)" : ""}`,
+        h("li", {}, m.note ? null : h("strong", {}, String(m.total)), m.note ? m.label : ` ${m.unit?.name ?? m.by.name} · ${m.label}${m.crit ? " (crit)" : ""}`,
           m.natural === 20 ? " · nat 20" : m.natural === 1 ? " · nat 1" : "", m.visibility === "private" ? " · private" : "",
           h("span", { className: "muted" }, ` (${m.by.name}, ${new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`))))
       : h("div", { className: "small muted" }, "No rolls yet this session. Rolls made from unit cards show here."));

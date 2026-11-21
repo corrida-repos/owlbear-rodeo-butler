@@ -39,6 +39,8 @@ export interface RollMessage {
   /** The kept d20 of a d20 test (1 and 20 are called out). */
   natural?: number;
   groups?: RollGroupShown[];
+  /** A text announcement, not a roll (e.g. loot posted by the GM): no total or dice are shown. */
+  note?: true;
 }
 
 export interface Viewer { id: string; role: Role }
@@ -73,6 +75,7 @@ export function rollDetail(msg: RollMessage): string {
 /** "Goblin 2 · Scimitar · to hit: 17 (1d20+4 → 13 +4)", with "(private)" and natural 20 / 1 call-outs. */
 export function rollText(msg: RollMessage): string {
   const who = msg.unit?.name ?? msg.by.name;
+  if (msg.note) return `${msg.visibility === "private" ? "(private) " : ""}${msg.label}`;
   const nat = msg.natural === 20 ? " NATURAL 20!" : msg.natural === 1 ? " natural 1" : "";
   const crit = msg.crit ? " (critical)" : "";
   return `${msg.visibility === "private" ? "(private) " : ""}${who} · ${msg.label}${crit}: ${msg.total}${nat} (${rollDetail(msg)})`;
@@ -107,6 +110,16 @@ export function makeRoll(formula: string, label: string, by: RollMessage["by"], 
     ...(opts.crit ? { crit: true } : {}),
     ...(natural !== undefined ? { natural } : {}),
     groups: r.groups.map((g) => ({ sides: g.sides, rolls: g.rolls, kept: g.kept, sign: g.sign })),
+  };
+}
+
+/** A text announcement for the roll log and notifications (no dice). */
+export function makeNote(text: string, by: RollMessage["by"], visibility: RollVisibility, opts: Pick<RollOptions, "unit" | "newId" | "now"> = {}): RollMessage {
+  return {
+    v: 1,
+    id: (opts.newId ?? (() => globalThis.crypto.randomUUID()))(),
+    at: (opts.now ?? (() => new Date()))().toISOString(),
+    by, unit: opts.unit, label: text, formula: "", dice: [], modifier: 0, total: 0, visibility, note: true,
   };
 }
 

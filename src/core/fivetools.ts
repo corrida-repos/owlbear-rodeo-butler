@@ -1,3 +1,4 @@
+import { lootFields } from "./loot";
 import { MAX_DICE, MAX_DIE_SIDES, SIZE_NAMES } from "./constants";
 import { fmtMod } from "./dice";
 import { resolveVariables } from "./fivetools-copy";
@@ -393,6 +394,7 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
     legendary,
     spells,
     inventory: [],
+    ...lootFields(m),
     source: {
       provenance: "official",
       book: m.source,
