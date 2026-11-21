@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, coinMix, coinValueGp, expectedPurse, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
+  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
   partyIncome, planLoot, rarityFor, removeLine, rollMagicItem, rollPurse, THEMES, RARITIES, type Economy,
 } from "../src/core/loot";
 import { THEME_TABLES } from "../src/core/lootTables";
@@ -48,7 +48,7 @@ describe("planLoot", () => {
     expect(l.lines.filter((x) => x.kind === "gear").map((x) => x.text)).toEqual(goblin.gear);
     const coins = l.lines.find((x) => x.kind === "coins")!;
     expect(coins.text).toMatch(/^[\d,]+ (pp|gp|ep|sp|cp)(, [\d,]+ (pp|gp|ep|sp|cp))*$/);
-    expect(coins.detail).toMatch(/^Worth .* gp\. Expected .* gp for CR 1\/4 against a level 5 party of 4/);
+    expect(coins.detail).toMatch(/^Worth .* gp \(.* lb\)\. Expected .* gp for CR 1\/4 against a level 5 party of 4/);
     expect(l.themes).toEqual(["Implements"]);
     expect(l.any).toBeUndefined();
     expect(new Set(l.lines.map((x) => x.id)).size).toBe(l.lines.length);
@@ -152,27 +152,31 @@ describe("money", () => {
     }
   });
 
-  it("coins come in believable mixes", () => {
+  it("coins are light: the bulk in the best coin there are three of, then at most nine of each smaller coin", () => {
     const rng = seededRng(5);
     const kinds = new Set<string>();
-    for (let i = 0; i < 300; i++) {
-      const v = 0.5 + rng() * 20000;
+    for (let i = 0; i < 400; i++) {
+      const v = i % 4 === 0 ? 0.05 + rng() * 9 : 0.05 + rng() * rng() * 30000;
       const c = coinMix(v, rng);
-      const ks = Object.keys(c);
-      ks.forEach((k) => kinds.add(k));
-      expect(ks.length).toBeGreaterThanOrEqual(1);
-      expect(ks.length).toBeLessThanOrEqual(3);
-      expect(Math.abs(coinValueGp(c) - v) / v, `value ${v}`).toBeLessThan(0.1);
-      // Copper never piles up in a rich purse, and the smallest coin is just change.
-      if (v > 100) expect(c.cp ?? 0).toBe(0);
+      Object.keys(c).forEach((k) => kinds.add(k));
+      const order = ["pp", "gp", "ep", "sp", "cp"].filter((k) => c[k as keyof typeof c]);
+      for (const k of order.slice(1)) expect(c[k as keyof typeof c]!, `${k} in ${JSON.stringify(c)}`).toBeLessThanOrEqual(k === "ep" ? 1 : 9);
+      // The value is kept (rounded to the silver above 10 gp, the gold above 100 gp).
+      expect(Math.abs(coinValueGp(c) - v), `value ${v}`).toBeLessThanOrEqual(v >= 100 ? 0.5 : v >= 10 ? 0.05 : 0.005);
+      // As light as change-making allows: never more than a pound beyond the bulk coin's own weight.
+      const bulk = c[order[0] as keyof typeof c]!;
+      expect(coinWeightLb(c) - bulk / 50).toBeLessThanOrEqual(1);
+      if (v >= 30) expect(order[0]).toBe("pp");
     }
     expect([...kinds].sort()).toEqual(["cp", "ep", "gp", "pp", "sp"]);
-    expect(Object.keys(coinMix(0.05, rng))).toEqual(["cp"]);
+    expect(coinMix(0.05, rng)).toEqual({ cp: 5 });
+    expect(coinMix(2.5, rng)).toEqual({ sp: 25 });
+    expect(coinMix(1234.4, rng)).toEqual({ pp: 123, gp: 4 });
   });
 
   it("says how the money was worked out", () => {
     const d = rollPurse(2, { partyLevel: 3, partySize: 4 }, seededRng(1)).detail!;
-    expect(d).toMatch(/^Worth [\d.,]+ gp\. Expected [\d.,]+ gp for CR 2 against a level 3 party of 4, whose coin at this level is ~1,864 gp from hoards and quests plus 20% from monsters/);
+    expect(d).toMatch(/^Worth [\d.,]+ gp \((under 1|[\d.]+) lb\)\. Expected [\d.,]+ gp for CR 2 against a level 3 party of 4, whose coin at this level is ~1,864 gp from hoards and quests plus 20% from monsters/);
     expect(rollPurse(2, {}, seededRng(1)).detail).toMatch(/CR used as the level: no party in the scene/);
   });
 });

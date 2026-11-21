@@ -138,36 +138,29 @@ export function expectedPurse(cr: number | undefined, e: Economy = {}): number {
 }
 
 /**
- * Splits a value into a believable purse: most of it (70–95%) in the largest coin worth having ten of, most of the rest
- * in the next smaller coin, and loose change (under a hundred pieces) in the one below that, if any. Electrum turns up
- * now and then in place of silver. Returns counts per coin; their value is the asked value, give or take the change.
+ * Splits a value into a purse its owner would want to carry: coins weigh a pound per fifty (PHB), so the bulk is in the
+ * most valuable coin there are at least three of, and the rest is exact change, largest coins first (never more than
+ * nine of any smaller coin). Electrum turns up now and then as change in place of five silver. The value is exact,
+ * rounded to the silver above 10 gp and to the gold above 100 gp.
  */
 export function coinMix(valueGp: number, rng: Rng): Partial<Record<CoinKey, number>> {
-  const cp = Math.max(1, Math.round(valueGp * 100));
+  // Nobody carries exact copper in a fat purse: round to the silver above 10 gp, to the gold above 100 gp.
+  const unit = valueGp >= 100 ? 100 : valueGp >= 10 ? 10 : 1;
+  let cp = Math.max(1, Math.round(valueGp * 100 / unit) * unit);
   const plain: CoinKey[] = ["pp", "gp", "sp", "cp"];
-  const m = plain.findIndex((k) => cp / CP[k] >= 10);
-  const start = m < 0 ? 3 : m;
-  const coins = plain.slice(start, start + (rng() < 0.3 ? 2 : 3));
-  if (coins.includes("sp") && rng() < 0.15) coins[coins.indexOf("sp")] = "ep";
+  const main = plain.find((k) => cp / CP[k] >= 3) ?? "cp";
+  const change: CoinKey[] = plain.slice(plain.indexOf(main) + 1);
+  if (change.includes("sp") && rng() < 0.15) change.splice(change.indexOf("sp"), 0, "ep");
   const out: Partial<Record<CoinKey, number>> = {};
-  const shares = [0.7 + 0.25 * rng(), 0.75 + 0.2 * rng()];
-  // Fill from the smallest coin up: loose change first (capped), so the bigger coins absorb the rest exactly.
-  const plan = coins.map((k, i) => ({ k, share: shares[i] ?? 1 }));
-  const amounts = plan.map(() => 0);
-  let rest = cp;
-  plan.forEach((p, i) => { amounts[i] = i === plan.length - 1 ? rest : Math.floor(rest * p.share); rest -= amounts[i]!; });
-  for (let i = plan.length - 1; i >= 0; i--) {
-    const k = plan[i]!.k;
-    const isChange = i === plan.length - 1 && i > 0;
-    let n = i === 0 ? Math.round(amounts[i]! / CP[k]) : Math.floor(amounts[i]! / CP[k]);
-    if (isChange && n > 99) n = 10 + Math.floor(rng() * 90);
-    const leftover = amounts[i]! - n * CP[k];
-    if (i > 0) amounts[i - 1]! += leftover;
-    if (n > 0) out[k] = n;
+  for (const k of [main, ...change]) {
+    const n = Math.floor(cp / CP[k]);
+    if (n > 0) { out[k] = n; cp -= n * CP[k]; }
   }
-  if (!Object.keys(out).length) out.cp = 1;
   return out;
 }
+
+/** Coins weigh a pound per fifty (PHB). */
+export const coinWeightLb = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.reduce((n, k) => n + (c[k] ?? 0), 0) / 50;
 
 export const coinText = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.filter((k) => c[k]).map((k) => `${c[k]!.toLocaleString("en-US")} ${k}`).join(", ");
 export const coinValueGp = (c: Partial<Record<CoinKey, number>>) => COIN_ORDER.reduce((v, k) => v + (c[k] ?? 0) * CP[k] / 100, 0);
@@ -184,7 +177,7 @@ export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, id = idM
   const who = e.partyLevel !== undefined ? `a level ${level} party of ${Math.max(1, Math.round(e.partySize ?? 4))}` : `a level ${level} party of 4 (CR used as the level: no party in the scene)`;
   return {
     id, kind: "coins", text: coinText(coins),
-    detail: `Worth ${gpText(coinValueGp(coins))} gp. Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
+    detail: `Worth ${gpText(coinValueGp(coins))} gp (${coinWeightLb(coins) < 1 ? "under 1 lb" : `${Math.round(coinWeightLb(coins) * 10) / 10} lb`}). Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
       + `whose coin at this level is ~${gpText(partyIncome(level).hoardsAndQuests)} gp from hoards and quests plus ${Math.round(PURSE_SHARE * 100)}% from monsters, `
       + `shared by XP; varied by 4d6 (${r.dice.join(" + ")} = ${r.total}) ÷ 14`,
   };
