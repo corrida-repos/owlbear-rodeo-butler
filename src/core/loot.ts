@@ -42,6 +42,8 @@ export interface UnitLoot {
   any?: true;
   /** Why there's little or nothing: "Beasts carry no treasure." */
   note?: string;
+  /** Theme rolls that found no magic item: "Arcana: no magic item (d100 63, needed 18 or less for CR 2)". */
+  misses?: string[];
 }
 
 /** The DMG's CR bands. */
@@ -323,11 +325,33 @@ export function rollMagicItem(theme: Theme, cr: number | undefined, rng: Rng, id
 }
 
 /** Adds a rolled magic item; picking a theme uses up that offer (one roll per monster). */
-export function addRolled(loot: UnitLoot, line: LootLine, used: Theme): UnitLoot {
-  const lines = [...loot.lines, line];
+export function addRolled(loot: UnitLoot, line: LootLine | null, used: Theme, miss?: string): UnitLoot {
+  const lines = line ? [...loot.lines, line] : loot.lines;
   // "Any" offers every theme but stands for one roll: picking one ends the choice.
   const { any: _, ...rest } = loot;
-  return { ...rest, lines, themes: loot.any ? [] : loot.themes.filter((t) => t !== used) };
+  return { ...rest, lines, themes: loot.any ? [] : loot.themes.filter((t) => t !== used), ...(miss ? { misses: [...(loot.misses ?? []), miss] } : {}) };
+}
+
+/**
+ * The chance a monster carries a magic item at all when its Treasure line offers one: 10% plus 4% per CR, at most 90%
+ * (about 11% at CR 1/4, 18% at CR 2, 30% at CR 5, 50% at CR 10, 90% at CR 20). Weak monsters seldom have one; the
+ * DMG's hoards for low CRs often hold none either (1d4 − 1 items).
+ */
+export function itemChance(cr: number | undefined): number {
+  return Math.min(0.9, 0.1 + 0.04 * Math.max(0, cr ?? 0));
+}
+
+/**
+ * The GM's theme roll: d100 against itemChance, then (on a hit) a magic item within what's left of the CR budget.
+ * Either way the theme's roll is used up; a miss is noted on the loot.
+ */
+export function rollThemeItem(loot: UnitLoot, theme: Theme, cr: number | undefined, rng: Rng): UnitLoot {
+  const chance = Math.round(itemChance(cr) * 100);
+  const d100 = rollFormula("1d100", rng).total;
+  if (d100 > chance) return addRolled(loot, null, theme, `${theme}: no magic item (d100 ${d100}, needed ${chance} or less for CR ${crText(cr ?? 0)})`);
+  const line = rollMagicItem(theme, cr, rng, idMaker(rng)(), lootBudget(cr) - lootValue(loot));
+  if (!line) return addRolled(loot, null, theme, `${theme}: no magic item (its loot is already worth as much as a CR ${crText(cr ?? 0)} monster should carry)`);
+  return addRolled(loot, { ...line, detail: `${line.detail}; found on d100 ${d100} (${chance}% chance for CR ${crText(cr ?? 0)})` }, theme);
 }
 
 export function removeLine(loot: UnitLoot, id: string): UnitLoot {

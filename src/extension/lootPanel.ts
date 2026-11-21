@@ -7,7 +7,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { cryptoRng } from "../core/dice";
 import {
-  addRolled, lootBudget, lootEligible, lootFields, lootPostText, lootValue, markPosted, planLoot, rarityWithin, removeLine, rollMagicItem,
+  itemChance, lootBudget, lootEligible, lootFields, lootPostText, lootValue, markPosted, planLoot, rarityWithin, removeLine, rollThemeItem,
   type Economy, type LootSource, type Theme, type UnitLoot,
 } from "../core/loot";
 import { makeNote, ROLL_CHANNEL, type Role } from "../core/rolls";
@@ -78,20 +78,18 @@ export function lootPanel(ctx: LootPanelCtx, sheet: UnitSheet, state: UnitState)
   // The whole loot (gear aside) stays within what a monster of this CR should be worth.
   const left = lootBudget(cr) - lootValue(loot);
   const canRollItem = rarityWithin(left) !== null;
-  const rollTheme = (t: Theme) => act(async () => {
-    const line = rollMagicItem(t, cr, cryptoRng, undefined, left);
-    if (line) await save(ctx.unitId, addRolled(loot, line, t));
-  });
+  const rollTheme = (t: Theme) => act(() => save(ctx.unitId, rollThemeItem(loot, t, cr, cryptoRng)));
+  const chance = Math.round(itemChance(cr) * 100);
   const reroll = act(async () => save(ctx.unitId, planLoot(await lootSource(sheet), ctx.economy, cryptoRng)));
   const unposted = loot.lines.filter((l) => !l.posted).map((l) => l.id);
 
   const offers: Child[] = [];
   if (loot.themes.length) {
-    offers.push(h("div", { className: "small" }, loot.any ? "Treasure: Any. Pick a theme to roll a magic item:" : "Treasure line offers a magic item roll:"));
+    offers.push(h("div", { className: "small" }, loot.any ? `Treasure: Any. Pick a theme to roll for a magic item (${chance}% chance at its CR):` : `Treasure line offers a magic item roll (${chance}% chance at its CR):`));
     offers.push(h("div", { className: "row" },
       ...loot.themes.map((t) => h("button", {
         className: "secondary small", onclick: rollTheme(t), disabled: !canRollItem,
-        title: canRollItem ? `Roll on the 2024 DMG ${t} tables (rarity by CR, at most ${rarityWithin(left)} to stay within what its loot should be worth)` : "Its loot is already worth as much as a monster of its CR should carry",
+        title: canRollItem ? `${chance}% chance of a magic item; if so, rolled on the 2024 DMG ${t} tables (rarity by CR, at most ${rarityWithin(left)} to stay within what its loot should be worth)` : "Its loot is already worth as much as a monster of its CR should carry",
       }, `🎲 ${t}`))));
     if (!canRollItem) offers.push(h("div", { className: "small muted" }, "Its loot is already worth as much as a monster of its CR should carry."));
   }
@@ -111,6 +109,7 @@ export function lootPanel(ctx: LootPanelCtx, sheet: UnitSheet, state: UnitState)
             h("button", { className: "icon", title: "Remove from the suggestion", onclick: act(() => save(ctx.unitId, removeLine(loot, l.id))) }, "✕")))))
         : h("div", { className: "small muted" }, loot.note ?? "Nothing found."),
       loot.lines.length && loot.note ? h("div", { className: "small muted" }, loot.note) : null,
+      ...(loot.misses ?? []).map((m) => h("div", { className: "small muted" }, m)),
       ...offers,
       h("div", { className: "row" },
         partySelect ? h("label", { className: "small row" }, "Taken by ", partySelect) : null,

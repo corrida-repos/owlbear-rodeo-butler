@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gemText, itemValue, lootBudget, lootValue, purseCap, rarityWithin, splitGems, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
+  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gemText, itemChance, itemValue, rollThemeItem, lootBudget, lootValue, purseCap, rarityWithin, splitGems, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
   partyIncome, planLoot, rarityFor, removeLine, rollMagicItem, rollPurse, THEMES, RARITIES, type Economy,
 } from "../src/core/loot";
 import { GEMSTONES, THEME_TABLES } from "../src/core/lootTables";
@@ -278,6 +278,36 @@ describe("rolls", () => {
     expect(rarityWithin(99)).toBeNull();
     expect(rarityWithin(400)).toBe("Uncommon");
     expect(rarityWithin(1e9)).toBe("Legendary");
+  });
+
+  it("low-CR monsters seldom carry a magic item", () => {
+    expect([0, 0.25, 2, 5, 10, 20, 30].map((cr) => Math.round(itemChance(cr) * 100))).toEqual([10, 11, 18, 30, 50, 90, 90]);
+    const found = (cr: number) => {
+      let n = 0;
+      for (let s = 0; s < 1000; s++) if (rollThemeItem({ lines: [], themes: ["Arcana"] }, "Arcana", cr, seededRng(s)).lines.length) n++;
+      return n / 1000;
+    };
+    const low = found(0.25), mid = found(5), high = found(20);
+    expect(low).toBeGreaterThan(0.07);
+    expect(low).toBeLessThan(0.15);
+    expect(mid).toBeGreaterThan(0.25);
+    expect(mid).toBeLessThan(0.35);
+    expect(high).toBeGreaterThan(0.86);
+  });
+
+  it("a theme roll is used up either way; a miss is noted", () => {
+    let miss = null, hit = null;
+    for (let s = 0; s < 200 && !(miss && hit); s++) {
+      const l = rollThemeItem({ lines: [], themes: ["Arcana", "Relics"] }, "Arcana", 2, seededRng(s));
+      expect(l.themes).toEqual(["Relics"]);
+      if (l.lines.length) hit = l; else miss = l;
+    }
+    expect(miss!.misses).toEqual([expect.stringMatching(/^Arcana: no magic item \(d100 \d+, needed 18 or less for CR 2\)$/)]);
+    expect(hit!.lines[0]!.detail).toMatch(/found on d100 \d+ \(18% chance for CR 2\)$/);
+    // Over budget: no item even on a hit.
+    const outcomes = [...Array(200).keys()].map((s) => rollThemeItem({ lines: [{ id: "c", kind: "coins", text: "20 pp", valueGp: 200 }], themes: ["Arcana"] }, "Arcana", 0.25, seededRng(s)));
+    for (const o of outcomes) expect(o.lines).toHaveLength(1);
+    expect(outcomes.some((o) => /already worth as much as a CR 1\/4 monster should carry/.test(o.misses![0]!))).toBe(true);
   });
 
   it("item values follow the 2024 DMG", () => {
