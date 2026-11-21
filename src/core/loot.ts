@@ -28,6 +28,8 @@ export interface LootLine {
   text: string;
   /** How it was worked out, for the GM. */
   detail?: string;
+  /** What it's worth (coins, gems, magic items), for the CR budget (lootBudget). */
+  valueGp?: number;
   /** Posted to the roll log. */
   posted?: true;
 }
@@ -138,6 +140,26 @@ export function expectedPurse(cr: number | undefined, e: Economy = {}): number {
 }
 
 /**
+ * The most a monster's loot (money, gems and magic items; not its gear) should be worth: the 2024 DMG's average
+ * Random Treasure Hoard for its CR, which the DMG uses for "a hoard belonging to one monster" (smoothed between tiers,
+ * as hoardValue). About 260 gp at CR 1/4, 960 gp at CR 4, 10,500 gp at CR 10, 170,000 gp at CR 17.
+ */
+export function lootBudget(cr: number | undefined): number {
+  return hoardValue(economyLevel(cr));
+}
+
+/**
+ * The most a monster's purse can hold: twice what it would carry against a party of its own level (CR as the level),
+ * and never more than its loot budget. A strong party fighting weak monsters doesn't make them rich.
+ */
+export function purseCap(cr: number | undefined): number {
+  return Math.min(lootBudget(cr), 2 * expectedPurse(cr, {}));
+}
+
+/** What the loot (not counting gear) is worth so far. */
+export const lootValue = (loot: Pick<UnitLoot, "lines">) => loot.lines.reduce((v, l) => v + (l.kind === "gear" ? 0 : l.valueGp ?? 0), 0);
+
+/**
  * Splits a value into a purse its owner would want to carry: coins weigh a pound per fifty (PHB), so the bulk is in the
  * most valuable coin there are at least three of, and the rest is exact change, largest coins first (never more than
  * nine of any smaller coin). Electrum turns up now and then as change in place of five silver. The value is exact,
@@ -217,7 +239,9 @@ const weightText = (lb: number) => (lb < 1 ? "under 1 lb" : `${Math.round(lb * 1
 export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, ids: () => string = idMaker(rng)): LootLine[] {
   const expected = expectedPurse(cr, e);
   const r = rollFormula("4d6", rng);
-  const total = expected * r.total / 14;
+  const rolled = expected * r.total / 14;
+  const cap = purseCap(cr);
+  const total = Math.min(rolled, cap);
   const split = splitGems(total, rng);
   const coins = coinMix(split.coinsGp, rng);
   const gemsGp = split.gems.reduce((v, g) => v + g.value, 0);
@@ -228,11 +252,13 @@ export function rollPurse(cr: number | undefined, e: Economy, rng: Rng, ids: () 
     detail: `Worth ${gpText(coinValueGp(coins))} gp (${weightText(coinWeightLb(coins))})${gemsGp ? `; the purse's other ${gemsGp.toLocaleString("en-US")} gp is in gemstones` : ""}. `
       + `Expected ${gpText(expected)} gp for CR ${crText(cr ?? 0)} against ${who}, `
       + `whose coin at this level is ~${gpText(partyIncome(level).hoardsAndQuests)} gp from hoards and quests plus ${Math.round(PURSE_SHARE * 100)}% from monsters, `
-      + `shared by XP; varied by 4d6 (${r.dice.join(" + ")} = ${r.total}) ÷ 14`,
+      + `shared by XP; varied by 4d6 (${r.dice.join(" + ")} = ${r.total}) ÷ 14`
+      + `${rolled > cap ? `; capped at ${gpText(cap)} gp, the most a CR ${crText(cr ?? 0)} monster carries` : ""}`,
+    valueGp: coinValueGp(coins),
   };
   if (!split.gems.length) return [coinLine];
   return [coinLine, {
-    id: ids(), kind: "gems", text: `Gems: ${gemText(split.gems)}`,
+    id: ids(), kind: "gems", text: `Gems: ${gemText(split.gems)}`, valueGp: gemsGp,
     detail: `${split.gems.length} gemstone${split.gems.length > 1 ? "s" : ""} worth ${gemsGp.toLocaleString("en-US")} gp (2024 DMG gemstone tables)`
       + `${gemsGp >= 500 ? `, carried instead of ${weightText(gemsGp / 10 / 50)} of platinum` : ""}`,
   }];
@@ -252,15 +278,48 @@ export function rarityFor(b: Band, d100: number): Rarity {
   return RARITIES[i < 0 ? RARITIES.length - 1 : i]!;
 }
 
-/** A magic item from a theme's table: d100 for rarity (by CR band), d100 on the table, and a variant when it lists several. */
-export function rollMagicItem(theme: Theme, cr: number | undefined, rng: Rng, id = idMaker(rng)()): LootLine {
+/** 2024 DMG Magic Item Rarities and Values. */
+export const RARITY_VALUE: Record<Rarity, number> = { Common: 100, Uncommon: 400, Rare: 4000, "Very Rare": 40000, Legendary: 200000 };
+/** PHB 2024 cost to scribe a Spell Scroll, by spell level (0 = cantrip). */
+const SCRIBE_COST = [15, 25, 100, 150, 1000, 1500, 10000, 12500, 15000, 50000];
+const CONSUMABLE = /^(potion|philter|elixir|oil|dust|scroll|ammunition|[+]\d ammunition|arrow|bolt|bead of|quaal's feather token|elemental gem|candle of|keoghtom|necklace of fireballs|chime of opening|sovereign glue|universal solvent|walloping ammunition)/i;
+
+/** A magic item's value (2024 DMG): its rarity's value, half for a consumable, double the scribing cost for a Spell Scroll. */
+export function itemValue(name: string, rarity: Rarity): number {
+  const scroll = /^Spell Scroll \((Cantrip|Level (\d))/i.exec(name) ?? /^Spell Scroll \(level (\d)/i.exec(name);
+  if (scroll) {
+    const level = /cantrip/i.test(scroll[1]!) ? 0 : Number(scroll[2] ?? scroll[1]);
+    return 2 * SCRIBE_COST[level]!;
+  }
+  return CONSUMABLE.test(name) ? RARITY_VALUE[rarity] / 2 : RARITY_VALUE[rarity];
+}
+
+/** The rarest rarity whose value fits `budget` (null when not even a Common item does). */
+export function rarityWithin(budget: number): Rarity | null {
+  return [...RARITIES].reverse().find((r) => RARITY_VALUE[r] <= budget) ?? null;
+}
+
+/**
+ * A magic item from a theme's table: d100 for rarity (by CR band), lowered when the item would push the monster's loot
+ * past `budget` (see lootBudget), then d100 on the table, and a variant when the row lists several. Null when not even
+ * a Common item fits.
+ */
+export function rollMagicItem(theme: Theme, cr: number | undefined, rng: Rng, id = idMaker(rng)(), budget = Infinity): LootLine | null {
+  const most = rarityWithin(budget);
+  if (!most) return null;
   const b = band(cr);
   const rRoll = rollFormula("1d100", rng).total;
-  const rarity = rarityFor(b, rRoll);
+  const rolledRarity = rarityFor(b, rRoll);
+  const rarity = RARITIES.indexOf(rolledRarity) > RARITIES.indexOf(most) ? most : rolledRarity;
   const iRoll = rollFormula("1d100", rng).total;
   const row = THEME_TABLES[theme][rarity].find((r) => iRoll >= r.min && iRoll <= r.max)!;
   const name = row.options ? row.options[Math.floor(rng() * row.options.length)]! : row.name;
-  return { id, kind: "item", text: `${name} (${rarity})`, detail: `2024 DMG ${theme} – ${rarity}: rarity d100 ${rRoll} (CR ${b}), item d100 ${iRoll}` };
+  const value = itemValue(name, rarity);
+  return {
+    id, kind: "item", text: `${name} (${rarity})`, valueGp: value,
+    detail: `Worth ${value.toLocaleString("en-US")} gp. 2024 DMG ${theme} – ${rarity}: rarity d100 ${rRoll} (CR ${b})`
+      + `${rarity !== rolledRarity ? `, rolled ${rolledRarity} but lowered to fit what a CR ${crText(cr ?? 0)} monster's loot should be worth` : ""}, item d100 ${iRoll}`,
+  };
 }
 
 /** Adds a rolled magic item; picking a theme uses up that offer (one roll per monster). */

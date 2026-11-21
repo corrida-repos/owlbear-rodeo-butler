@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { seededRng } from "../src/core/dice";
 import {
-  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gemText, splitGems, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
+  addRolled, band, coinMix, coinValueGp, coinWeightLb, expectedPurse, gemText, itemValue, lootBudget, lootValue, purseCap, rarityWithin, splitGems, gearName, hoardValue, inferGear, lootEligible, lootFields, lootPostText, markPosted,
   partyIncome, planLoot, rarityFor, removeLine, rollMagicItem, rollPurse, THEMES, RARITIES, type Economy,
 } from "../src/core/loot";
 import { GEMSTONES, THEME_TABLES } from "../src/core/lootTables";
@@ -221,6 +221,32 @@ describe("money", () => {
     expect(new Set(lines.map((l) => l.id)).size).toBe(2);
   });
 
+  it("the whole loot stays within what a monster of its CR should be worth", () => {
+    // The DMG's hoard for one monster, by its CR (smoothed): a goblin's loot is worth a few hundred gp at most.
+    expect(lootBudget(0.25)).toBeCloseTo(hoardValue(1), 5);
+    expect(lootBudget(10)).toBeCloseTo(hoardValue(10), 5);
+    expect(lootBudget(30)).toBeCloseTo(hoardValue(20), 5);
+    // A strong party doesn't make weak monsters rich: the purse is capped by the monster's own CR.
+    expect(purseCap(2)).toBeCloseTo(2 * expectedPurse(2, {}), 5);
+    for (let s = 0; s < 100; s++) {
+      const lines = rollPurse(2, { partyLevel: 20, partySize: 4 }, seededRng(s));
+      expect(purseValue(lines)).toBeLessThanOrEqual(purseCap(2) + 0.5);
+      expect(lines.reduce((v, l) => v + (l.valueGp ?? 0), 0)).toBeCloseTo(purseValue(lines), 1);
+    }
+    expect(rollPurse(2, { partyLevel: 20, partySize: 4 }, seededRng(1))[0]!.detail).toMatch(/capped at 75 gp, the most a CR 2 monster carries/);
+    // Purse plus the best item that still fits never passes the budget, at any CR.
+    for (const cr of [0.125, 0.25, 1, 2, 4, 5, 8, 10, 13, 17, 20, 30]) {
+      for (let s = 0; s < 30; s++) {
+        let loot = planLoot({ cr, type: "Humanoid", treasure: ["any"] }, { partyLevel: 20, partySize: 4 }, seededRng(s));
+        const item = rollMagicItem("Arcana", cr, seededRng(s + 1), "i", lootBudget(cr) - lootValue(loot));
+        if (item) loot = addRolled(loot, item, "Arcana");
+        expect(lootValue(loot), `CR ${cr}`).toBeLessThanOrEqual(lootBudget(cr) + 0.5);
+      }
+    }
+    // Gear doesn't count.
+    expect(lootValue({ lines: [{ id: "g", kind: "gear", text: "Plate Armor" }, { id: "c", kind: "coins", text: "5 gp", valueGp: 5 }] })).toBe(5);
+  });
+
   it("says how the money was worked out", () => {
     const d = rollPurse(2, { partyLevel: 3, partySize: 4 }, seededRng(1))[0]!.detail!;
     expect(d).toMatch(/^Worth [\d.,]+ gp \((under 1|[\d.]+) lb\)\. Expected [\d.,]+ gp for CR 2 against a level 3 party of 4, whose coin at this level is ~1,864 gp from hoards and quests plus 20% from monsters/);
@@ -231,18 +257,43 @@ describe("money", () => {
 describe("rolls", () => {
   it("magic items come from the theme's table, at a rarity the CR band allows", () => {
     for (let s = 0; s < 50; s++) {
-      const low = rollMagicItem("Arcana", 1, seededRng(s));
+      const low = rollMagicItem("Arcana", 1, seededRng(s))!;
       expect(low.kind).toBe("item");
       expect(low.text).toMatch(/\((Common|Uncommon|Rare)\)$/);
-      expect(low.detail).toMatch(/^2024 DMG Arcana – /);
-      const high = rollMagicItem("Relics", 20, seededRng(s));
+      expect(low.detail).toMatch(/^Worth [\d,]+ gp\. 2024 DMG Arcana – /);
+      const high = rollMagicItem("Relics", 20, seededRng(s))!;
       expect(high.text).toMatch(/\((Rare|Very Rare|Legendary)\)$/);
     }
   });
 
+  it("an item's rarity is lowered to fit the budget, and none comes when not even a Common one fits", () => {
+    for (let s = 0; s < 100; s++) {
+      const l = rollMagicItem("Relics", 20, seededRng(s), "x", 5000)!;
+      expect(l.text).toMatch(/\((Common|Uncommon|Rare)\)$/);
+      expect(l.valueGp!).toBeLessThanOrEqual(5000);
+    }
+    const lowered = [...Array(100).keys()].map((s) => rollMagicItem("Relics", 20, seededRng(s), "x", 5000)!).find((l) => /lowered/.test(l.detail!));
+    expect(lowered!.detail).toMatch(/rolled (Very Rare|Legendary) but lowered to fit what a CR 20 monster's loot should be worth/);
+    expect(rollMagicItem("Arcana", 1, seededRng(1), "x", 99)).toBeNull();
+    expect(rarityWithin(99)).toBeNull();
+    expect(rarityWithin(400)).toBe("Uncommon");
+    expect(rarityWithin(1e9)).toBe("Legendary");
+  });
+
+  it("item values follow the 2024 DMG", () => {
+    expect(itemValue("Cloak of Billowing", "Common")).toBe(100);
+    expect(itemValue("Flame Tongue", "Rare")).toBe(4000);
+    expect(itemValue("Potion of Giant Strength", "Rare")).toBe(2000);
+    expect(itemValue("+2 Ammunition", "Rare")).toBe(2000);
+    expect(itemValue("Spell Scroll (Cantrip)", "Common")).toBe(30);
+    expect(itemValue("Spell Scroll (Level 3)", "Uncommon")).toBe(300);
+    expect(itemValue("Spell Scroll (Level 9)", "Legendary")).toBe(100000);
+    expect(itemValue("Spell Scroll (level 9 spell)", "Legendary")).toBe(100000);
+  });
+
   it("a row listing variants rolls one of them", () => {
     const names = new Set<string>();
-    for (let s = 0; s < 400; s++) names.add(rollMagicItem("Arcana", 1, seededRng(s)).text);
+    for (let s = 0; s < 400; s++) names.add(rollMagicItem("Arcana", 1, seededRng(s))!.text);
     expect([...names].some((n) => /^Spell Scroll \((Cantrip|Level 1)\) \(Common\)$/.test(n))).toBe(true);
     expect([...names].some((n) => /^Spell Scroll \(/.test(n) && !/Cantrip|Level/.test(n))).toBe(false);
   });
@@ -250,7 +301,7 @@ describe("rolls", () => {
 
 describe("GM choices", () => {
   const base = planLoot({ cr: 2, treasure: ["any"] }, L5, seededRng(9));
-  const item = rollMagicItem("Armaments", 2, seededRng(9), "x1");
+  const item = rollMagicItem("Armaments", 2, seededRng(9), "x1")!;
 
   it("picking a theme for Any ends the choice (one roll per monster)", () => {
     const l = addRolled(base, item, "Armaments");
