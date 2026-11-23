@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#689f38" fill-opacity="0.35" stroke="#689f38" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M40 70 l60 10 M40 100 l60 0 M40 130 l60-10 M100 80 l15 2 M100 100 h15 M100 120 l15-2" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 70 l60 10 M40 100 l60 0 M40 130 l60-10 M100 80 l15 2 M100 100 h15 M100 120 l15-2" fill="none" stroke="#689f38" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Poison Darts</text>
+</svg>

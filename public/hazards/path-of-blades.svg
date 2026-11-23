@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#b0bec5" fill-opacity="0.35" stroke="#b0bec5" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M100 100 m-40 0 a40 40 0 1 0 80 0 a40 40 0 1 0-80 0 M100 60 v80 M60 100 h80 M72 72 l56 56 M128 72 l-56 56" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M100 100 m-40 0 a40 40 0 1 0 80 0 a40 40 0 1 0-80 0 M100 60 v80 M60 100 h80 M72 72 l56 56 M128 72 l-56 56" fill="none" stroke="#b0bec5" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Path of Blades</text>
+</svg>

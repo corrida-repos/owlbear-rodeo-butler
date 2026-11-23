@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#e65100" fill-opacity="0.35" stroke="#e65100" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M80 150 v-50 h40 v50 M75 100 q25-50 50 0 M125 85 l35-15 l-5 25Z" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M80 150 v-50 h40 v50 M75 100 q25-50 50 0 M125 85 l35-15 l-5 25Z" fill="none" stroke="#e65100" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Fire-Breathing Statue</text>
+</svg>

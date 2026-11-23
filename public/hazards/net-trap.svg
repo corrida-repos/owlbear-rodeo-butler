@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#a1887f" fill-opacity="0.35" stroke="#a1887f" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M40 50 h120 l-20 90 h-80Z M60 50 l20 90 M100 50 v90 M140 50 l-20 90 M45 80 h110 M52 110 h96" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M40 50 h120 l-20 90 h-80Z M60 50 l20 90 M100 50 v90 M140 50 l-20 90 M45 80 h110 M52 110 h96" fill="none" stroke="#a1887f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Net Trap</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#8d6e63" fill-opacity="0.35" stroke="#8d6e63" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M30 80 h140 M100 80 l-10 20 h20Z M60 150 a15 15 0 1 1 0.1 0 M110 150 a15 15 0 1 1 0.1 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M30 80 h140 M100 80 l-10 20 h20Z M60 150 a15 15 0 1 1 0.1 0 M110 150 a15 15 0 1 1 0.1 0" fill="none" stroke="#8d6e63" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Balance and Ruin</text>
+</svg>

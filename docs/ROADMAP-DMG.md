@@ -55,6 +55,7 @@ the Owlbear-facing parts (popover tabs, background page, map items) are thin and
 
 ### G8 · Hazards and traps on the map
 - A catalog of the 2024 DMG's hazards and traps with a picture each, placed on the map as an area.
+- Every other official trap in 5etools `trapshazards.json` too (2014 DMG, XGE, VRGR, BMT, RtG, AZfyT), with trap attack rolls, effects whatever the save, and complex traps' elements set off one at a time.
 - The mechanics run: a unit that enters the area or starts its turn there gets the hazard's saving throw rolled,
   damage applied (half on a success where the rules say so) and conditions added; the GM is notified.
 - Detect/disarm DCs shown on the hazard's card.

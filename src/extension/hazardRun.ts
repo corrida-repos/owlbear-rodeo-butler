@@ -5,8 +5,8 @@
  */
 import OBR, { buildImage, type Item } from "@owlbear-rodeo/sdk";
 import { addCondition, type TurnPoint } from "../core/conditions";
-import { fmtMod } from "../core/dice";
-import { HAZARD_KEY, resolveHazard, type HazardDef, type PlacedHazard } from "../core/hazards";
+import { critFormula, fmtMod } from "../core/dice";
+import { attackHits, HAZARD_KEY, resolveHazard, type HazardDef, type HazardOption, type PlacedHazard } from "../core/hazards";
 import { readEncounter } from "../core/encounter";
 import { saveBonus, STATE_KEY, ABILITY_NAMES } from "../core/sheet";
 import { changeHp, trackerView, type TrackerUnit } from "../core/tracker";
@@ -29,23 +29,43 @@ export async function placeHazard(d: HazardDef, hidden: boolean) {
   await OBR.scene.items.addItems([item]);
 }
 
-/** Sets off `d` on `unit`: save, damage, conditions. A one-shot trap is spent and revealed. Returns the GM's line. */
-export async function triggerHazard(d: HazardDef, hazardItem: Item | null, unit: TrackerUnit): Promise<string> {
+/**
+ * Sets off `d` on `unit` (or `option`, one element of a complex trap): attack rolls against its AC, then the save,
+ * damage, conditions. A one-shot trap is spent and revealed. Returns the GM's line.
+ */
+export async function triggerHazard(d: HazardDef, hazardItem: Item | null, unit: TrackerUnit, option?: HazardOption): Promise<string> {
+  const e = option?.effect ?? d;
+  const name = option?.name ?? d.name;
   const vis = "private" as const;
   const who = { id: unit.id, name: unit.name };
+  let hits = 0, crits = 0;
+  if (e.attack) {
+    for (let i = 0; i < (e.attack.count ?? 1); i++) {
+      const r = await gmRoll(`1d20${fmtMod(e.attack.bonus)}`, `${name} · to hit (AC ${unit.sheet.ac})`, { unit: who, kind: "attack", visibility: vis });
+      const a = attackHits(r.natural, r.total, unit.sheet.ac);
+      if (a.hit) hits++;
+      if (a.crit) crits++;
+    }
+  }
+  const landed = !e.attack || hits > 0;
   let saveTotal: number | null = null;
-  if (d.save) saveTotal = (await gmRoll(`1d20${fmtMod(saveBonus(unit.sheet, d.save.ability))}`, `${ABILITY_NAMES[d.save.ability]} save · ${d.name} (DC ${d.save.dc})`, { unit: who, kind: "save", visibility: vis })).total;
-  const failed = !d.save || saveTotal === null || saveTotal < d.save.dc;
+  if (e.save && landed) saveTotal = (await gmRoll(`1d20${fmtMod(saveBonus(unit.sheet, e.save.ability))}`, `${ABILITY_NAMES[e.save.ability]} save · ${name} (DC ${e.save.dc})`, { unit: who, kind: "save", visibility: vis })).total;
+  const failed = !e.save || saveTotal === null || saveTotal < e.save.dc;
   const rolled: number[] = [];
-  if (d.damage && (failed || d.half)) {
-    const times = d.times ? (await gmRoll(d.times, `${d.name}: how many hit`, { unit: who, kind: "dice", visibility: vis })).total : 1;
-    for (const dm of d.damage) {
+  if (e.damage && landed && (failed || e.half || e.damage.some((dm) => dm.always))) {
+    const times = e.attack ? hits : e.times ? (await gmRoll(e.times, `${name}: how many hit`, { unit: who, kind: "dice", visibility: vis })).total : 1;
+    for (const dm of e.damage) {
       let sum = 0;
-      for (let i = 0; i < times; i++) sum += (await gmRoll(dm.formula, `${dm.type} damage · ${d.name}`, { unit: who, kind: "damage", visibility: vis })).total;
+      if (failed || e.half || dm.always) {
+        for (let i = 0; i < times; i++) {
+          const formula = i < crits ? critFormula(dm.formula) : dm.formula;
+          sum += (await gmRoll(formula, `${dm.type} damage · ${name}${i < crits ? " (critical)" : ""}`, { unit: who, kind: "damage", visibility: vis })).total;
+        }
+      }
       rolled.push(sum);
     }
   }
-  const out = resolveHazard(d, unit.name, saveTotal, rolled, unit.sheet.defenses);
+  const out = resolveHazard({ ...e, name }, unit.name, saveTotal, rolled, unit.sheet.defenses, { hits });
   if (out.damage) await changeHp(obrGateway, [unit.id], { kind: "damage", amount: out.damage }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
   if (out.conditions.length) {
     const meta = await OBR.scene.getMetadata();

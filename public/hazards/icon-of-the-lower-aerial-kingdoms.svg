@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#4a148c" fill-opacity="0.35" stroke="#4a148c" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M100 70 v70 M100 90 l-50-30 M100 90 l50-30 M100 110 l-45-10 M100 110 l45-10" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M100 70 v70 M100 90 l-50-30 M100 90 l50-30 M100 110 l-45-10 M100 110 l45-10" fill="none" stroke="#4a148c" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Icon of the Lower Aerial Kingdoms</text>
+</svg>

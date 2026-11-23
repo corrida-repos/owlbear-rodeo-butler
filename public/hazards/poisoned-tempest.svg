@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+<rect x="4" y="4" width="192" height="192" rx="18" fill="#7b1fa2" fill-opacity="0.35" stroke="#7b1fa2" stroke-width="8" stroke-dasharray="18 10"/>
+<path d="M60 70 q40-30 80 0 q-60 0-40 30 q40 10 20 40 M40 120 q30 20 60 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M60 70 q40-30 80 0 q-60 0-40 30 q40 10 20 40 M40 120 q30 20 60 0" fill="none" stroke="#7b1fa2" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">⚠ Poisoned Tempest</text>
+</svg>
