@@ -2,16 +2,16 @@ import { describe, expect, it } from "vitest";
 import { readChase, CHASE_KEY } from "../src/core/chase";
 import {
   crashDice, damageVehicle, driverProficient, effectiveDt, effectiveSpeed, liveVehicles, mishapFor, nextVehicle, placeUnit, readVehicle, ridersOf,
-  vehicleComplicationFor, vehicleFromPreset, vehicleOf, vehicleTest, VEHICLE_PRESETS, VEHICLE_TABLES, type Vehicle,
+  vehicleComplicationFor, vehicleFromPreset, vehicleGridProblem, vehicleStats, vehicleOf, vehicleTest, VEHICLE_PRESETS, VEHICLE_TABLES, type Vehicle,
 } from "../src/core/vehicles";
 
 const preset = (k: string) => VEHICLE_PRESETS.find((p) => p.key === k)!;
-const chariot = (patch: Partial<Vehicle> = {}): Vehicle => ({ ...vehicleFromPreset(preset("chariot"), "v1"), ...patch });
+const chariot = (patch: Partial<Vehicle> = {}): Vehicle => ({ ...vehicleFromPreset(preset("chariot"), "v1"), dt: 5, ...patch });
 
-describe("vehicles (Descent into Avernus rules, any terrain)", () => {
+describe("vehicles (any vehicle, any terrain)", () => {
   it("presets become vehicles at full HP, named without the parenthesis", () => {
-    const v = chariot();
-    expect(v).toMatchObject({ name: "Chariot", hp: 30, maxHp: 30, dt: 5, mt: 10, speed: 60, side: "", riders: [], mishaps: [] });
+    const v = vehicleFromPreset(preset("chariot"), "v1");
+    expect(v).toMatchObject({ name: "Chariot", ac: 17, hp: 30, maxHp: 30, dt: 0, mt: 10, speed: 60, side: "", riders: [], mishaps: [] });
     expect(VEHICLE_PRESETS.every((p) => p.stats.maxHp > 0 && p.stats.speed > 0)).toBe(true);
     expect(new Set(VEHICLE_PRESETS.map((p) => p.stats.terrain))).toEqual(new Set(["land", "water", "air"]));
   });
@@ -49,6 +49,19 @@ describe("vehicles (Descent into Avernus rules, any terrain)", () => {
     expect(effectiveSpeed(chariot({ exhaustion: 5 }), "2014")).toBe(0);
     expect(effectiveSpeed(chariot({ overturned: true }), "2024")).toBe(0);
     expect(effectiveDt(chariot({ mishaps: ["plating"] }))).toBe(0);
+  });
+  it("builds any vehicle from material, size, handling and speed", () => {
+    expect(vehicleStats({ terrain: "land", size: "H", material: "iron", handling: "steady", speed: 90, weapons: true }))
+      .toMatchObject({ ac: 19, maxHp: 120, dt: 10, mt: 20, str: 18, dex: 10, con: 14, speed: 90, weapons: true });
+    expect(vehicleStats({ terrain: "air", size: "L", material: "cloth", handling: "agile", speed: 80 })).toMatchObject({ ac: 15, maxHp: 15, dt: 0, mt: 10, dex: 18 });
+    expect(vehicleStats({ terrain: "water", size: "G", material: "wood", handling: "clumsy", speed: 30 })).toMatchObject({ ac: 13, maxHp: 200, dt: 5, mt: 20 });
+  });
+  it("vehicle chases need a grid of at least 100 ft per square", () => {
+    expect(vehicleGridProblem({ multiplier: 100, unit: "ft" })).toBeNull();
+    expect(vehicleGridProblem({ multiplier: 500, unit: "feet" })).toBeNull();
+    expect(vehicleGridProblem({ multiplier: 5, unit: "ft" })).toMatch(/at least 100 ft/);
+    expect(vehicleGridProblem({ multiplier: 1, unit: "mi" })).toMatch(/feet/);
+    expect(vehicleGridProblem(null)).toBeTruthy();
   });
   it("damage: threshold, Poison/Psychic immunity, a mishap at the mishap threshold while moving", () => {
     expect(damageVehicle(chariot(), 4, "Slashing")).toMatchObject({ applied: 0, mishap: false });

@@ -9,13 +9,14 @@ import { DAMAGE_TYPES } from "../core/objects";
 import type { TrackerUnit } from "../core/tracker";
 import {
   driverProficient, effectiveDt, effectiveSpeed, mishapByKey, placeUnit, RIDER_LABEL, ridersOf, vehicleFromPreset, vehicleOf, VEHICLE_ENV_LABEL,
-  VEHICLE_PRESETS, VEHICLE_TABLES, type RiderAt, type Vehicle, type VehicleEnv,
+  VEHICLE_PRESETS, VEHICLE_TABLES, HANDLING, VEHICLE_SIZES, vehicleStats, type Handling, type RiderAt, type Vehicle, type VehicleEnv, type VehicleSpec,
 } from "../core/vehicles";
+import { SUBSTANCES } from "../core/objects";
 import { chaseCtx, clearSmoke, crashVehicle, hurtVehicle, ramCreature, repairMishap, rollMishap, saveChase, say, setVehicle, vehicleById, type ChaseCtx } from "./chaseRun";
-import { action, h, type Child } from "./dom";
+import { action, h, rerender, type Child } from "./dom";
 import { roomSystem } from "./roomSettings";
 
-const st = { preset: VEHICLE_PRESETS[0]!.key, name: "" };
+const st = { preset: VEHICLE_PRESETS[0]!.key, name: "", custom: false, spec: { terrain: "land", size: "L", material: "wood", handling: "steady", speed: 60, weapons: false } as VehicleSpec };
 const amounts: Record<string, string> = {};
 const types: Record<string, string> = {};
 const crashFeet: Record<string, string> = {};
@@ -30,18 +31,13 @@ const newId = () => `v-${globalThis.crypto.randomUUID().slice(0, 8)}`;
 const run = (fn: (x: ChaseCtx) => Promise<void>) => action(async () => { const x = await chaseCtx(); await fn(x); await saveChase(x); });
 
 export function vehicleSection(c: ChaseState, units: TrackerUnit[], set: (patch: Partial<ChaseState>) => () => Promise<void>): Child[] {
-  const groups = [...new Set(VEHICLE_PRESETS.map((p) => p.group))];
   const setVehicles = (vehicles: Vehicle[]) => set({ vehicles });
   const live = units.filter((u) => !u.dead);
   return [
     h("div", { className: "row wrap", style: "margin-top:6px" },
       h("select", { title: "Which Vehicle Chase Complications table", onchange: (e: Event) => void set({ vehicleEnv: (e.target as HTMLSelectElement).value as VehicleEnv })() },
         ...(Object.keys(VEHICLE_TABLES) as VehicleEnv[]).map((k) => h("option", { value: k, selected: c.vehicleEnv === k }, `${VEHICLE_ENV_LABEL[k]} complications`)))),
-    h("div", { className: "row wrap", style: "margin-top:6px" },
-      h("select", { onchange: (e: Event) => { st.preset = (e.target as HTMLSelectElement).value; } },
-        ...groups.map((g) => h("optgroup", { label: g }, ...VEHICLE_PRESETS.filter((p) => p.group === g).map((p) => h("option", { value: p.key, selected: p.key === st.preset }, p.label))))),
-      h("input", { type: "text", placeholder: "Name (optional)", value: st.name, oninput: (e: Event) => { st.name = (e.target as HTMLInputElement).value; } }),
-      h("button", { className: "small", onclick: () => { const v = vehicleFromPreset(VEHICLE_PRESETS.find((p) => p.key === st.preset)!, newId(), st.name); st.name = ""; void setVehicles([...c.vehicles, v])(); } }, "Add vehicle")),
+    addForm(c, setVehicles),
     c.vehicles.length ? h("div", { className: "dm-list" }, ...c.vehicles.map((v) => vehicleCard(c, v, units, set))) : h("div", { className: "small muted" }, "No vehicles yet: add one for each side."),
     c.vehicles.length ? h("details", { open: !c.active, style: "margin-top:6px" }, h("summary", { className: "small" }, "Who rides where"),
       h("div", { className: "dm-list" }, ...live.map((u) => {
@@ -134,3 +130,38 @@ function vehicleCard(c: ChaseState, v: Vehicle, units: TrackerUnit[], set: (patc
 }
 
 const feetOf = (v: Vehicle) => { const n = Number(crashFeet[v.id]); return Number.isFinite(n) && n > 0 ? n : v.speed; };
+
+function addForm(c: ChaseState, setVehicles: (list: Vehicle[]) => () => Promise<void>): Child {
+  const groups = [...new Set(VEHICLE_PRESETS.map((p) => p.group))];
+  const sp = st.spec;
+  const pick = <K extends keyof VehicleSpec>(k: K, opts: [string, string][], conv: (s: string) => VehicleSpec[K]) =>
+    h("select", { onchange: (e: Event) => { st.spec = { ...st.spec, [k]: conv((e.target as HTMLSelectElement).value) }; rerender(); } },
+      ...opts.map(([v, l]) => h("option", { value: v, selected: String(sp[k]) === v }, l)));
+  const preview = vehicleStats(sp);
+  const add = () => {
+    const id = newId();
+    const v: Vehicle = st.custom
+      ? { id, name: st.name.trim() || "Vehicle", ...preview, hp: preview.maxHp, side: "", riders: [], dashes: 0, exhaustion: 0, mishaps: [] }
+      : vehicleFromPreset(VEHICLE_PRESETS.find((p) => p.key === st.preset)!, id, st.name);
+    st.name = "";
+    void setVehicles([...c.vehicles, v])();
+  };
+  return h("div", { className: "stack tight", style: "margin-top:6px" },
+    h("div", { className: "row" },
+      h("label", { className: "small" }, h("input", { type: "radio", name: "vehmode", checked: !st.custom, onchange: () => { st.custom = false; rerender(); } }), "Preset"),
+      h("label", { className: "small" }, h("input", { type: "radio", name: "vehmode", checked: st.custom, onchange: () => { st.custom = true; rerender(); } }), "Build any vehicle")),
+    st.custom
+      ? h("div", { className: "row wrap" },
+        pick("terrain", [["land", "Land"], ["water", "Water"], ["air", "Air"]], (v) => v as VehicleSpec["terrain"]),
+        pick("size", VEHICLE_SIZES.map((z) => [z.key, z.label]), (v) => v as VehicleSpec["size"]),
+        pick("material", SUBSTANCES.map((m) => [m.key, `${m.label} (AC ${m.ac})`]), (v) => v),
+        pick("handling", (Object.keys(HANDLING) as Handling[]).map((k) => [k, HANDLING[k].label]), (v) => v as Handling),
+        h("label", { className: "small" }, "Speed ", h("input", { type: "number", className: "num", min: 0, step: 5, value: String(sp.speed), onchange: (e: Event) => { st.spec = { ...st.spec, speed: Math.max(0, Number((e.target as HTMLInputElement).value) || 0) }; rerender(); } }), " ft"),
+        h("label", { className: "small" }, h("input", { type: "checkbox", checked: !!sp.weapons, onchange: () => { st.spec = { ...st.spec, weapons: !sp.weapons }; rerender(); } }), "has weapons"),
+        h("div", { className: "small muted", title: preview.basis ?? "" }, `AC ${preview.ac} · ${preview.maxHp} HP · threshold ${preview.dt || "—"} · mishap ${preview.mt} · Str ${mod(preview.str)} Dex ${mod(preview.dex)} Con ${mod(preview.con)}`))
+      : h("select", { onchange: (e: Event) => { st.preset = (e.target as HTMLSelectElement).value; } },
+        ...groups.map((g) => h("optgroup", { label: g }, ...VEHICLE_PRESETS.filter((p) => p.group === g).map((p) => h("option", { value: p.key, selected: p.key === st.preset }, p.label))))),
+    h("div", { className: "row wrap" },
+      h("input", { type: "text", placeholder: st.custom ? "Name (e.g. Steam hauler)" : "Name (optional)", value: st.name, oninput: (e: Event) => { st.name = (e.target as HTMLInputElement).value; } }),
+      h("button", { className: "small", onclick: add }, "Add vehicle")));
+}

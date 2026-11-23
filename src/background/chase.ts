@@ -16,10 +16,10 @@ import { abilityMod, STATE_KEY } from "../core/sheet";
 import type { TrackerUnit } from "../core/tracker";
 import {
   DROP_OUT_EXHAUSTION as VEHICLE_DROP_OUT, FIRE_DAMAGE, liveVehicles, nextVehicle, ridersOf, vehicleComplicationFor, vehicleOf, vehicleTest,
-  VEHICLE_TABLES_BY_KEY,
+  VEHICLE_TABLES_BY_KEY, vehicleGridProblem,
 } from "../core/vehicles";
 import {
-  chaseCtx, condUnit, driverPb, fallUnit, hurtUnit, isDown, resolveVehicleComplication, rollDamage, saveChase, say, setVehicle, unitOf, unitTest,
+  chaseCtx, condUnit, sceneGrid, driverPb, fallUnit, hurtUnit, isDown, resolveVehicleComplication, rollDamage, saveChase, say, setVehicle, unitOf, unitTest,
   vehicleById, vehicleFeet, vehicleRoll, type ChaseCtx,
 } from "../extension/chaseRun";
 import { gmRoll } from "../extension/gmRoll";
@@ -30,7 +30,15 @@ const passive = (u: TrackerUnit) => u.sheet.passivePerception ?? 10 + skillBonus
 export async function chaseTurnEnded(ended: TurnPoint, next: TurnPoint, prevMovement: MovementState | null): Promise<string[]> {
   const x = await chaseCtx(ended);
   if (!x.c.active) return [];
-  if (x.c.mode === "vehicles") await vehicleTurn(x, ended, next, prevMovement);
+  if (x.c.mode === "vehicles") {
+    // Vehicle chases need a large-scale grid (at least 100 ft per square): paused until the scene has one.
+    const why = vehicleGridProblem(await sceneGrid());
+    if (why) {
+      const line = `Vehicle chase paused: ${why}`;
+      if (x.c.log.at(-1) === line) return [];
+      say(x, line);
+    } else await vehicleTurn(x, ended, next, prevMovement);
+  }
   else await creatureTurn(x, ended, next, prevMovement);
   await saveChase(x);
   return x.lines;

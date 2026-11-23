@@ -1,7 +1,8 @@
 /**
- * Vehicle chases: the chase rules (core/chase.ts) with the vehicle rules of Baldur's Gate: Descent into Avernus
- * (appendix B), made setting-neutral so they serve any chase: carts and carriages through city streets, chariots and
- * war rigs across open country, boats on rivers and seas, airships in the sky.
+ * Vehicle chases: the chase rules (core/chase.ts) with general vehicle rules (adapted from the vehicle appendix of
+ * Descent into Avernus, with nothing that assumes a particular kind of vehicle), for any chase: carts and carriages
+ * through city streets, buggies and war wagons across open country, boats on rivers and seas, airships in the sky.
+ * Vehicle chases are played at a large scale: the scene's grid must be at least 100 ft per square.
  *
  * - A vehicle has AC, Hit Points, a damage threshold (less damage than that does nothing) and a mishap threshold (that
  *   much damage from one source causes a mishap), a Speed, and Strength, Dexterity and Constitution (0 in the mental
@@ -23,6 +24,7 @@
  */
 import type { Ability, SizeCode, UnitSheet } from "./sheet";
 import type { DamagePart, Mode } from "./chase";
+import { SUBSTANCES } from "./objects";
 
 export type VehicleEnv = "streets" | "country" | "water" | "sky";
 export type Terrain = "land" | "water" | "air";
@@ -69,6 +71,7 @@ export interface Vehicle {
   basis?: string;
 }
 
+const mod = (score: number) => Math.floor((score - 10) / 2);
 const num = (x: unknown, d: number) => (typeof x === "number" && Number.isFinite(x) ? x : d);
 const RIDER_AT: RiderAt[] = ["inside", "aboard", "clinging"];
 const MISHAP_KEYS: MishapKey[] = ["fire", "steering", "power", "weapon", "smoke", "plating", "gear", "overturn"];
@@ -102,28 +105,70 @@ const p = (key: string, group: string, label: string, terrain: Terrain, size: Si
   [str, dex, con]: [number, number, number], basis: string, weapons = false): VehiclePreset =>
   ({ key, group, label, stats: { terrain, size, speed, ac, maxHp, dt, mt, str, dex, con, weapons, basis } });
 
-const DRAWN = "Butler's estimate: wood (AC 15) + Dexterity modifier, HP and thresholds scaled from the Descent into Avernus vehicles; Speed is the team's (the animals pulling it are creatures of their own)";
-const IRON = "Descent into Avernus war machine stats without the infernal trappings: iron (AC 19 + Dexterity modifier)";
-const SHIP = "Ghosts of Saltmarsh hull; mishap threshold (twice the damage threshold, at least 10) is Butler's estimate";
+// ------------------------------------------------------------------ any vehicle, from what it's made of
 
-/** Starting points: every number can be edited once the vehicle is added. */
+export type Handling = "clumsy" | "steady" | "nimble" | "agile";
+export const HANDLING: Record<Handling, { label: string; dex: number }> = {
+  clumsy: { label: "Clumsy (barges, big wagons)", dex: 6 }, steady: { label: "Steady", dex: 10 },
+  nimble: { label: "Nimble", dex: 14 }, agile: { label: "Agile (racers, skiffs)", dex: 18 },
+};
+export const VEHICLE_SIZES: { key: SizeCode; label: string; hp: number; str: number; mt: number }[] = [
+  { key: "M", label: "Medium", hp: 20, str: 10, mt: 10 },
+  { key: "L", label: "Large", hp: 30, str: 14, mt: 10 },
+  { key: "H", label: "Huge", hp: 80, str: 18, mt: 15 },
+  { key: "G", label: "Gargantuan", hp: 200, str: 20, mt: 20 },
+];
+/** Per material (the Object Armor Class table's substances): base damage threshold, Constitution and HP multiplier. */
+const MATERIAL: Record<string, { dt: number; con: number; hp: number }> = {
+  cloth: { dt: 0, con: 8, hp: 0.5 }, glass: { dt: 0, con: 8, hp: 0.5 }, wood: { dt: 0, con: 12, hp: 1 }, stone: { dt: 5, con: 14, hp: 1.25 },
+  iron: { dt: 5, con: 14, hp: 1.5 }, mithral: { dt: 10, con: 16, hp: 1.5 }, adamantine: { dt: 10, con: 18, hp: 2 },
+};
+export interface VehicleSpec { terrain: Terrain; size: SizeCode; material: string; handling: Handling; speed: number; weapons?: boolean }
+
+/**
+ * Stats for any vehicle (Butler's guideline, every number editable): AC = its material's Object AC + Dexterity
+ * modifier; Dexterity from its handling; HP, Strength and mishap threshold from its size; damage threshold and
+ * Constitution from its material (Huge and bigger: threshold +5); mishap threshold at least twice the damage threshold.
+ */
+export function vehicleStats(spec: VehicleSpec): VehiclePreset["stats"] {
+  const size = VEHICLE_SIZES.find((x) => x.key === spec.size) ?? VEHICLE_SIZES[1]!;
+  const mat = MATERIAL[spec.material] ?? MATERIAL.wood!;
+  const sub = SUBSTANCES.find((x) => x.key === spec.material) ?? SUBSTANCES.find((x) => x.key === "wood")!;
+  const dex = HANDLING[spec.handling].dex;
+  const dt = mat.dt + (spec.size === "H" || spec.size === "G" ? 5 : 0);
+  return {
+    terrain: spec.terrain, size: size.key, speed: Math.max(0, spec.speed), ac: sub.ac + mod(dex), maxHp: Math.max(1, Math.round(size.hp * mat.hp)), dt,
+    mt: Math.max(size.mt, 2 * dt), str: size.str, dex, con: mat.con, weapons: !!spec.weapons,
+    basis: `Butler's guideline: ${sub.label.toLowerCase()} (AC ${sub.ac}) + Dexterity modifier, ${HANDLING[spec.handling].label.replace(/ \(.*\)$/, "").toLowerCase()} handling, ${size.label} size`,
+  };
+}
+
+const b = (key: string, group: string, label: string, spec: VehicleSpec, note = ""): VehiclePreset => {
+  const stats = vehicleStats(spec);
+  return { key, group, label, stats: note ? { ...stats, basis: `${stats.basis}; ${note}` } : stats };
+};
+const SHIP = "Ghosts of Saltmarsh hull; mishap threshold (twice the damage threshold, at least 10) is Butler's estimate";
+const TEAM = "Speed: the animals pulling it (they're creatures of their own if you want them on the map)";
+
+/** Starting points: every number can be edited once the vehicle is added, or build your own (vehicleStats). */
 export const VEHICLE_PRESETS: VehiclePreset[] = [
-  p("chariot", "Land: drawn", "Chariot (two horses)", "land", "L", 60, 17, 30, 5, 10, [14, 14, 12], DRAWN),
-  p("carriage", "Land: drawn", "Carriage or coach", "land", "L", 50, 15, 50, 5, 15, [14, 10, 12], DRAWN),
-  p("cart", "Land: drawn", "Cart", "land", "L", 40, 14, 25, 0, 10, [12, 8, 10], DRAWN),
-  p("wagon", "Land: drawn", "Wagon", "land", "H", 40, 14, 60, 5, 15, [16, 8, 14], DRAWN),
-  p("sled", "Land: drawn", "Sled (dog team)", "land", "L", 40, 17, 20, 0, 10, [10, 14, 10], DRAWN),
-  p("minecart", "Land: drawn", "Mine cart (on rails, can't leave the track)", "land", "L", 60, 17, 30, 5, 10, [12, 6, 14], "Butler's estimate: iron (AC 19) + Dexterity modifier"),
-  p("racer", "Land: engines and magic", "Light racer (one rider)", "land", "L", 120, 23, 30, 5, 10, [14, 18, 12], IRON),
-  p("raider", "Land: engines and magic", "Raider (crew of four)", "land", "H", 100, 21, 60, 10, 20, [16, 14, 14], IRON, true),
-  p("hauler", "Land: engines and magic", "Armored hauler (crew of eight)", "land", "H", 100, 20, 150, 10, 20, [20, 12, 20], IRON, true),
-  p("warrig", "Land: engines and magic", "War rig (crew of eight)", "land", "G", 100, 19, 200, 10, 20, [18, 10, 18], IRON, true),
+  b("chariot", "Land: drawn", "Chariot (two horses)", { terrain: "land", size: "L", material: "wood", handling: "nimble", speed: 60 }, TEAM),
+  b("carriage", "Land: drawn", "Carriage or coach", { terrain: "land", size: "L", material: "wood", handling: "steady", speed: 50 }, TEAM),
+  b("cart", "Land: drawn", "Cart", { terrain: "land", size: "L", material: "wood", handling: "clumsy", speed: 40 }, TEAM),
+  b("wagon", "Land: drawn", "Wagon", { terrain: "land", size: "H", material: "wood", handling: "clumsy", speed: 40 }, TEAM),
+  b("sled", "Land: drawn", "Sled (dog team)", { terrain: "land", size: "L", material: "wood", handling: "nimble", speed: 40 }, TEAM),
+  b("minecart", "Land: drawn", "Mine cart (on rails, can't leave the track)", { terrain: "land", size: "L", material: "iron", handling: "clumsy", speed: 60 }),
+  b("buggy", "Land: engines and magic", "Fast buggy or bike (1–2 riders)", { terrain: "land", size: "L", material: "iron", handling: "agile", speed: 120 }),
+  b("warwagon", "Land: engines and magic", "Armored war wagon (crew of 4–8)", { terrain: "land", size: "H", material: "iron", handling: "steady", speed: 90, weapons: true }),
+  b("crawler", "Land: engines and magic", "Land crawler or walker (huge hauler)", { terrain: "land", size: "G", material: "iron", handling: "clumsy", speed: 60, weapons: true }),
   p("rowboat", "Water", "Rowboat", "water", "L", 15, 11, 50, 0, 10, [11, 8, 11], SHIP),
   p("keelboat", "Water", "Keelboat", "water", "G", 25, 15, 100, 10, 20, [16, 7, 13], SHIP),
   p("longship", "Water", "Longship", "water", "G", 45, 15, 300, 15, 30, [20, 6, 17], SHIP),
   p("sailingship", "Water", "Sailing ship", "water", "G", 45, 15, 300, 15, 30, [20, 7, 17], SHIP, true),
+  b("speedboat", "Water", "Fast skiff (engine, sail or magic)", { terrain: "water", size: "L", material: "wood", handling: "agile", speed: 90 }),
   p("skyskiff", "Air", "Skyskiff (small airship)", "air", "L", 70, 18, 150, 5, 10, [12, 16, 12], "Eberron: Forge of the Artificer skyskiff hull; ability scores and mishap threshold are Butler's estimate"),
   p("airship", "Air", "Airship (balloon)", "air", "G", 80, 15, 500, 15, 30, [18, 17, 20], "Acquisitions Incorporated battle balloon; mishap threshold is Butler's estimate", true),
+  b("flyer", "Air", "Light flyer (glider, flying carpet, ornithopter)", { terrain: "air", size: "L", material: "cloth", handling: "agile", speed: 80 }),
 ];
 
 export function vehicleFromPreset(preset: VehiclePreset, id: string, name?: string): Vehicle {
@@ -170,7 +215,6 @@ export const dropRider = (v: Vehicle, unitId: string): Vehicle =>
 
 // ------------------------------------------------------------------ the vehicle's numbers
 
-const mod = (score: number) => Math.floor((score - 10) / 2);
 
 /** Proficiency the driver adds: "Vehicles (Land)" for land vehicles, "Vehicles (Water)" (or Air) for boats and airships. */
 export function driverProficient(v: Pick<Vehicle, "terrain" | "proficient">, driver: Pick<UnitSheet, "proficiencies"> | undefined): boolean {
@@ -371,3 +415,12 @@ export const OVERTURN = { clingDc: 20, insideDc: 15, damage: { dice: "3d6", type
 export const VEHICLE_TABLES_BY_KEY: Record<string, VehicleComplication[]> = VEHICLE_TABLES;
 /** A vehicle drops out of the chase at this much Exhaustion and breaks down (0 HP) at 6. */
 export const DROP_OUT_EXHAUSTION = 5;
+
+/** Vehicle chases are played at a large scale: the scene's grid must be in feet, at least 100 ft per square. Null when it's fine. */
+export const MIN_GRID_FT = 100;
+export function vehicleGridProblem(grid: { multiplier: number; unit: string } | null): string | null {
+  if (!grid) return "Reading the scene's grid…";
+  if (!/^(ft|feet|foot|')$/i.test(grid.unit.trim())) return `The grid is measured in "${grid.unit}": vehicle chases need feet, at least ${MIN_GRID_FT} ft per square.`;
+  if (grid.multiplier < MIN_GRID_FT) return `The grid is ${grid.multiplier} ft per square: vehicle chases need at least ${MIN_GRID_FT} ft per square (Scene → grid settings in Owlbear).`;
+  return null;
+}

@@ -54,8 +54,9 @@ the Owlbear-facing parts (popover tabs, background page, map items) are thin and
   1 Exhaustion level.
 - 5E rooms use the 2014 DMG tables (d20, skill checks, the guard, snare, stampede) and a Constitution check for Dashes;
   Exhaustion counts against chase rolls; downed participants aren't hit by complications.
-- Vehicle chases (Descent into Avernus appendix B, setting-neutral): vehicles with drivers and riders, four terrain
-  complication tables, mishaps and repairs, crashes and ramming, vehicular Exhaustion from Dashing.
+- Vehicle chases (any vehicle; rules adapted from Descent into Avernus appendix B): a grid of at least 100 ft per square,
+  presets or vehicles built from size, material, handling and Speed, drivers and riders, four terrain complication
+  tables, mishaps and repairs, crashes and ramming, vehicular Exhaustion from Dashing.
 
 ### G8 · Hazards and traps on the map
 - A catalog of the 2024 DMG's hazards and traps with a picture each, placed on the map as an area.

@@ -46,6 +46,11 @@ export async function chaseCtx(now?: TurnPoint | null): Promise<ChaseCtx> {
   return { c, units: [...view.order, ...view.waiting, ...view.outside], order: view.order.map((u) => u.id), vis: c.publicRolls ? "public" : "private", rules: roomSystem().rules, now: at, lines: [] };
 }
 
+/** The scene's grid scale (e.g. 100 ft per square). */
+export async function sceneGrid(): Promise<{ multiplier: number; unit: string } | null> {
+  try { const s = await OBR.scene.grid.getScale(); return { multiplier: s.parsed.multiplier, unit: s.parsed.unit }; } catch { return null; }
+}
+
 export const saveChase = (x: ChaseCtx) => OBR.scene.setMetadata({ [CHASE_KEY]: x.c satisfies ChaseState });
 export const say = (x: ChaseCtx, line: string) => { x.lines.push(line); x.c = withLog(x.c, line); };
 export const unitOf = (x: ChaseCtx, id: string | undefined) => (id ? x.units.find((u) => u.id === id) : undefined);
