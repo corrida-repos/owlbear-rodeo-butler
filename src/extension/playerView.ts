@@ -16,7 +16,8 @@ import { displayConditions } from "../core/systems";
 import { trackerUnits, trackerView, type TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
-import { playerBattleView, readBattle, readBattleUnit } from "../core/massCombat";
+import { checkStep, moveAllowance, movedSquares, playerBattleView, readBattle, readBattleUnit, unitBrNow, type Direction } from "../core/massCombat";
+import { attackPreview, buildField, fieldUnit, guardsTriggered, readGrid, type GridInfo } from "./battleOps";
 import { openActions } from "./actionsPopover";
 import { openCard } from "./cardPopover";
 import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
@@ -182,8 +183,75 @@ function visionUnits() {
   }));
 }
 
+let grid: GridInfo | null = null;
+let battleTarget = "";
+let battleNote = "";
+
+/** Orders for the battle unit this player commands: one square at a time, the five actions, End turn (applied by the GM's client). */
+function battleOrders(): Child {
+  if (!grid) return null;
+  const f = buildField(items, sceneMeta, grid);
+  const b = f.battle;
+  const send = (unitId: string, body: Record<string, unknown>) => async () => {
+    battleNote = "";
+    try { await sendRequest({ type: "battle", unitId, round: b.round, ...body } as Parameters<typeof sendRequest>[0]); } catch (e) { battleNote = String(e); renderAgain(); }
+  };
+  const mine = f.units.filter((u) => u.unit.commandedBy === OBR.player.id && !u.unit.removed);
+  const out: Child[] = [];
+  // A guarding unit of mine that the acting enemy came next to.
+  for (const g of guardsTriggered(f).filter((x) => mine.some((m) => m.id === x.id))) {
+    const foe = f.units.find((u) => u.id === b.turnId)!;
+    out.push(h("div", { className: "row small" }, h("span", { className: "warn grow" }, `${foe.unit.name} came next to ${g.unit.name}, which is guarding.`),
+      h("button", { className: "small", onclick: send(g.id, { op: "guard-attack", targetId: foe.id }) }, "Attack it now")));
+  }
+  const e = mine.find((u) => u.id === b.turnId);
+  if (b.active && e) {
+    const me = fieldUnit(e);
+    const all = f.units.map(fieldUnit);
+    const shaken = e.unit.shakenRound === b.round;
+    const used = b.turn.action;
+    const allowed = moveAllowance(e.unit, b.turn, f.scale);
+    const moved = movedSquares(b.turn, e.cell);
+    const targets = f.units.filter((t) => !t.unit.removed && t.unit.side !== e.unit.side && t.item.visible)
+      .map((t) => ({ t, pv: attackPreview(f, e.id, t.id, { highGround: false, cover: false })! }));
+    if (!targets.some((x) => x.t.id === battleTarget && x.pv.reach.ok)) battleTarget = targets.find((x) => x.pv.reach.ok)?.t.id ?? "";
+    const chosen = targets.find((x) => x.t.id === battleTarget);
+    const arrow = (d: Direction | null, label: string) => {
+      if (!d) return h("span", {});
+      const r = checkStep(me, e.unit, all, b, f.scale, d);
+      return h("button", { className: "secondary small", disabled: !r.ok, title: r.ok ? `Move ${d.toUpperCase()}` : r.why, onclick: send(e.id, { op: "move", dir: d }) }, label);
+    };
+    const act = (label: string, op: string, title: string, extra: Record<string, unknown> = {}, off = false) =>
+      h("button", { className: "small", disabled: !!used || shaken || off, title, onclick: send(e.id, { op, ...extra }) }, label);
+    const pad: [Direction | null, string][] = [["nw", "↖"], ["n", "↑"], ["ne", "↗"], ["w", "←"], [null, ""], ["e", "→"], ["sw", "↙"], ["s", "↓"], ["se", "↘"]];
+    out.push(h("div", { className: "stack tight", style: "margin-top:6px" },
+      h("div", {}, h("strong", {}, `Your unit acts: ${e.unit.name}`), h("span", { className: "small muted" }, `${b.showCommandedBr ? ` · BR ${unitBrNow(e.unit)}` : ""} · moved ${moved}/${allowed} squares`)),
+      shaken ? h("div", { className: "small bad" }, "Shaken: it can't move or take actions this turn.") : null,
+      used ? h("div", { className: "small ok" }, `Action used: ${used}${used === "disengage" ? (b.turn.disengaged ? " (it may move half its speed)" : " (failed: it doesn't move)") : ""}.`) : null,
+      h("div", { className: "row", style: "align-items:flex-start" },
+        h("div", { style: "display:grid;grid-template-columns:repeat(3,2.2em);gap:2px" }, ...pad.map(([d, l]) => arrow(d, l))),
+        h("div", { className: "stack tight grow" },
+          h("div", { className: "row wrap" },
+            h("select", { onchange: (ev: Event) => { battleTarget = (ev.target as HTMLSelectElement).value; renderAgain(); } },
+              ...targets.map(({ t, pv }) => h("option", { value: t.id, selected: t.id === battleTarget, disabled: !pv.reach.ok }, `${t.unit.name}${pv.reach.ok ? ` (${pv.reach.how})` : ` — ${pv.reach.why}`}`))),
+            act("Attack", "attack", "Opposed d20 + BR rolls", { targetId: battleTarget }, !chosen?.pv.reach.ok)),
+          chosen ? h("div", { className: "small muted" }, [...chosen.pv.factors.adv.map((x) => `Advantage: ${x}`), ...chosen.pv.factors.dis.map((x) => `Disadvantage: ${x}`)].join(" · ") || "No Advantage or Disadvantage from the map (higher ground and cover are the GM's call).") : null,
+          h("div", { className: "row wrap" },
+            act("Dash", "dash", "Double its speed this turn"),
+            act("Defend", "defend", "Attacks against it have Disadvantage until the end of its next turn"),
+            act("Disengage", "disengage", "DC 10 morale check: move half its speed away from enemies, or lose the action"),
+            act("Guard", "guard", "Attack the next enemy unit that moves next to it")),
+          h("div", { className: "row wrap" },
+            h("button", { className: "secondary small", disabled: !!used || moved === 0, title: "Back to where it started this turn", onclick: send(e.id, { op: "undo-move" }) }, "Undo move"),
+            h("button", { className: "small", onclick: send(e.id, { op: "end-turn" }) }, "End turn"))))));
+  }
+  if (battleNote) out.push(h("div", { className: "small bad" }, battleNote));
+  return out.length ? h("div", {}, ...out) : null;
+}
+
 /** Mass combat: the units the player can see, how they're doing in words, and the battle's public log. */
 function battlePanel(): Child {
+  if (!roomSettings().massCombat) return null;
   const units = items.flatMap((i) => { const unit = readBattleUnit(i.metadata); return unit ? [{ id: i.id, visible: i.visible, unit }] : []; });
   const b = readBattle(sceneMeta);
   if (!units.length && !b.active) return null;
@@ -194,6 +262,7 @@ function battlePanel(): Child {
         h("div", {}, h("strong", {}, r.name), h("span", { className: "small muted" }, ` · ${r.side}`), r.mine ? h("span", { className: "small ok" }, " · you command it") : null, r.active ? h("span", { className: "small warn" }, " · acting") : null),
         h("div", { className: "small muted" }, r.makeup),
         h("div", { className: "small" }, r.status, r.numbers ? ` · ${r.numbers}` : ""))))),
+    battleOrders(),
     v.log.length ? h("div", { className: "small stack tight", style: "margin-top:6px" }, ...v.log.slice(-10).reverse().map((l) => h("div", {}, "• ", l))) : null);
 }
 
@@ -214,8 +283,10 @@ export function renderPlayerView(): Child[] {
 export async function initPlayerItems(onChange: () => void) {
   renderAgain = onChange;
   [items, lite, sceneMeta] = await Promise.all([OBR.scene.items.getItems(), obrGateway.getItems(), OBR.scene.getMetadata()]);
+  grid = await readGrid().catch(() => null);
   if (subscribed) return;
   subscribed = true;
+  OBR.scene.grid.onChange(async () => { grid = await readGrid().catch(() => null); onChange(); });
   OBR.scene.items.onChange(async (i) => { items = i; lite = await obrGateway.getItems(); onChange(); });
   OBR.scene.onMetadataChange((m) => { sceneMeta = m; onChange(); });
 }

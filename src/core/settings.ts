@@ -23,9 +23,11 @@ export interface RoomSettings {
   autoApplyCasts: boolean;
   /** Players see whether their attacks from the action bar hit (it tells them roughly the target's AC). On by default. */
   revealHits: boolean;
+  /** Mass combat (Unearthed Arcana 2017, playtest): the DM Tools panel, unit badges and the players' Battle view. Off by default. */
+  massCombat: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true, massCombat: false };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -38,6 +40,7 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     handheld: typeof s.handheld === "boolean" ? s.handheld : DEFAULT_SETTINGS.handheld,
     autoApplyCasts: typeof s.autoApplyCasts === "boolean" ? s.autoApplyCasts : DEFAULT_SETTINGS.autoApplyCasts,
     revealHits: typeof s.revealHits === "boolean" ? s.revealHits : DEFAULT_SETTINGS.revealHits,
+    massCombat: typeof s.massCombat === "boolean" ? s.massCombat : DEFAULT_SETTINGS.massCombat,
   };
 }
 

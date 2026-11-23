@@ -9,8 +9,8 @@ import { SIZE_NAMES } from "../core/constants";
 import { convertMonster } from "../core/fivetools";
 import type { ResolvedImage } from "../core/importer";
 import {
-  adjacent, BATTLE_UNIT_KEY, cellDistance, crLabel, MORALE_FACTORS, MORALE_LABELS, MORALE_ROWS, memberFromSheet, membersFromSheets, moraleFromFactors,
-  notRanged, sideStrength, squaresAllowed, unitBrNow, unitInitiativeOf, unitMakeup, unitMoraleOf, unitSpeed, unitSummary, unitWarnings, fmtBonus,
+  adjacent, BATTLE_UNIT_KEY, crLabel, MORALE_FACTORS, MORALE_LABELS, MORALE_ROWS, memberFromSheet, membersFromSheets, moraleFromFactors,
+  moveAllowance, movedSquares, notRanged, sideStrength, unitBrNow, unitInitiativeOf, unitMakeup, unitMoraleOf, unitSpeed, unitSummary, unitWarnings, fmtBonus,
   type BattleUnit, type CriticalEvent, type Member, type MemberRole, type MoraleFactors, type RollMode,
 } from "../core/massCombat";
 import { targetsInArea, type AreaShape } from "../core/mob";
@@ -20,7 +20,7 @@ import type { TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import {
   attack, attackPreview, beginBattle, casualties, disengage, endBattle, orderOf, patchUnits, readField, removeByHand, restore, saveBattle,
-  simpleAction, stepTurn, writeUnit, type Field, type FieldEntry,
+  guardsTriggered, simpleAction, stepTurn, writeUnit, type Field, type FieldEntry,
 } from "./battleOps";
 import { fivetoolsImage, getLib } from "./bestiary";
 import { action, h, rerender, type Child } from "./dom";
@@ -228,7 +228,7 @@ function unitRow(e: FieldEntry, f: Field, units: TrackerUnit[]): Child {
           const id = (ev.target as HTMLSelectElement).value;
           if (id) void patchUnits([{ id: e.id, patch: { characters: u.characters.includes(id) ? u.characters.filter((x) => x !== id) : [...u.characters, id] } }]).then(refreshBattle).then(rerender);
         } }, h("option", { value: "" }, "characters…"), ...party.map((p) => h("option", { value: p.id }, `${u.characters.includes(p.id) ? "✓ " : ""}${p.name}`))),
-        h("select", { title: "House extension: a player who commands this unit (turn notices; sees its BR if allowed below)", onchange: (ev: Event) => {
+        h("select", { title: "A player who commands this unit moves it and gives its orders from their popover (the rules enforced), gets a notice on its turn, and sees its BR unless you turn that off below", onchange: (ev: Event) => {
           const id = (ev.target as HTMLSelectElement).value;
           void patchUnits([{ id: e.id, patch: { commandedBy: id || undefined } }]).then(refreshBattle).then(rerender);
         } }, h("option", { value: "", selected: !u.commandedBy }, "no player commands it"), ...players.map((p) => h("option", { value: p.id, selected: p.id === u.commandedBy }, `commanded by ${p.name}`))),
@@ -253,9 +253,9 @@ function turnPanel(f: Field, units: TrackerUnit[]): Child {
   const used = b.turn.action;
   const speed = unitSpeed(u.members);
   const mult = used === "dash" ? 2 : used === "disengage" && b.turn.disengaged ? 0.5 : 1;
-  const allowed = used === "disengage" && !b.turn.disengaged ? 0 : squaresAllowed(Math.max(speed.walk, speed.fly ?? 0) * mult, f.scale);
+  const allowed = moveAllowance(u, b.turn, f.scale);
   const start = b.turn.startCell;
-  const moved = start ? cellDistance(start, e.cell) : 0;
+  const moved = movedSquares(b.turn, e.cell);
   const enemies = f.units.filter((x) => !x.unit.removed && x.unit.side !== u.side);
   const startAdj = start ? enemies.some((x) => adjacent(x.cell, start)) : false;
   const warn: string[] = [];
@@ -263,7 +263,7 @@ function turnPanel(f: Field, units: TrackerUnit[]): Child {
   if (shaken && moved) warn.push("It's shaken: it can't move this turn.");
   if (startAdj && moved && !b.turn.disengaged) warn.push("It started next to an enemy unit: it can't move away without a successful Disengage.");
   // Guard: an enemy that was guarding and is now next to this unit, which wasn't there at the start of the turn.
-  const guards = enemies.filter((x) => x.unit.guardRound !== undefined && adjacent(x.cell, e.cell) && !(start && adjacent(x.cell, start)));
+  const guards = guardsTriggered(f);
   const targets = enemies.map((t) => ({ t, pv: attackPreview(f, e.id, t.id, { highGround: atk.highGround, cover: atk.cover }) }));
   if (!targets.some((x) => x.t.id === atk.target)) atk.target = targets.find((x) => x.pv?.reach.ok)?.t.id ?? "";
   const chosen = targets.find((x) => x.t.id === atk.target);
@@ -273,6 +273,7 @@ function turnPanel(f: Field, units: TrackerUnit[]): Child {
   return h("div", { className: "stack tight", style: "margin-top:6px" },
     h("div", {}, h("strong", {}, `Round ${b.round}: ${u.name}`), h("span", { className: "small muted" }, ` · BR ${unitBrNow(u)} · morale ${fmtBonus(unitMoraleOf(u))} · ${moved}/${allowed} squares`)),
     shaken ? h("div", { className: "small bad" }, "Shaken: it can't move or take actions this turn.") : null,
+    u.commandedBy ? h("div", { className: "small" }, `Commanded by ${players.find((p) => p.id === u.commandedBy)?.name ?? "a player"}: their moves and orders arrive from their popover, the rules enforced. You can still act for the unit here.`) : null,
     chars.length ? h("div", { className: "small" }, `Characters act first: ${chars.join(", ")}. Resolve their attacks and spells with the normal rules, take the creatures they kill off the target with its Casualties tool, then the unit acts.`) : null,
     ...warn.map((w) => h("div", { className: "small warn" }, w)),
     ...guards.map((g) => h("div", { className: "row small" }, h("span", { className: "warn grow" }, `${g.unit.name} was guarding and ${u.name} came next to it.`),
@@ -347,7 +348,7 @@ export function battlePanel(units: TrackerUnit[]): Child {
         : [h("button", { className: "small", disabled: !!startWhy, title: startWhy, onclick: action(async () => { await beginBattle(); await refreshBattle(); }) }, "Start battle")]),
       !b.active && startWhy && f.units.length ? h("span", { className: "small warn" }, startWhy) : null,
       h("label", { className: "small", title: "Off: players see the results in words only (dice totals would reveal BR)" }, h("input", { type: "checkbox", checked: b.publicRolls, onchange: action(() => saveBattle({ ...b, publicRolls: !b.publicRolls })) }), "players see the battle's dice"),
-      h("label", { className: "small", title: "House extension: a player who commands a unit sees its BR and morale" }, h("input", { type: "checkbox", checked: b.showCommandedBr, onchange: action(() => saveBattle({ ...b, showCommandedBr: !b.showCommandedBr })) }), "commanders see their unit's BR")),
+      h("label", { className: "small", title: "A player who commands a unit moves it and gives its orders from their popover; with this on (the default) they also see its BR and morale" }, h("input", { type: "checkbox", checked: b.showCommandedBr, onchange: action(() => saveBattle({ ...b, showCommandedBr: !b.showCommandedBr })) }), "commanders see their unit's BR")),
     b.active ? h("div", { className: "small muted" }, `Order: ${order.map((x) => `${x.unit.name} ${unitInitiativeOf(x.unit)}`).join(" → ")}`) : null,
     b.active ? turnPanel(f, units) : null,
     eventsPanel(f),

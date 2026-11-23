@@ -6,6 +6,8 @@
 import OBR, { buildLabel, type Item } from "@owlbear-rodeo/sdk";
 import { BUTLER_NS } from "../core/constants";
 import { fmtBonus, readBattle, readBattleUnit, unitBrNow, unitMoraleOf, type BattleState, type BattleUnit } from "../core/massCombat";
+import type { BattleRequest } from "../core/turns";
+import { applyBattleOrder } from "../extension/battleOps";
 
 const BADGE = `${BUTLER_NS}/battle-badge/`;
 const shown = new Map<string, string>();
@@ -59,7 +61,15 @@ export async function updateBattle(items: Item[], meta: Record<string, unknown>,
   if (first || !key || role !== "PLAYER") return;
   const it = items.find((i) => i.id === b.turnId);
   const u = it ? readBattleUnit(it.metadata) : null;
-  if (u?.commandedBy === me.id) await notify(`Your unit acts: ${u.name} (round ${b.round}). Tell the GM where it moves and what it does.`);
+  if (u?.commandedBy === me.id) await notify(`Your unit acts: ${u.name} (round ${b.round}). Move it and give its orders in your Butler popover (Battle).`);
 }
 
 export function resetBattle() { shown.clear(); lastKey = null; }
+
+/** Checks that the order comes from the unit's commanding player (or a GM), then applies it. Returns why not, or null. */
+export async function battleOrderFrom(req: BattleRequest, it: Item, fromGm: boolean): Promise<string | null> {
+  const u = readBattleUnit(it.metadata);
+  if (!u) return "that token isn't a battle unit";
+  if (!fromGm && u.commandedBy !== req.playerId) return "they don't command that unit";
+  try { return await applyBattleOrder(req); } catch (e) { return e instanceof Error ? e.message : String(e); }
+}

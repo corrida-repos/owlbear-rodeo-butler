@@ -318,15 +318,15 @@ export interface BattleState {
   turnId: string | null;
   /** Players see the battle's dice (they'd reveal BR). Off by default: players read the results in words. */
   publicRolls: boolean;
-  /** Players who command a unit see its BR and morale (house extension). */
+  /** Players who command a unit see its BR and morale (house extension, on by default). */
   showCommandedBr: boolean;
   /** The current turn: where the unit started, and the action it took. */
-  turn: { startCell?: Cell; action?: "attack" | "dash" | "defend" | "disengage" | "guard"; disengaged?: boolean };
+  turn: { startCell?: Cell; action?: "attack" | "dash" | "defend" | "disengage" | "guard"; disengaged?: boolean; /** Squares stepped by a commanding player's moves. */ moved?: number };
   events: CriticalEvent[];
   log: BattleLine[];
 }
 
-export const NEW_BATTLE: BattleState = { v: 1, active: false, round: 0, turnId: null, publicRolls: false, showCommandedBr: false, turn: {}, events: [], log: [] };
+export const NEW_BATTLE: BattleState = { v: 1, active: false, round: 0, turnId: null, publicRolls: false, showCommandedBr: true, turn: {}, events: [], log: [] };
 export const BATTLE_LOG_MAX = 40;
 
 export function readBattle(meta: Record<string, unknown>): BattleState {
@@ -334,7 +334,7 @@ export function readBattle(meta: Record<string, unknown>): BattleState {
   if (!b || b.v !== 1) return { ...NEW_BATTLE, turn: {}, events: [], log: [] };
   return {
     v: 1, active: b.active === true, round: num(b.round), turnId: typeof b.turnId === "string" ? b.turnId : null,
-    publicRolls: b.publicRolls === true, showCommandedBr: b.showCommandedBr === true,
+    publicRolls: b.publicRolls === true, showCommandedBr: b.showCommandedBr !== false,
     turn: b.turn && typeof b.turn === "object" ? b.turn : {},
     events: Array.isArray(b.events) ? b.events.filter((e: any) => e && typeof e.id === "string") : [],
     log: Array.isArray(b.log) ? b.log.filter((l: any) => l && typeof l.pub === "string") : [],
@@ -510,4 +510,43 @@ export function playerBattleView(units: { id: string; visible: boolean; unit: Ba
       };
     });
   return { round: b.round, active: b.active, rows, log: b.log.map((l) => l.pub).filter(Boolean) };
+}
+
+// ------------------------------------------------------------------ a commanding player's orders
+
+export const DIRECTIONS = { nw: [-1, -1], n: [0, -1], ne: [1, -1], w: [-1, 0], e: [1, 0], sw: [-1, 1], s: [0, 1], se: [1, 1] } as const;
+export type Direction = keyof typeof DIRECTIONS;
+export const isDirection = (x: unknown): x is Direction => typeof x === "string" && x in DIRECTIONS;
+
+/** Squares the acting unit may move this turn: its best speed (flying if every member flies), doubled by Dash, halved by a successful Disengage, none after a failed one. */
+export function moveAllowance(u: Pick<BattleUnit, "members">, turn: BattleState["turn"], scaleFt: number): number {
+  if (turn.action === "disengage" && !turn.disengaged) return 0;
+  const sp = unitSpeed(u.members);
+  const mult = turn.action === "dash" ? 2 : turn.action === "disengage" ? 0.5 : 1;
+  return squaresAllowed(Math.max(sp.walk, sp.fly ?? 0) * mult, scaleFt);
+}
+
+/** Squares moved so far this turn: steps taken by the player's orders, or the straight distance if the GM moved the token. */
+export const movedSquares = (turn: BattleState["turn"], cell: Cell) => Math.max(turn.moved ?? 0, turn.startCell ? cellDistance(turn.startCell, cell) : 0);
+
+/**
+ * One square of movement ordered by the commanding player, with the rules enforced (the GM moves tokens freely):
+ * not while Shaken; within the allowance; never away from an adjacent enemy unit without a successful Disengage (so it
+ * also stops on coming next to one); never into a square another unit holds.
+ */
+export function checkStep(me: FieldUnit, unit: BattleUnit, all: FieldUnit[], b: Pick<BattleState, "turn" | "round">, scaleFt: number, dir: Direction): { ok: true; cell: Cell } | { ok: false; why: string } {
+  if (unit.shakenRound === b.round) return { ok: false, why: "it's shaken: it can't move this turn" };
+  if (b.turn.action === "disengage" && !b.turn.disengaged) return { ok: false, why: "it failed to disengage: it doesn't move" };
+  if (movedSquares(b.turn, me.cell) >= moveAllowance(unit, b.turn, scaleFt)) return { ok: false, why: "no movement left" };
+  const live = all.filter((u) => !u.removed && u.id !== me.id);
+  if (!b.turn.disengaged && live.some((u) => u.side !== me.side && adjacent(u.cell, me.cell))) return { ok: false, why: "it's next to an enemy unit: it must stop (Disengage to move away)" };
+  const [dc, dr] = DIRECTIONS[dir];
+  const cell = { col: me.cell.col + dc, row: me.cell.row + dr };
+  if (live.some((u) => u.cell.col === cell.col && u.cell.row === cell.row)) return { ok: false, why: "another unit holds that square" };
+  return { ok: true, cell };
+}
+
+/** Guarding enemy units the acting unit has come next to this turn (it wasn't next to them where it started). */
+export function guardTriggers(active: FieldUnit, guarding: Set<string>, all: FieldUnit[], startCell: Cell | undefined): string[] {
+  return all.filter((u) => !u.removed && guarding.has(u.id) && u.side !== active.side && adjacent(u.cell, active.cell) && !(startCell && adjacent(u.cell, startCell))).map((u) => u.id);
 }

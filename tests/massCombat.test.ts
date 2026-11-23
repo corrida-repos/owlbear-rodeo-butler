@@ -220,7 +220,7 @@ describe("mass combat: turns", () => {
 describe("mass combat: what players see", () => {
   it("visible units in words; BR only for a unit the player commands when the GM allows it; the public log only", async () => {
     const { playerBattleView } = await import("../src/core/massCombat");
-    const b = { ...NEW_BATTLE, active: true, round: 2, turnId: "a", log: [{ pub: "Orcs attack: casualties.", gm: "17 vs 12" }, { pub: "", gm: "morale 9 vs DC 15" }] };
+    const b = { ...NEW_BATTLE, showCommandedBr: false, active: true, round: 2, turnId: "a", log: [{ pub: "Orcs attack: casualties.", gm: "17 vs 12" }, { pub: "", gm: "morale 9 vs DC 15" }] };
     const units = [
       { id: "a", visible: true, unit: unit({ name: "Orcs", startBr: 23, brLost: 2, commandedBy: "p1" }) },
       { id: "b", visible: true, unit: unit({ name: "Pikes", side: "B", startBr: 23, defendUntil: 3 }) },
@@ -260,5 +260,53 @@ describe("mass combat: a scripted skirmish", () => {
     expect(afterLoss(unitBrNow(pikes), 21, { heavy: false, halfChecked: true }).removed).toBe(true);
     const all = [field("pikes", "B", 3, 3), field("archers", "B", 7, 3), field("reserve", "B", 9, 3), field("orcs", "A", 4, 3)];
     expect(friendlyCheckIds(all[0]!, all, 100)).toEqual(["archers"]);
+  });
+});
+
+describe("mass combat: a commanding player's orders", () => {
+  it("moves one square at a time: within the allowance, stopping next to enemies unless disengaged, never into a held square", async () => {
+    const { checkStep, moveAllowance, movedSquares } = await import("../src/core/massCombat");
+    const u = unit(); // 30 ft creatures: 300 ft = 3 squares at 100 ft
+    const me = field("me", "A", 0, 0);
+    const b = { round: 1, turn: { startCell: { col: 0, row: 0 } } };
+    expect(moveAllowance(u, b.turn, 100)).toBe(3);
+    expect(moveAllowance(u, { action: "dash" }, 100)).toBe(6);
+    expect(moveAllowance(u, { action: "disengage", disengaged: true }, 100)).toBe(2);
+    expect(moveAllowance(u, { action: "disengage", disengaged: false }, 100)).toBe(0);
+    expect(checkStep(me, u, [me], b, 100, "e")).toEqual({ ok: true, cell: { col: 1, row: 0 } });
+    expect(checkStep({ ...me, cell: { col: 3, row: 0 } }, u, [me], { ...b, turn: { ...b.turn, moved: 3 } }, 100, "e")).toMatchObject({ ok: false, why: "no movement left" });
+    expect(movedSquares({ startCell: { col: 0, row: 0 }, moved: 1 }, { col: 2, row: 2 })).toBe(2);
+    const foe = field("foe", "B", 1, 1);
+    expect(checkStep(me, u, [me, foe], b, 100, "w")).toMatchObject({ ok: false, why: expect.stringMatching(/next to an enemy/) });
+    expect(checkStep(me, u, [me, foe], { ...b, turn: { ...b.turn, action: "disengage", disengaged: true } }, 100, "w").ok).toBe(true);
+    expect(checkStep(me, u, [me, field("ally", "A", 1, 0)], b, 100, "e")).toMatchObject({ ok: false, why: "another unit holds that square" });
+    expect(checkStep(me, { ...u, shakenRound: 1 }, [me], b, 100, "e").ok).toBe(false);
+  });
+
+  it("a guard triggers when the acting unit comes next to it, not when it started there", async () => {
+    const { guardTriggers } = await import("../src/core/massCombat");
+    const mover = field("m", "A", 2, 0);
+    const all = [mover, field("g1", "B", 3, 0), field("g2", "B", 1, 1), field("idle", "B", 3, 1)];
+    expect(guardTriggers(mover, new Set(["g1", "g2"]), all, { col: 0, row: 0 })).toEqual(["g1"]);
+  });
+
+  it("commanders see their unit's BR by default; old records without the option keep it on", () => {
+    expect(NEW_BATTLE.showCommandedBr).toBe(true);
+    expect(readBattle({ [BATTLE_KEY]: { v: 1 } }).showCommandedBr).toBe(true);
+    expect(readBattle({ [BATTLE_KEY]: { v: 1, showCommandedBr: false } }).showCommandedBr).toBe(false);
+  });
+
+  it("orders are validated as player requests; mass combat is off by default", async () => {
+    const { isPlayerRequest } = await import("../src/core/turns");
+    const { DEFAULT_SETTINGS, readSettings } = await import("../src/core/settings");
+    const base = { v: 1, unitId: "u", playerId: "p", playerName: "Alice", type: "battle", round: 2 };
+    expect(isPlayerRequest({ ...base, op: "move", dir: "ne" })).toBe(true);
+    expect(isPlayerRequest({ ...base, op: "move", dir: "up" })).toBe(false);
+    expect(isPlayerRequest({ ...base, op: "attack", targetId: "t" })).toBe(true);
+    expect(isPlayerRequest({ ...base, op: "attack" })).toBe(false);
+    expect(isPlayerRequest({ ...base, op: "end-turn" })).toBe(true);
+    expect(isPlayerRequest({ ...base, op: "fireball" })).toBe(false);
+    expect(DEFAULT_SETTINGS.massCombat).toBe(false);
+    expect(readSettings({}).massCombat).toBe(false);
   });
 });

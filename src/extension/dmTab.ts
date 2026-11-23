@@ -13,6 +13,7 @@ import { aoePanel, refreshAreas } from "./aoePanel";
 import { hazardsPanel, refreshHazards } from "./hazardsPanel";
 import { battlePanel, refreshBattle } from "./battlePanel";
 import { obrGateway } from "./obrGateway";
+import { roomSettings } from "./roomSettings";
 
 let view: TrackerView | null = null;
 let sceneMeta: Record<string, unknown> = {};
@@ -36,5 +37,5 @@ export function resetDmTab() { view = null; }
 export function renderDmTab(): Child[] {
   if (!view) { refreshDmTab(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const units = [...view.order, ...view.waiting, ...view.outside];
-  return [moralePanel(units, sceneMeta), chasePanel(units, sceneMeta, view.encounter.started), aoePanel(units), hazardsPanel(units), mobPanel(units), objectsPanel(sceneMeta), battlePanel(units)];
+  return [moralePanel(units, sceneMeta), chasePanel(units, sceneMeta, view.encounter.started), aoePanel(units), hazardsPanel(units), mobPanel(units), objectsPanel(sceneMeta), roomSettings().massCombat ? battlePanel(units) : null];
 }

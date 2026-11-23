@@ -209,8 +209,17 @@ they want to target". So:
   casualties", "flees", "bloodied ranks", "shaken".
 - Players never see enemy BR, morale or initiative breakdowns.
 - Battle dice are private by default, because d20 + BR totals would reveal BR. The results are announced as words.
-- A player commanding a unit goes beyond the UA. It's a house extension, off unless the GM assigns a commander, and
-  that player sees their unit's BR only if the GM ticks the option.
+- A player commanding a unit goes beyond the UA. It's a house extension, off unless the GM assigns a commander.
+
+**Mass combat is off by default** (decided 2026-11-23): a room setting in Combat → Room settings turns on the DM Tools
+panel, the badges, the players' Battle view and their orders.
+
+**A commanding player controls their unit** (decided 2026-11-23). On its turn, their popover moves it one square at a
+time and gives its orders (Attack, Dash, Defend, Disengage, Guard, Undo move, End turn, and their guard's attack). The
+orders travel as requests to the primary GM client, which checks that the player commands the unit and that it's its
+turn, then applies them with the rules enforced. Players can't move GM tokens in Owlbear, so this is how they move.
+The GM still moves tokens freely, with warnings. The player sees their own unit's BR and morale: **on by default**, and
+the GM can turn it off.
 
 ## Status
 | Milestone | Status | Checked by |
@@ -220,6 +229,7 @@ they want to target". So:
 | M3 running the battle | done | headless smoke test: start, an attack with heavy casualties, a failed DC 10 rout, a friendly-casualty check, Defend, a round wrap. Live check pending with two armies over 3 rounds |
 | M4 map rules | done (warnings) | movement over the allowance, moving away from an enemy without Disengage, and Guard triggers are worked out in the panel from the token positions. Guard triggers only for the acting unit's move, seen when the GM's panel refreshes. Live check pending |
 | M5 characters and spells | done | attach party members, a casualties editor with the Targets in Area of Effect estimate. Skirmishes run on another scene. Live check pending |
+| Player command | done | unit tests: one-square moves (allowance, Dash, Disengage, stopping next to enemies, held squares, Shaken), guard triggers, request validation, BR shown by default, the setting off by default. Headless smoke test: the player's popover with the orders, a move, a refused move, an attack, a refused second action, End turn. Live check pending with a player |
 | M6 events, players, wrap-up | done | critical events, the player popover's Battle section (pure `playerBattleView`, unit-tested), badges on unit tokens, turn notices for commanded units, a summary when the battle ends. Live check pending with a player |
 
 Deviations from the plan above: the unit tests cover the rules end to end with fixed rolls rather than replaying a

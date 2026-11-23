@@ -7,10 +7,11 @@ import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import { fmtMod } from "../core/dice";
 import {
   afterLoss, atTurnEnd, atTurnStart, attackFactors, attackOutcome, BATTLE_KEY, BATTLE_UNIT_KEY, battleOrder, canAttack, cellOf, DC_DISENGAGE, DC_FRIENDLY,
-  friendlyCheckIds, gridProblem, nextBattleTurn, nextTurnRound, previousBattleTurn, readBattle, readBattleUnit, removeCreatures, sideStrength,
+  checkStep, DIRECTIONS, friendlyCheckIds, gridProblem, guardTriggers, movedSquares, nextBattleTurn, nextTurnRound, previousBattleTurn, readBattle, readBattleUnit, removeCreatures, sideStrength,
   startBattle, unitBrNow, unitMoraleOf, unitRange, withBattleLog, type BattleLine, type BattleState, type BattleUnit, type Cell, type FieldUnit,
   type MoraleCheck, type RollMode,
 } from "../core/massCombat";
+import type { BattleRequest } from "../core/turns";
 import { makeNote, ROLL_CHANNEL } from "../core/rolls";
 import { gmRoll } from "./gmRoll";
 
@@ -25,18 +26,25 @@ export interface Field {
   gridIssue: string | null;
 }
 
-export async function readField(): Promise<Field> {
-  const [items, meta, dpi, scale, type] = await Promise.all([
-    OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.scene.grid.getDpi(), OBR.scene.grid.getScale(), OBR.scene.grid.getType(),
-  ]);
+export interface GridInfo { dpi: number; type: string; multiplier: number; unit: string }
+
+export async function readGrid(): Promise<GridInfo> {
+  const [dpi, scale, type] = await Promise.all([OBR.scene.grid.getDpi(), OBR.scene.grid.getScale(), OBR.scene.grid.getType()]);
+  return { dpi, type, multiplier: scale.parsed.multiplier, unit: scale.parsed.unit };
+}
+
+/** The battle from items already in hand (the player's view keeps its own copy of the scene). */
+export function buildField(items: Item[], meta: Record<string, unknown>, grid: GridInfo): Field {
   const units = items.flatMap((item): FieldEntry[] => {
     const unit = readBattleUnit(item.metadata);
-    return unit ? [{ id: item.id, item, unit, cell: cellOf(item.position, dpi) }] : [];
+    return unit ? [{ id: item.id, item, unit, cell: cellOf(item.position, grid.dpi) }] : [];
   });
-  return {
-    battle: readBattle(meta), units, dpi, scale: scale.parsed.multiplier,
-    gridIssue: gridProblem({ type, multiplier: scale.parsed.multiplier, unit: scale.parsed.unit }),
-  };
+  return { battle: readBattle(meta), units, dpi: grid.dpi, scale: grid.multiplier, gridIssue: gridProblem(grid) };
+}
+
+export async function readField(): Promise<Field> {
+  const [items, meta, grid] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), readGrid()]);
+  return buildField(items, meta, grid);
 }
 
 export const fieldUnit = (e: FieldEntry): FieldUnit => ({
@@ -274,4 +282,65 @@ export async function removeByHand(id: string, why: string): Promise<void> {
 export async function restore(id: string): Promise<void> {
   await patchUnits([{ id, patch: { removed: null } }]);
   await OBR.scene.items.updateItems([id], (ds) => { for (const d of ds) d.visible = true; });
+}
+
+// ------------------------------------------------------------------ orders from a commanding player
+
+/** Guarding enemies the acting unit has come next to this turn. */
+export function guardsTriggered(f: Field): FieldEntry[] {
+  const e = f.units.find((u) => u.id === f.battle.turnId);
+  if (!e || !f.battle.active) return [];
+  const guarding = new Set(f.units.filter((u) => u.unit.guardRound !== undefined).map((u) => u.id));
+  return guardTriggers(fieldUnit(e), guarding, f.units.map(fieldUnit), f.battle.turn.startCell).map((id) => f.units.find((u) => u.id === id)!);
+}
+
+/** Moves the acting unit one square (a commanding player's order), the rules enforced. */
+export async function stepUnit(id: string, dir: keyof typeof DIRECTIONS): Promise<void> {
+  const f = await readField();
+  const e = f.units.find((u) => u.id === id);
+  if (!e || f.battle.turnId !== id) throw new Error("It isn't that unit's turn.");
+  const r = checkStep(fieldUnit(e), e.unit, f.units.map(fieldUnit), f.battle, f.scale, dir);
+  if (!r.ok) throw new Error(`${e.unit.name} can't move: ${r.why}.`);
+  const [dc, dr] = DIRECTIONS[dir];
+  await OBR.scene.items.updateItems([id], (ds) => { for (const d of ds) d.position = { x: d.position.x + dc * f.dpi, y: d.position.y + dr * f.dpi }; });
+  const moved = movedSquares(f.battle.turn, e.cell) + 1;
+  await saveBattle({ ...f.battle, turn: { ...f.battle.turn, moved } });
+}
+
+/** Puts the acting unit back where its turn started (before it takes an action). */
+export async function undoMove(id: string): Promise<void> {
+  const f = await readField();
+  const e = f.units.find((u) => u.id === id);
+  const start = f.battle.turn.startCell;
+  if (!e || f.battle.turnId !== id || !start || f.battle.turn.action) return;
+  await OBR.scene.items.updateItems([id], (ds) => { for (const d of ds) d.position = { x: d.position.x + (start.col - e.cell.col) * f.dpi, y: d.position.y + (start.row - e.cell.row) * f.dpi }; });
+  await saveBattle({ ...f.battle, turn: { ...f.battle.turn, moved: 0 } });
+}
+
+/**
+ * Applies an order from the player commanding `req.unitId` (primary GM client). Returns why it was refused, or null.
+ * The caller has checked the room setting and that the player commands the unit.
+ */
+export async function applyBattleOrder(req: BattleRequest): Promise<string | null> {
+  const f = await readField();
+  const b = f.battle;
+  const e = f.units.find((u) => u.id === req.unitId);
+  if (!e || !b.active || e.unit.removed) return "the unit isn't in a running battle";
+  if (req.op === "guard-attack") {
+    if (!guardsTriggered(f).some((g) => g.id === e.id) || b.turnId !== req.targetId) return "no enemy unit has come next to it this turn";
+    await attack(e.id, req.targetId, { highGround: false, cover: false }, { guard: true });
+    return null;
+  }
+  if (b.turnId !== e.id || b.round !== req.round) return "it isn't that unit's turn";
+  const acts = ["attack", "dash", "defend", "disengage", "guard"];
+  if (acts.includes(req.op) && (b.turn.action || e.unit.shakenRound === b.round)) return b.turn.action ? "it already took its action" : "it's shaken";
+  switch (req.op) {
+    case "attack": await attack(e.id, req.targetId, { highGround: false, cover: false }); break;
+    case "dash": case "defend": case "guard": await simpleAction(e.id, req.op); break;
+    case "disengage": await disengage(e.id); break;
+    case "move": await stepUnit(e.id, req.dir); break;
+    case "undo-move": await undoMove(e.id); break;
+    case "end-turn": await stepTurn("next"); break;
+  }
+  return null;
 }
