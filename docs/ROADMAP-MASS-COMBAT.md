@@ -1,6 +1,6 @@
 # Roadmap: mass combat (UA 2017)
 
-Drafted 2026-11-23. Nothing here is built yet.
+Drafted 2026-11-23. Built the same day: see [Status](#status).
 
 ## Source
 
@@ -91,6 +91,9 @@ the same in 5E and 5.5E rooms (it reads CR only).
 | A8 | The text doesn't say whether "adjacent" includes diagonals. | It does: the 8 squares around the unit, on Butler's square grid. |
 | A9 | The text doesn't say how often a unit can be the target of advantage factors. | The factors are counted again for every attack, from the map as it is then. Advantage and Disadvantage cancel as usual. |
 | A10 | A PC's or NPC's own BR, when one is part of a unit, needs a CR. | The GM types a CR or BR. 5etools NPCs use their CR. |
+| A11 | Only ranged attacks exempt the commander, and mounts can't shoot, so mounted archers could never be ranged. | The commander's speed and range don't limit the unit. Mounts don't need a ranged attack. |
+| A12 | The BR table stops at CR 20. | +4 per CR above 20 (CR 21 = +54). |
+| A13 | The text doesn't say where a 100 ft unit's range is measured from. | Centre to centre, in squares × the grid's feet per square. Morale is kept within −10…+10 after the commander's Charisma is added. |
 
 ## How it fits Butler
 
@@ -194,8 +197,42 @@ Two choices to note:
 M1 → M2 → M3 together make a usable battle. M5 brings in the player characters, which is the point of the rules.
 M4 and M6 are refinements. M1 and M2 are self-contained. M3 is the first milestone that needs live checks.
 
-## Open questions for the owner
+## Decisions
 Decided 2026-11-23: A1 counted twice; A3 removal at BR 0 or below; the battle scene's grid at least 100 ft per square,
 enforced; skirmishes on another scene.
 
-1. Should players see enemy BR? By default the plan hides it, as Butler hides monster HP.
+**What players see**, decided 2026-11-23 from what the UA implies. The UA is a DM's tool: "designed to allow you, the
+DM, to determine the outcome of battles". BR is "an abstract measure", and players take part through their
+characters. They do need each enemy unit's makeup, because characters in a unit "pick out which members of the unit
+they want to target". So:
+- Players see each visible unit's name, side and creatures, and what happens to it, in words: "casualties", "heavy
+  casualties", "flees", "bloodied ranks", "shaken".
+- Players never see enemy BR, morale or initiative breakdowns.
+- Battle dice are private by default, because d20 + BR totals would reveal BR. The results are announced as words.
+- A player commanding a unit goes beyond the UA. It's a house extension, off unless the GM assigns a commander.
+
+**Mass combat is off by default** (decided 2026-11-23): a room setting in Combat → Room settings turns on the DM Tools
+panel, the badges, the players' Battle view and their orders.
+
+**A commanding player controls their unit** (decided 2026-11-23). On its turn, their popover moves it one square at a
+time and gives its orders (Attack, Dash, Defend, Disengage, Guard, Undo move, End turn, and their guard's attack). The
+orders travel as requests to the primary GM client, which checks that the player commands the unit and that it's its
+turn, then applies them with the rules enforced. Players can't move GM tokens in Owlbear, so this is how they move.
+The GM still moves tokens freely, with warnings. The player sees their own unit's BR and morale: **on by default**, and
+the GM can turn it off.
+
+## Status
+| Milestone | Status | Checked by |
+|---|---|---|
+| M1 rules core | done | 24 unit tests in `tests/massCombat.test.ts`: the UA's examples, every BR row, each attack band, morale triggers (A3–A5), initiative (A1), the grid check, adjacency and range, Advantage/Disadvantage from the map, the turn order and flags, what players see, and a scripted skirmish chaining them |
+| M2 army builder | done | headless smoke test against a stubbed Owlbear SDK. Live check pending: *From selected tokens*, the 5etools search, *Place on map* sizing the token to one square |
+| M3 running the battle | done | headless smoke test: start, an attack with heavy casualties, a failed DC 10 rout, a friendly-casualty check, Defend, a round wrap. Live check pending with two armies over 3 rounds |
+| M4 map rules | done (warnings) | movement over the allowance, moving away from an enemy without Disengage, and Guard triggers are worked out in the panel from the token positions. Guard triggers only for the acting unit's move, seen when the GM's panel refreshes. Live check pending |
+| M5 characters and spells | done | attach party members, a casualties editor with the Targets in Area of Effect estimate. Skirmishes run on another scene. Live check pending |
+| Player command | done | unit tests: one-square moves (allowance, Dash, Disengage, stopping next to enemies, held squares, Shaken), guard triggers, request validation, BR shown by default, the setting off by default. Headless smoke test: the player's popover with the orders, a move, a refused move, an attack, a refused second action, End turn. Live check pending with a player |
+| M6 events, players, wrap-up | done | critical events, the player popover's Battle section (pure `playerBattleView`, unit-tested), badges on unit tokens, turn notices for commanded units, a summary when the battle ends. Live check pending with a player |
+
+Deviations from the plan above: the unit tests cover the rules end to end with fixed rolls rather than replaying a
+battle through the Owlbear layer, which isn't testable without Owlbear, so that layer was smoke-tested in Chromium
+against a stub. The *Mob shortcut* is an area estimate on the Casualties tool, plus the existing Mob panel for the
+saves.

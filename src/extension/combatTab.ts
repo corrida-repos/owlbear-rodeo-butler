@@ -154,6 +154,8 @@ function renderSettings(): Child {
       "Apply damage and conditions from spells and attacks cast on the action bar automatically (otherwise they wait in the Tracker for you to apply)"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().revealHits, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ revealHits: (e.target as HTMLInputElement).checked }))() }),
       "Players see whether their attacks from the action bar hit (this hints at the target's AC; off: Butler checks hits for you and players only see their rolls)"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().massCombat, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ massCombat: (e.target as HTMLInputElement).checked }))() }),
+      "Mass combat (Unearthed Arcana 2017, playtest): a Mass combat panel in DM Tools for battles of hundreds of creatures, badges on unit tokens, and a Battle view for players"),
     h("div", { className: "small muted", style: "margin-top:4px" }, "Homebrew actions: add them with ＋ Homebrew on any unit's action bar; they show for every unit in the room."));
 }
 

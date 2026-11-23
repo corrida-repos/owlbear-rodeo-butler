@@ -9,6 +9,7 @@ import type { PartyMember } from "./ddb";
 import { ZERO_HP_CHOICES, type HpChange, type ZeroHpChoice } from "./hp";
 import type { ResolvedImage } from "./importer";
 import type { UnitSheet } from "./sheet";
+import { isDirection, type Direction } from "./massCombat";
 import { isUnitLight, type UnitLight } from "./vision";
 import { isKnownShape, type KnownShape } from "./wildshape";
 
@@ -52,7 +53,14 @@ export type WildShapeRequest = Base & { type: "wild-shape" } & WildShapeOp;
 export interface CastRequest extends Base { type: "cast"; record: CastRecord }
 /** A party member's saving throw against a cast (unitId: the target). */
 export interface CastSaveRequest extends Base { type: "cast-save"; castId: string; total: number }
-export type PlayerRequest = CastRequest | CastSaveRequest | EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
+/** Mass combat: an order from the player commanding a battle unit (unitId: that unit). */
+export type BattleOp =
+  | { op: "attack"; targetId: string } | { op: "guard-attack"; targetId: string }
+  | { op: "dash" } | { op: "defend" } | { op: "disengage" } | { op: "guard" }
+  | { op: "move"; dir: Direction } | { op: "undo-move" } | { op: "end-turn" };
+export type BattleRequest = Base & { type: "battle"; round: number } & BattleOp;
+const BATTLE_OPS = ["attack", "guard-attack", "dash", "defend", "disengage", "guard", "move", "undo-move", "end-turn"];
+export type PlayerRequest = BattleRequest | CastRequest | CastSaveRequest | EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | LightRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
@@ -62,6 +70,13 @@ export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
   if (!r || r.v !== 1 || typeof r.unitId !== "string" || typeof r.playerId !== "string" || typeof r.playerName !== "string") return false;
   if (r.type === "end-turn") return typeof r.round === "number";
+  if (r.type === "battle") {
+    const b = r as BattleRequest;
+    if (typeof b.round !== "number" || !BATTLE_OPS.includes(b.op)) return false;
+    if (b.op === "attack" || b.op === "guard-attack") return typeof b.targetId === "string";
+    if (b.op === "move") return isDirection(b.dir);
+    return true;
+  }
   if (r.type === "cast") return !!r.record && typeof r.record.id === "string" && Array.isArray(r.record.targets) && r.record.targets.length <= 40
     && ["attack", "save", "damage"].includes(r.record.kind) && r.record.targets.every((t) => !!t && typeof t.id === "string");
   if (r.type === "cast-save") return typeof r.castId === "string" && Number.isFinite(r.total);

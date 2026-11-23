@@ -32,12 +32,13 @@ import { resetHazards, watchHazards } from "./hazards";
 import { receiveCast, receiveCastSave } from "./casts";
 import { pendingSaves } from "../extension/castUi";
 import { resetOverlays, updateOverlays } from "./overlays";
+import { battleOrderFrom, resetBattle, updateBattle } from "./battle";
 import { resetVision, updateVision } from "./vision";
 import { receiveAim, resetReach, updateReach } from "./reach";
 import { AIM_CHANNEL, SHOW_REACH_KEY } from "../core/reach";
 import { resetDarkness, updateDarkness } from "./darkness";
 import { AURA_CHANNEL, AURA_CHOSEN_KEY, AURA_SCOPE_KEY, HUD_KEY, readChosen, readSceneLight, setUnitLight, toggleChosen } from "../core/vision";
-import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL } from "../core/turns";
+import { EDIT_REQUESTS, isPlayerRequest, REQUEST_CHANNEL, REQUEST_CHUNK_CHANNEL, type BattleRequest } from "../core/turns";
 import { Assembler, isChunk } from "../core/chunks";
 import { applySelfSync } from "../core/party";
 import { openCard } from "../extension/cardPopover";
@@ -217,7 +218,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); resetHazards(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); resetHazards(); resetBattle(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -236,6 +237,7 @@ async function onSceneChange() {
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
+      await updateBattle(roomSettings().massCombat ? items : [], meta, role, (t) => notify(t, "SUCCESS")).catch((e) => console.error("[Butler] mass combat badges failed", e));
       await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] vision auras failed", e));
       await updateReach(items, role).catch((e) => console.error("[Butler] reach auras failed", e));
@@ -317,6 +319,14 @@ async function setupDruids(items: Awaited<ReturnType<typeof obrGateway.getItems>
   }
 }
 
+/** Mass combat: an order from the player commanding a battle unit (only while the room has mass combat on). */
+async function battleOrder(req: BattleRequest, it: Item) {
+  if (!roomSettings().massCombat) return;
+  const fromGm = req.playerId === OBR.player.id || (await OBR.party.getPlayers()).some((p) => p.id === req.playerId && p.role === "GM");
+  const why = await battleOrderFrom(req, it, fromGm);
+  if (why) await notify(`${req.playerName}'s order for ${it.name} was refused: ${why}.`, "WARNING");
+}
+
 /** Applies a request from a player's (or GM's) client; only the primary GM client acts on it. */
 async function handleRequest(req: unknown) {
   try {
@@ -324,6 +334,7 @@ async function handleRequest(req: unknown) {
     // The request must come from the player who controls the unit, or from a GM.
     const [it] = await OBR.scene.items.getItems([req.unitId]);
     if (!it) return;
+    if (req.type === "battle") { await battleOrder(req, it); return; }
     const st = it.metadata[STATE_KEY] as { controlledBy?: string } | undefined;
     const fromGm = req.playerId === OBR.player.id || (await OBR.party.getPlayers()).some((p) => p.id === req.playerId && p.role === "GM");
     if (!fromGm && !controls({ id: req.playerId, role: "PLAYER" }, it, st ?? {})) return;
