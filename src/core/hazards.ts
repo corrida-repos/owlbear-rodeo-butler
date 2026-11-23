@@ -57,7 +57,7 @@ export interface HazardDef extends HazardEffect {
   /** What else happens, for the GM. */
   note: string;
   detect?: string;
-  /** Picture: colour and file in public/hazards/. */
+  /** Picture: colour and file in public/hazards/ (512 × 512 WebP; the older .png files stay for items already placed). */
   color: string;
   image: string;
 }
@@ -70,7 +70,7 @@ export const SOURCE_NAMES: Record<string, string> = {
 /** Haunted traps (VRGR): noticing the emanation and disarming. */
 const HAUNTED = (bonus: number) => `Its emanation comes first: noticed with a passive Wisdom (Perception) of ${10 + bonus} or more (then there's until the start of the next turn to react); Divine Sense and Detect Evil and Good detect it. Thieves' tools and Dispel Magic don't work: Channel Divinity (an action) or Remove Curse makes it save against the spell save DC with +${bonus}; on a failure it's disarmed for 24 hours, for good if it fails by 10 or more.`;
 
-const H = (d: Omit<HazardDef, "image" | "source"> & { image?: string; source?: string }): HazardDef => ({ ...d, source: d.source ?? "XDMG", image: d.image ?? `${d.key}.png` });
+const H = (d: Omit<HazardDef, "image" | "source"> & { image?: string; source?: string }): HazardDef => ({ ...d, source: d.source ?? "XDMG", image: d.image ?? `${d.key}.webp` });
 
 export const HAZARDS: HazardDef[] = [
   // ---- hazards

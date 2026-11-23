@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { imageSize } from "../scripts/lib/image-size";
+import { TRAP_ART } from "../scripts/trap-art";
 import { attackHits, entered, hasEffect, hazardDef, hazardOptions, HAZARDS, readHazard, resolveHazard, HAZARD_KEY } from "../src/core/hazards";
 import { isRollable } from "../src/core/dice";
 
@@ -40,6 +42,10 @@ describe("every official trap in 5etools", () => {
   it("each 5etools trap has a deployable entry", () => {
     const have = new Set(HAZARDS.filter((h) => h.kind === "trap").map((h) => h.fivetools ?? `${h.name}|${h.source}`));
     expect(FIVETOOLS_TRAPS.filter((n) => !have.has(n))).toEqual([]);
+  });
+  it("every picture is 512 × 512 (placement assumes it); every trap has top-down map art", () => {
+    for (const h of HAZARDS) expect(imageSize(readFileSync(`public/hazards/${h.image}`)), h.image).toMatchObject({ width: 512, height: 512 });
+    expect(HAZARDS.filter((h) => h.kind === "trap" && !TRAP_ART[h.key]).map((h) => h.key)).toEqual([]);
   });
   it("keys are unique; every entry does something and its dice roll", () => {
     expect(new Set(HAZARDS.map((h) => h.key)).size).toBe(HAZARDS.length);

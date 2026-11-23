@@ -14,7 +14,8 @@ import { gmRoll } from "./gmRoll";
 import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
 
-const PX = 256;
+/** Pictures in public/hazards are 512 × 512 and cover the whole area. */
+const PX = 512;
 
 /** Places a hazard's picture at the view's centre, covering its area; traps start hidden from players. */
 export async function placeHazard(d: HazardDef, hidden: boolean) {
@@ -23,7 +24,7 @@ export async function placeHazard(d: HazardDef, hidden: boolean) {
   // Centre on a square (odd sizes) or an intersection (even sizes).
   const snap = (v: number) => (d.cells % 2 ? (Math.floor(v / dpi) + 0.5) * dpi : Math.round(v / dpi) * dpi);
   const url = new URL(`hazards/${d.image}`, location.href).href;
-  const item = buildImage({ width: PX, height: PX, url, mime: "image/png" }, { dpi: PX / d.cells, offset: { x: PX / 2, y: PX / 2 } })
+  const item = buildImage({ width: PX, height: PX, url, mime: "image/webp" }, { dpi: PX / d.cells, offset: { x: PX / 2, y: PX / 2 } })
     .position({ x: snap(c.x), y: snap(c.y) }).layer("PROP").name(`${d.kind === "trap" ? "Trap" : "Hazard"}: ${d.name}`)
     .visible(!hidden).metadata({ [HAZARD_KEY]: { key: d.key, armed: true } satisfies PlacedHazard }).build();
   await OBR.scene.items.addItems([item]);

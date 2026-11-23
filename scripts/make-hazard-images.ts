@@ -1,6 +1,7 @@
-/** Writes public/hazards/<key>.svg: one picture per hazard and trap (see src/core/hazards.ts). Run: npx tsx scripts/make-hazard-images.ts */
+/** Writes public/hazards/<key>.svg: one picture per hazard and trap (traps: top-down map art from trap-art.ts) (see src/core/hazards.ts). Run: npx tsx scripts/make-hazard-images.ts */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { HAZARDS } from "../src/core/hazards";
+import { DEFS, SIZE, TRAP_ART } from "./trap-art";
 
 const GLYPH: Record<string, string> = {
   "brown-mold": "M60 120 q20-40 40 0 q20-40 40 0 q-40 30-80 0Z", "green-slime": "M50 70 q50-30 100 0 v40 q-10 30-20 0 q-10 40-30 0 q-10 30-25 0 q-10 30-25 0Z",
@@ -47,6 +48,12 @@ mkdirSync("public/hazards", { recursive: true });
 for (const d of HAZARDS) {
   const trap = d.kind === "trap";
   const label = SHORT[d.key] ?? d.name;
+  const art = TRAP_ART[d.key];
+  if (art) {
+    // Traps: top-down map art on a transparent background, no label (Owlbear shows the item's name).
+    writeFileSync(`public/hazards/${d.key}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">\n<defs>${DEFS}</defs>\n${art()}\n</svg>\n`);
+    continue;
+  }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
 <rect x="4" y="4" width="192" height="192" rx="18" fill="${d.color}" fill-opacity="0.35" stroke="${d.color}" stroke-width="8"${trap ? ' stroke-dasharray="18 10"' : ""}/>
 <path d="${GLYPH[d.key] ?? "M60 60 h80 v80 h-80Z"}" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
