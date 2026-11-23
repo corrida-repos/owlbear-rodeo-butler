@@ -1,6 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-<rect x="4" y="4" width="192" height="192" rx="18" fill="#37474f" fill-opacity="0.35" stroke="#37474f" stroke-width="8"/>
-<path d="M30 90 q35-25 70 0 t70 0 M30 120 q35-25 70 0 t70 0" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M30 90 q35-25 70 0 t70 0 M30 120 q35-25 70 0 t70 0" fill="none" stroke="#37474f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-<text x="100" y="185" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#ffffff" stroke="#000000" stroke-width="3" paint-order="stroke" text-anchor="middle">River Styx</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+<radialGradient id="hole" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#050404"/><stop offset="0.6" stop-color="#110d0b"/><stop offset="1" stop-color="#2c241e"/></radialGradient>
+<linearGradient id="iron" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9aa3ab"/><stop offset="0.45" stop-color="#5b636b"/><stop offset="1" stop-color="#2a2f34"/></linearGradient>
+<linearGradient id="rust" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8f8a84"/><stop offset="0.5" stop-color="#5e5048"/><stop offset="1" stop-color="#3a2a22"/></linearGradient>
+<linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a87444"/><stop offset="1" stop-color="#6b4220"/></linearGradient>
+<linearGradient id="woodH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a87444"/><stop offset="1" stop-color="#6b4220"/></linearGradient>
+<linearGradient id="stone" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b3ada2"/><stop offset="1" stop-color="#6f695f"/></linearGradient>
+<linearGradient id="slab" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a49d91"/><stop offset="1" stop-color="#7b7469"/></linearGradient>
+<radialGradient id="ball" cx="35%" cy="32%" r="70%"><stop offset="0" stop-color="#d8d2c6"/><stop offset="0.5" stop-color="#8f887c"/><stop offset="1" stop-color="#3b362f"/></radialGradient>
+<radialGradient id="steelBall" cx="35%" cy="30%" r="72%"><stop offset="0" stop-color="#f4f7fa"/><stop offset="0.35" stop-color="#9aa4ad"/><stop offset="1" stop-color="#1e2328"/></radialGradient>
+<radialGradient id="spike" cx="40%" cy="38%" r="60%"><stop offset="0" stop-color="#e6e2da"/><stop offset="0.4" stop-color="#8c8478"/><stop offset="1" stop-color="#2a2622"/></radialGradient>
+<radialGradient id="silver" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#c3c9cf"/><stop offset="1" stop-color="#6c747c"/></radialGradient>
+<radialGradient id="ruby" cx="40%" cy="35%" r="65%"><stop offset="0" stop-color="#ff8a8a"/><stop offset="1" stop-color="#8a0010"/></radialGradient>
+<filter id="rough" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7"/><feDisplacementMap in="SourceGraphic" scale="14"/></filter>
+<filter id="rough2" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.08" numOctaves="2" seed="2"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter>
+<filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0" result="a"/><feComposite in="a" in2="SourceGraphic" operator="in" result="g"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="g"/></feMerge></filter>
+<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="4" dy="6" stdDeviation="5" flood-color="#000" flood-opacity="0.55"/></filter>
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<filter id="blur8"><feGaussianBlur stdDeviation="8"/></filter>
+<filter id="blur3"><feGaussianBlur stdDeviation="3"/></filter>
+<radialGradient id="fadeMask" cx="50%" cy="50%" r="50%"><stop offset="0.55" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
+<mask id="fade"><rect width="512" height="512" fill="url(#fadeMask)"/></mask>
+</defs>
+<rect width="512" height="512" fill="#14262a" opacity="0.85" mask="url(#fade)"/><filter id="patch41" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="4" seed="71"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.11764705882352941  0 0 0 0 0.27450980392156865  0 0 0 0 0.2980392156862745  4.8 0 0 0 -1.5699999999999998"/></filter>
+<radialGradient id="pg43" cx="256" cy="256" r="260" gradientUnits="userSpaceOnUse"><stop offset="0.7" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
+<mask id="pm42"><rect width="512" height="512" fill="url(#pg43)"/></mask>
+<rect width="512" height="512" filter="url(#patch41)" mask="url(#pm42)"/>
+<g fill="none" stroke="#7fb3b8" stroke-width="4" stroke-linecap="round" opacity="0.45"><path d="M30 90 q60 -24 120 0 t120 0 t120 0"/><path d="M40 170 q60 -24 120 0 t120 0 t120 0"/><path d="M50 250 q60 -24 120 0 t120 0 t120 0"/><path d="M60 330 q60 -24 120 0 t120 0 t120 0"/><path d="M70 410 q60 -24 120 0 t120 0 t120 0"/></g>
+<g fill="#d7f2f0" opacity="0.18" filter="url(#blur3)"><ellipse cx="150" cy="140" rx="30" ry="38"/><ellipse cx="140" cy="134" rx="5" ry="7" fill="#000"/><ellipse cx="160" cy="134" rx="5" ry="7" fill="#000"/><ellipse cx="150" cy="154" rx="7" ry="10" fill="#000"/><ellipse cx="360" cy="260" rx="30" ry="38"/><ellipse cx="350" cy="254" rx="5" ry="7" fill="#000"/><ellipse cx="370" cy="254" rx="5" ry="7" fill="#000"/><ellipse cx="360" cy="274" rx="7" ry="10" fill="#000"/><ellipse cx="200" cy="380" rx="30" ry="38"/><ellipse cx="190" cy="374" rx="5" ry="7" fill="#000"/><ellipse cx="210" cy="374" rx="5" ry="7" fill="#000"/><ellipse cx="200" cy="394" rx="7" ry="10" fill="#000"/></g>
 </svg>

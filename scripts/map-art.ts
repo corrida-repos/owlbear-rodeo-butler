@@ -1,6 +1,6 @@
 /**
- * Top-down map art for every trap (see src/core/hazards.ts): what the trap looks like seen from above on a battle map,
- * on a transparent background, covering its area (512 px for the whole area). Used by make-hazard-images.ts.
+ * Top-down map art for every hazard and trap (see src/core/hazards.ts): what it looks like seen from above on a battle
+ * map, on a transparent background, covering its area (512 px for the whole area). Used by make-hazard-images.ts.
  */
 
 export const SIZE = 512;
@@ -39,9 +39,21 @@ const rnd = (seed: number) => () => { seed = (seed * 16807) % 2147483647; return
 export function fog(color: [number, number, number], opacity = 1, freq = 0.012, seed = 3) {
   const f = id("fog");
   const [r, g, b] = color.map((c) => c / 255) as [number, number, number];
-  return `<filter id="${f}" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="4" seed="${seed}"/>
-<feColorMatrix type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 ${1.6 * opacity} ${-0.45 * opacity}"/></filter>
+  return `<filter id="${f}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="4" seed="${seed}"/>
+<feColorMatrix type="matrix" values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  ${2.2 * opacity} 0 0 0 ${-0.75 * opacity}"/></filter>
 <rect width="${SIZE}" height="${SIZE}" filter="url(#${f})" mask="url(#fade)"/>`;
+}
+
+/** An organic patch (mold, slime, sand…): textured colour inside a soft-edged circle of radius `r` around (cx, cy). */
+export function patch(color: [number, number, number], cx: number, cy: number, r: number, opts: { freq?: number; seed?: number; density?: number; edge?: number } = {}) {
+  const f = id("patch"), m = id("pm"), g = id("pg");
+  const [cr, cg, cb] = color.map((c) => c / 255) as [number, number, number];
+  const d = opts.density ?? 1;
+  return `<filter id="${f}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="${opts.freq ?? 0.03}" numOctaves="4" seed="${opts.seed ?? 1}"/>
+<feColorMatrix type="matrix" values="0 0 0 0 ${cr}  0 0 0 0 ${cg}  0 0 0 0 ${cb}  ${4 * d} 0 0 0 ${-1.6 * d + 0.35}"/></filter>
+<radialGradient id="${g}" cx="${cx}" cy="${cy}" r="${r}" gradientUnits="userSpaceOnUse"><stop offset="${opts.edge ?? 0.6}" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
+<mask id="${m}"><rect width="${SIZE}" height="${SIZE}" fill="url(#${g})"/></mask>
+<rect width="${SIZE}" height="${SIZE}" filter="url(#${f})" mask="url(#${m})"/>`;
 }
 
 /** A soft radial glow (light, heat, magic) centred in the area. */
@@ -185,6 +197,55 @@ const crossbow = (x: number, y: number, rot: number) => `<g transform="translate
 <rect x="-5" y="-40" width="10" height="110" fill="#5a3c22"/><path d="M-10 70 L0 96 L10 70Z" fill="#c4cad0" stroke="#2a2f34" stroke-width="2"/>
 <rect x="-20" y="-60" width="40" height="18" rx="4" fill="url(#iron)" stroke="#1d2024" stroke-width="2"/></g>`;
 
+/** Small dots scattered in a circle (spores, sparks, frost). */
+function dots(cx: number, cy: number, r: number, n: number, color: string, size: number, seed: number) {
+  const g = rnd(seed);
+  let s = "";
+  for (let i = 0; i < n; i++) { const a = g() * Math.PI * 2, d = Math.sqrt(g()) * r; s += `<circle cx="${cx + Math.cos(a) * d}" cy="${cy + Math.sin(a) * d}" r="${size * (0.5 + g())}"/>`; }
+  return `<g fill="${color}" opacity="0.8">${s}</g>`;
+}
+
+/** Dots in a ring between radius r1 and r2 around the centre. */
+function spray(color: string, n: number, size: number, r1: number, r2: number) {
+  const g = rnd(n * 7 + r1);
+  let s = "";
+  for (let i = 0; i < n; i++) { const a = g() * Math.PI * 2, d = r1 + g() * (r2 - r1); s += `<circle cx="${C + Math.cos(a) * d}" cy="${C + Math.sin(a) * d}" r="${size * (0.4 + g())}"/>`; }
+  return `<g fill="${color}" opacity="0.7">${s}</g>`;
+}
+
+/** Glossy bubbles in a circle. */
+function bubbles(cx: number, cy: number, r: number, n: number, seed: number) {
+  const g = rnd(seed);
+  let s = "";
+  for (let i = 0; i < n; i++) { const a = g() * Math.PI * 2, d = Math.sqrt(g()) * r, rr = 6 + g() * 14; s += `<circle cx="${cx + Math.cos(a) * d}" cy="${cy + Math.sin(a) * d}" r="${rr}" fill-opacity="0.35" stroke="#efffd0" stroke-width="2"/>`; }
+  return s;
+}
+
+/** A pointed leaf, base at (x, y), pointing along `deg`. */
+const leaf = (x: number, y: number, deg: number, s: number, fill: string) =>
+  `<path d="M0 0 Q${14 * s} ${-12 * s} ${34 * s} 0 Q${14 * s} ${12 * s} 0 0Z" fill="${fill}" stroke="#1d3a10" stroke-width="2" transform="translate(${x} ${y}) rotate(${deg})"/>`;
+
+/** A band of thorny razorvine across the picture at height `dy`. */
+function vine(dy: number, seed: number) {
+  const g = rnd(seed + 3);
+  const path = `M-10 ${dy} C120 ${dy - 50} 200 ${dy + 50} 300 ${dy} S450 ${dy - 40} 522 ${dy}`;
+  let thorns = "";
+  for (let i = 0; i < 22; i++) { const x = 10 + i * 23, y = dy + Math.sin(i * 1.3 + seed) * 30; thorns += `<path d="M${x} ${y} l${8 + g() * 6} ${(g() - 0.5) * 34} l4 6Z" fill="#c9d6b0"/>` + leaf(x, y, g() * 360, 0.9, g() > 0.5 ? "#3d6b22" : "#2c5218"); }
+  return `<path d="${path}" stroke="#000" stroke-opacity="0.4" stroke-width="22" fill="none" transform="translate(4 7)"/><path d="${path}" stroke="#3a4f22" stroke-width="18" fill="none"/><path d="${path}" stroke="#6f8c3a" stroke-width="5" fill="none"/>${thorns}`;
+}
+
+/** A spider web: radial threads and a spiral. */
+function web(cx: number, cy: number, r: number, spokes: number, rings: number) {
+  let s = "";
+  for (let i = 0; i < spokes; i++) { const a = (i / spokes) * Math.PI * 2; s += `<line x1="${cx}" y1="${cy}" x2="${cx + Math.cos(a) * r}" y2="${cy + Math.sin(a) * r}"/>`; }
+  for (let k = 1; k <= rings; k++) {
+    const rr = (r * k) / (rings + 0.5);
+    const pts = Array.from({ length: spokes + 1 }, (_, i) => { const a = (i / spokes) * Math.PI * 2; return `${cx + Math.cos(a) * rr},${cy + Math.sin(a) * rr}`; });
+    s += `<polyline points="${pts.join(" ")}"/>`;
+  }
+  return `<g fill="none" stroke="#000" stroke-opacity="0.3" stroke-width="4" transform="translate(3 5)">${s}</g><g fill="none" stroke="#f1eee6" stroke-width="2.2" opacity="0.9">${s}</g>`;
+}
+
 // ---------- the pictures: key → SVG body in a 512 × 512 area
 const C = SIZE / 2;
 
@@ -199,10 +260,10 @@ ${rubble(80, 80, 340, 200, 10, 3, 0.5).replace(/url\(#stone\)/g, "#6b7a3a")}
 
 const fullPit = (withSpikes: boolean) => `${pit(20, 20, 472, 472, 34)}${withSpikes ? spikes(88, 88, 336, 336, 42) : ""}`;
 
-export const TRAP_ART: Record<string, () => string> = {
+export const MAP_ART: Record<string, () => string> = {
   // ---- pits
   "hidden-pit": () => `${trapdoor(40, 40, 432, 432)}${hinge(120, 34)}${hinge(362, 34)}<path d="M40 472 h432" stroke="#000" stroke-width="10" opacity="0.6"/>`,
-  "hidden-pit-2014": () => TRAP_ART["hidden-pit"]!(),
+  "hidden-pit-2014": () => MAP_ART["hidden-pit"]!(),
   "locking-pit": () => `${trapdoor(40, 40, 432, 432)}${hinge(120, 34)}${hinge(362, 34)}
 <g filter="url(#shadow)"><path d="M210 40 q12 -20 24 0 q12 -20 24 0 q12 -20 24 0 q12 -20 24 0" fill="none" stroke="#9aa3ab" stroke-width="7"/></g>
 <rect x="236" y="440" width="40" height="22" rx="4" fill="url(#iron)" stroke="#1d2024" stroke-width="3"/>`,
@@ -216,9 +277,9 @@ export const TRAP_ART: Record<string, () => string> = {
 <g fill="none" stroke="#2a221c" stroke-width="5" stroke-linecap="round" opacity="0.8"><path d="M100 120 l60 50 l-10 60 l70 40 M300 90 l-20 80 l60 40 l10 70 M140 380 l80 -40 l60 30 l90 -20"/></g>
 ${rubble(70, 90, 370, 330, 22, 9)}<g filter="url(#shadow)"><rect x="60" y="220" width="200" height="34" rx="4" fill="url(#woodH)" stroke="#3a220f" stroke-width="3" transform="rotate(-18 160 237)"/>
 <rect x="270" y="300" width="170" height="30" rx="4" fill="url(#woodH)" stroke="#3a220f" stroke-width="3" transform="rotate(24 355 315)"/></g>${wire(30, 470, 482, 470)}`,
-  "collapsing-roof-2014": () => TRAP_ART["collapsing-roof"]!(),
+  "collapsing-roof-2014": () => MAP_ART["collapsing-roof"]!(),
   "falling-net": () => `${net(40, 40, 432, 432)}${wire(20, 490, 492, 490)}`,
-  "falling-net-2014": () => TRAP_ART["falling-net"]!(),
+  "falling-net-2014": () => MAP_ART["falling-net"]!(),
   "net-trap": () => `${net(40, 40, 432, 432)}${wire(20, C, 492, C)}<g transform="translate(440 70)" filter="url(#shadow)"><path d="M-26 20 q0 -46 26 -46 q26 0 26 46Z" fill="#c8a24a" stroke="#6b5317" stroke-width="4"/><circle cy="24" r="7" fill="#6b5317"/></g>`,
   "falling-portcullis": () => `${plate(C, C, 300)}
 <g filter="url(#shadow)">${[0, 1, 2, 3, 4, 5, 6].map((i) => `<rect x="${40 + i * 72}" y="10" width="16" height="92" rx="3" fill="url(#iron)" stroke="#1d2024" stroke-width="2"/><path d="M${40 + i * 72} 102 l8 22 l8 -22Z" fill="#7d858c"/>`).join("")}
@@ -228,7 +289,7 @@ ${rubble(70, 90, 370, 330, 22, 9)}<g filter="url(#shadow)"><rect x="60" y="220" 
   "poisoned-darts": () => `${plate(C, C, 340)}
 ${[[70, 80], [440, 90], [60, 430], [450, 420], [C, 40], [C, 472]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="9" fill="#0b0908" stroke="#4d473f" stroke-width="3"/>`).join("")}
 ${dart(150, 150, 30)}${dart(360, 200, 160)}${dart(200, 360, -40)}${dart(330, 350, 200)}`,
-  "poison-darts": () => TRAP_ART["poisoned-darts"]!(),
+  "poison-darts": () => MAP_ART["poisoned-darts"]!(),
   "fire-casting-statue": () => statuePlate,
   "fire-breathing-statue": () => statuePlate,
   "fiery-blast-trap": () => `<circle cx="${C}" cy="${C}" r="240" fill="#1b120c" opacity="0.5" filter="url(#blur8)"/>
@@ -253,13 +314,13 @@ ${Array.from({ length: 22 }, (_, i) => { const a = (i / 22) * Math.PI * 2; const
 
   // ---- needles
   "poisoned-needle": () => `${chest(C, C - 10, 400, 300)}<g filter="url(#glow)"><line x1="${C}" y1="${C + 150}" x2="${C}" y2="${C + 215}" stroke="#e8edf0" stroke-width="5"/><circle cx="${C}" cy="${C + 222}" r="8" fill="#76e04a"/></g>`,
-  "poison-needle": () => TRAP_ART["poisoned-needle"]!(),
-  "poison-needle-trap": () => TRAP_ART["poisoned-needle"]!(),
+  "poison-needle": () => MAP_ART["poisoned-needle"]!(),
+  "poison-needle-trap": () => MAP_ART["poisoned-needle"]!(),
 
   // ---- rolling spheres
   "rolling-stone": () => `${plate(110, 400, 120)}${sphere(300, 230, 190, "url(#ball)", `<g fill="none" stroke="#3a342c" stroke-width="5" opacity="0.7"><path d="M200 140 q60 40 40 120 M330 330 q40 -40 110 -30 M380 110 l-30 60"/></g>`)}
 <g stroke="#ffffff" stroke-opacity="0.35" stroke-width="8" stroke-linecap="round"><path d="M40 160 h70 M30 230 h80 M40 300 h70"/></g>`,
-  "rolling-sphere": () => TRAP_ART["rolling-stone"]!(),
+  "rolling-sphere": () => MAP_ART["rolling-stone"]!(),
   "sphere-of-crushing-doom": () => `${sphere(C, C, 230, "url(#steelBall)", Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2; return `<circle cx="${C + Math.cos(a) * 170}" cy="${C + Math.sin(a) * 170}" r="9" fill="#2d3339" stroke="#c9d1d8" stroke-width="2"/>`; }).join("") + `<circle cx="${C}" cy="${C}" r="170" fill="none" stroke="#2d3339" stroke-width="4"/>`)}`,
 
   // ---- magic
@@ -313,4 +374,33 @@ ${[0, 90, 180, 270].map((a) => `<rect x="${C - 14}" y="0" width="28" height="40"
 ${Array.from({ length: 10 }, (_, i) => { const a = (i / 10) * Math.PI * 2; const x = C + Math.cos(a) * 190, y = C + Math.sin(a) * 190; return `<line x1="${C}" y1="${C}" x2="${x}" y2="${y}" stroke="#222" stroke-width="10"/><g filter="url(#shadow)"><circle cx="${x}" cy="${y}" r="30" fill="url(#iron)" stroke="#1d2024" stroke-width="3"/>${[18, 11].map((r) => `<circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="#c77d2a" stroke-width="4"/>`).join("")}</g>`; }).join("")}
 <g fill="none" stroke="#9fe8ff" stroke-width="4" filter="url(#glow)"><path d="M${C + 190} ${C} l-30 20 l20 15 l-40 25"/><path d="M${C - 150} ${C - 110} l20 30 l-20 10 l30 30"/><path d="M${C - 30} ${C + 185} l10 -30 l-20 -10 l15 -35"/></g>
 <g filter="url(#shadow)"><circle cx="${C}" cy="${C}" r="80" fill="url(#steelBall)" stroke="#1d2024" stroke-width="5"/><circle cx="${C}" cy="${C}" r="34" fill="#0b1a22" stroke="#7fe0ff" stroke-width="5" filter="url(#glow)"/></g>`,
+
+  // ---- hazards (2024 DMG)
+  "brown-mold": () => `${aura("#cfe8ff", 0.35, 0.5)}${spray("#f2fbff", 160, 4, 150, 250)}${patch([110, 74, 44], C, C, 140, { freq: 0.05, seed: 4, density: 1.3 })}${patch([70, 44, 24], C, C, 110, { freq: 0.09, seed: 9, density: 1.1 })}
+${dots(C, C, 115, 70, "#c9a77a", 4, 21)}`,
+  "green-slime": () => `${patch([70, 160, 40], C, C, 220, { freq: 0.02, seed: 6, density: 1.6, edge: 0.75 })}${patch([140, 220, 70], C, C, 190, { freq: 0.05, seed: 3, density: 0.9 })}
+<g fill="#d8ff9a" opacity="0.75">${bubbles(C, C, 170, 18, 31)}</g><path d="M150 170 q40 -30 90 -10" stroke="#f4ffd8" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.6"/>`,
+  "yellow-mold": () => `${([[150, 160, 110], [360, 200, 95], [230, 370, 120]] as const).map(([x, y, r], k) => patch([214, 180, 30], x, y, r, { freq: 0.06, seed: 10 + k, density: 1.3 }) + dots(x, y, r * 0.8, 35, "#fff27a", 3, 40 + k)).join("")}
+${spray("#ffe866", 120, 4, 30, 250)}`,
+  inferno: () => `${aura("#ff6d00", 0.55, 0.55)}${patch([255, 110, 20], C, C, 250, { freq: 0.015, seed: 13, density: 1.4, edge: 0.7 })}${patch([255, 200, 60], C, C, 200, { freq: 0.04, seed: 5, density: 1 })}
+${([[120, 140, 60], [330, 120, 70], [400, 330, 65], [180, 360, 75], [C, C, 90], [270, 420, 50], [90, 270, 50]] as const).map(([x, y, s]) => `<g filter="url(#glow)">${flame(x, y, s, "#ff5a10")}${flame(x, y + s * 0.25, s * 0.55, "#ffd43b")}</g>`).join("")}
+${spray("#ffe08a", 60, 3, 40, 250)}`,
+  "poisonous-gas": () => `${fog([190, 220, 60], 1, 0.01, 51)}${fog([160, 200, 40], 0.7, 0.028, 52)}`,
+  "quicksand-pit": () => `${patch([196, 160, 100], C, C, 250, { freq: 0.02, seed: 7, density: 1.6, edge: 0.75 })}
+<g fill="none" stroke="#8a6a3c" stroke-width="5" opacity="0.6">${[60, 105, 150, 195].map((r, k) => `<path d="M${C + r} ${C} A${r} ${r * 0.92} ${k * 10} 1 1 ${C + r * 0.6} ${C - r * 0.75}"/>`).join("")}</g>
+<ellipse cx="${C}" cy="${C}" rx="60" ry="52" fill="#7a5a30" opacity="0.6" filter="url(#blur8)"/>${patch([150, 116, 66], C, C, 90, { freq: 0.08, seed: 2, density: 1 })}`,
+  razorvine: () => `<g transform="translate(0 ${C})">${vine(-140, 0)}${vine(-60, 24)}${vine(30, 12)}</g>`,
+  rockslide: () => `${fog([150, 136, 116], 0.6, 0.02, 61)}${rubble(30, 30, 452, 452, 70, 17, 1.1)}${rubble(80, 80, 352, 352, 14, 29, 2.6)}
+<path d="M60 70 l60 20 M440 80 l-50 30 M70 440 l70 -30" stroke="#ffffff" stroke-opacity="0.25" stroke-width="10" stroke-linecap="round"/>`,
+  "vicious-vine": () => `${[0, 1, 2, 3, 4, 5, 6].map((k) => { const a = (k / 7) * Math.PI * 2 + 0.3; const x = C + Math.cos(a) * 220, y = C + Math.sin(a) * 220;
+    return `<path d="M${C} ${C} Q${C + Math.cos(a + 0.6) * 140} ${C + Math.sin(a + 0.6) * 140} ${x} ${y}" stroke="#2f5a1c" stroke-width="16" fill="none" stroke-linecap="round" filter="url(#shadow)"/>
+<path d="M${C} ${C} Q${C + Math.cos(a + 0.6) * 140} ${C + Math.sin(a + 0.6) * 140} ${x} ${y}" stroke="#5f9a34" stroke-width="5" fill="none" stroke-linecap="round"/>${leaf(x, y, (a * 180) / Math.PI, 1.1, "#4c8a2a")}`; }).join("")}
+<g filter="url(#shadow)">${[0, 1, 2, 3, 4, 5].map((k) => leaf(C, C, k * 60, 2.4, k % 2 ? "#3e7a22" : "#2f6418")).join("")}<circle cx="${C}" cy="${C}" r="34" fill="#5a1f3a" stroke="#2a0a1a" stroke-width="5"/><circle cx="${C}" cy="${C}" r="14" fill="#a8325e"/></g>`,
+  webs: () => `${web(C, C, 250, 16, 9)}${web(110, 120, 120, 9, 5)}${web(410, 400, 110, 9, 5)}<g filter="url(#shadow)">${([[150, 330], [380, 150]] as const).map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="18" ry="26" fill="#e8e4da" stroke="#9a948a" stroke-width="3"/>`).join("")}</g>`,
+  "fireball-fungus": () => `${aura("#ffb74d", 0.55, 0.28)}${aura("#ff9800", 0.25, 0.5)}
+<g filter="url(#shadow)"><circle cx="${C}" cy="${C}" r="40" fill="#ff7a1a" stroke="#7a2a00" stroke-width="5"/>${[0, 1, 2, 3, 4, 5, 6].map((k) => { const a = (k / 7) * Math.PI * 2; return `<circle cx="${C + Math.cos(a) * 22}" cy="${C + Math.sin(a) * 22}" r="6" fill="#ffe08a"/>`; }).join("")}<circle cx="${C}" cy="${C}" r="9" fill="#fff3c4" filter="url(#glow)"/></g>`,
+  "river-styx": () => `<rect width="${SIZE}" height="${SIZE}" fill="#14262a" opacity="0.85" mask="url(#fade)"/>${patch([30, 70, 76], C, C, 260, { freq: 0.012, seed: 71, density: 1.2, edge: 0.7 })}
+<g fill="none" stroke="#7fb3b8" stroke-width="4" stroke-linecap="round" opacity="0.45">${[90, 170, 250, 330, 410].map((y, k) => `<path d="M${30 + k * 10} ${y} q60 -24 120 0 t120 0 t120 0"/>`).join("")}</g>
+<g fill="#d7f2f0" opacity="0.18" filter="url(#blur3)">${([[150, 140], [360, 260], [200, 380]] as const).map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="30" ry="38"/><ellipse cx="${x - 10}" cy="${y - 6}" rx="5" ry="7" fill="#000"/><ellipse cx="${x + 10}" cy="${y - 6}" rx="5" ry="7" fill="#000"/><ellipse cx="${x}" cy="${y + 14}" rx="7" ry="10" fill="#000"/>`).join("")}</g>`,
+
 };

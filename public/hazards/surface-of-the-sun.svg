@@ -22,9 +22,9 @@
 <radialGradient id="fadeMask" cx="50%" cy="50%" r="50%"><stop offset="0.55" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
 <mask id="fade"><rect width="512" height="512" fill="url(#fadeMask)"/></mask>
 </defs>
-<radialGradient id="aura15" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#ffd54f" stop-opacity="0.65"/><stop offset="1" stop-color="#ffd54f" stop-opacity="0"/></radialGradient>
-<rect width="512" height="512" fill="url(#aura15)"/><radialGradient id="aura16" cx="50%" cy="50%" r="35%"><stop offset="0" stop-color="#ff8f00" stop-opacity="0.35"/><stop offset="1" stop-color="#ff8f00" stop-opacity="0"/></radialGradient>
-<rect width="512" height="512" fill="url(#aura16)"/>
+<radialGradient id="aura58" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#ffd54f" stop-opacity="0.65"/><stop offset="1" stop-color="#ffd54f" stop-opacity="0"/></radialGradient>
+<rect width="512" height="512" fill="url(#aura58)"/><radialGradient id="aura59" cx="50%" cy="50%" r="35%"><stop offset="0" stop-color="#ff8f00" stop-opacity="0.35"/><stop offset="1" stop-color="#ff8f00" stop-opacity="0"/></radialGradient>
+<rect width="512" height="512" fill="url(#aura59)"/>
 <rect x="158" y="0" width="24" height="512" fill="#8d4a2a" stroke="#4a2414" stroke-width="3"/><rect x="330" y="0" width="24" height="512" fill="#8d4a2a" stroke="#4a2414" stroke-width="3"/>
 <g stroke="#4f7a28" stroke-width="7" fill="none" stroke-linecap="round" opacity="0.85"><path d="M0 20 q30 60 0 120 t0 120 t0 120 t0 120"/><path d="M512 20 q-30 60 0 120 t0 120 t0 120 t0 120"/></g>
 <g transform="translate(256 70)" filter="url(#shadow)"><circle r="40" fill="url(#stone)" stroke="#4d473f" stroke-width="4"/><path d="M0 0 q30 -20 34 0" stroke="#5b4a2a" stroke-width="8" fill="none" transform="rotate(45)"/><path d="M0 0 q30 -20 34 0" stroke="#5b4a2a" stroke-width="8" fill="none" transform="rotate(135)"/><path d="M0 0 q30 -20 34 0" stroke="#5b4a2a" stroke-width="8" fill="none" transform="rotate(225)"/><path d="M0 0 q30 -20 34 0" stroke="#5b4a2a" stroke-width="8" fill="none" transform="rotate(315)"/><circle r="22" fill="url(#silver)"/></g>

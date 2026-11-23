@@ -22,10 +22,10 @@
 <radialGradient id="fadeMask" cx="50%" cy="50%" r="50%"><stop offset="0.55" stop-color="#fff"/><stop offset="1" stop-color="#000"/></radialGradient>
 <mask id="fade"><rect width="512" height="512" fill="url(#fadeMask)"/></mask>
 </defs>
-<radialGradient id="aura9" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#d7c6ff" stop-opacity="0.3"/><stop offset="1" stop-color="#d7c6ff" stop-opacity="0"/></radialGradient>
-<rect width="512" height="512" fill="url(#aura9)"/><filter id="fog10" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="4" seed="21"/>
-<feColorMatrix type="matrix" values="0 0 0 0 0.8627450980392157  0 0 0 0 0.8235294117647058  0 0 0 0 0.9411764705882353  0 0 0 0.7200000000000001 -0.2025"/></filter>
-<rect width="512" height="512" filter="url(#fog10)" mask="url(#fade)"/>
+<radialGradient id="aura52" cx="50%" cy="50%" r="60%"><stop offset="0" stop-color="#d7c6ff" stop-opacity="0.3"/><stop offset="1" stop-color="#d7c6ff" stop-opacity="0"/></radialGradient>
+<rect width="512" height="512" fill="url(#aura52)"/><filter id="fog53" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="4" seed="21"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.8627450980392157  0 0 0 0 0.8235294117647058  0 0 0 0 0.9411764705882353  0.9900000000000001 0 0 0 -0.3375"/></filter>
+<rect width="512" height="512" filter="url(#fog53)" mask="url(#fade)"/>
 <g filter="url(#shadow)"><rect x="126" y="14" width="260" height="60" rx="12" fill="#c9a24a" stroke="#5e4512" stroke-width="5"/><rect x="146" y="26" width="220" height="36" rx="8" fill="url(#silver)"/>
 <circle cx="146" cy="44" r="16" fill="#d9b55a" stroke="#5e4512" stroke-width="4"/><circle cx="366" cy="44" r="16" fill="#d9b55a" stroke="#5e4512" stroke-width="4"/></g>
 <ellipse cx="256" cy="300" rx="70" ry="90" fill="#f2ecff" opacity="0.25" filter="url(#blur8)"/>
