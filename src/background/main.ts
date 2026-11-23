@@ -32,6 +32,7 @@ import { resetHazards, watchHazards } from "./hazards";
 import { receiveCast, receiveCastSave } from "./casts";
 import { pendingSaves } from "../extension/castUi";
 import { resetOverlays, updateOverlays } from "./overlays";
+import { resetBattle, updateBattle } from "./battle";
 import { resetVision, updateVision } from "./vision";
 import { receiveAim, resetReach, updateReach } from "./reach";
 import { AIM_CHANNEL, SHOW_REACH_KEY } from "../core/reach";
@@ -217,7 +218,7 @@ async function onSceneChange() {
   try {
     do {
       again = false;
-      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); resetHazards(); continue; }
+      if (!(await OBR.scene.isReady())) { lastTurnKey = null; lastTurn = null; ringFor = null; resetOverlays(); resetVision(); resetReach(); resetDarkness(); resetMovementMemory(); resetAreas(); resetHazards(); resetBattle(); continue; }
       const [items, meta, role] = await Promise.all([OBR.scene.items.getItems(), OBR.scene.getMetadata(), OBR.player.getRole()]);
       const lite = await obrGateway.getItems();
       const v = trackerView(lite, meta);
@@ -236,6 +237,7 @@ async function onSceneChange() {
         ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
+      await updateBattle(items, meta, role, (t) => notify(t, "SUCCESS")).catch((e) => console.error("[Butler] mass combat badges failed", e));
       await updateVision([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] vision auras failed", e));
       await updateReach(items, role).catch((e) => console.error("[Butler] reach auras failed", e));

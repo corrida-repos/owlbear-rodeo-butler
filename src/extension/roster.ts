@@ -102,7 +102,7 @@ function filterPanel(): HTMLElement {
 }
 
 /** A persistent search box: typing only refreshes its results list (no full re-render, so focus is kept). */
-function createSearchBox(placeholder: string, onPick: (r: IndexRow) => Promise<void>) {
+export function createSearchBox(placeholder: string, onPick: (r: IndexRow) => Promise<void>) {
   let query = "";
   let filtersOpen = false;
   const input = h("input", { type: "text", autocomplete: "off", oninput: (e: Event) => { query = (e.target as HTMLInputElement).value; update(); } }) as HTMLInputElement;

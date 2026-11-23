@@ -16,6 +16,7 @@ import { displayConditions } from "../core/systems";
 import { trackerUnits, trackerView, type TrackerUnit } from "../core/tracker";
 import { readUnit } from "../core/unit";
 import { maxHp } from "../core/sheet";
+import { playerBattleView, readBattle, readBattleUnit } from "../core/massCombat";
 import { openActions } from "./actionsPopover";
 import { openCard } from "./cardPopover";
 import { bookmarkButton, DDB_ORIGIN, onDdbExport } from "./ddbLink";
@@ -181,11 +182,27 @@ function visionUnits() {
   }));
 }
 
+/** Mass combat: the units the player can see, how they're doing in words, and the battle's public log. */
+function battlePanel(): Child {
+  const units = items.flatMap((i) => { const unit = readBattleUnit(i.metadata); return unit ? [{ id: i.id, visible: i.visible, unit }] : []; });
+  const b = readBattle(sceneMeta);
+  if (!units.length && !b.active) return null;
+  const v = playerBattleView(units, b, OBR.player.id);
+  return h("details", { className: "panel", open: b.active }, h("summary", {}, h("strong", {}, b.active ? `Battle · round ${v.round}` : "Battle")),
+    h("div", { className: "dm-list" }, ...v.rows.map((r) => h("div", { className: "dm-item", style: r.active ? "outline:2px solid var(--accent, #6c5ce7)" : "" },
+      h("div", { className: "grow" },
+        h("div", {}, h("strong", {}, r.name), h("span", { className: "small muted" }, ` · ${r.side}`), r.mine ? h("span", { className: "small ok" }, " · you command it") : null, r.active ? h("span", { className: "small warn" }, " · acting") : null),
+        h("div", { className: "small muted" }, r.makeup),
+        h("div", { className: "small" }, r.status, r.numbers ? ` · ${r.numbers}` : ""))))),
+    v.log.length ? h("div", { className: "small stack tight", style: "margin-top:6px" }, ...v.log.slice(-10).reverse().map((l) => h("div", {}, "• ", l))) : null);
+}
+
 export function renderPlayerView(): Child[] {
   return [
     turnPanel(),
     pendingSavesBox(pendingSaves(sceneMeta, trackerUnits(lite), items, me()), "PLAYER"),
     note ? h("div", { className: "panel small" }, note, " ", h("button", { className: "icon tiny", onclick: () => { note = ""; renderAgain(); } }, "OK")) : null,
+    battlePanel(),
     orderPanel(),
     myUnitsPanel(),
     visionPanel("PLAYER", renderAgain, visionUnits()),
