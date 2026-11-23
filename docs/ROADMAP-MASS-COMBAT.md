@@ -71,7 +71,8 @@ the same in 5E and 5.5E rooms (it reads CR only).
   spells or magic items against the target unit, using the normal rules. The creatures they kill come out of the
   unit's composition and its BR is recalculated. A creature that can't move or act counts as eliminated. Attacks on
   the unit don't hurt the characters, and if the unit is removed they stay on the battlefield.
-- **Character-scale combat**: pause the battle, fight a normal encounter (DMG mob rules welcome), then resume.
+- **Character-scale combat**: pause the battle, fight a normal encounter (DMG mob rules welcome), then resume. In
+  Butler the GM switches to another scene for the skirmish (see "How it fits Butler").
 - **Spells against a unit** (a *Wall of Ice* across a 100 ft line) use the members' own statistics. Any deaths
   recalculate the unit's BR.
 - **Critical events**: side missions such as holding a bridge or killing a commander. They work like short adventures,
@@ -80,9 +81,9 @@ the same in 5E and 5.5E rooms (it reads CR only).
 ### Gaps and contradictions, with the ruling Butler will use
 | # | Issue in the text | Butler's default |
 |---|---|---|
-| A1 | The commander's Charisma is added to morale, and then initiative adds morale **and** Charisma again. | Follow the text (counted twice). The breakdown is shown, and a room option counts it only once. |
+| A1 | The commander's Charisma is added to morale, and then initiative adds morale **and** Charisma again. **Decided:** counted twice, as written. The initiative breakdown shows both terms. |
 | A2 | The text never says how kills by characters and the flat −2/−5 attack losses combine. | Current BR = the BR of the creatures still there − the BR lost to attacks. Starting BR is fixed when the battle starts. |
-| A3 | A unit at BR 0 or below isn't removed, so a long battle can grind on. | Follow the text. An off-by-default option removes a unit at BR ≤ 0. |
+| A3 | A unit at BR 0 or below isn't removed, so a long battle can grind on. | **Decided (house rule):** a unit at BR 0 or below is removed at once, with no morale check, and counts as a removed friendly unit for the 500 ft check. |
 | A4 | The text doesn't say whether the Casualties check happens only once. | Once, when the unit first drops to half its BR or below. |
 | A5 | Heavy casualties can call for both the DC 10 and the DC 15 check. | DC 10 first. If the unit stays, the DC 15 check follows if it applies. |
 | A6 | Guard has no end, and it isn't clear when the attack happens during a move. | Guard lasts until it is used or until the unit's next turn. The attack happens when the enemy moves next to it, before that enemy acts. |
@@ -101,17 +102,21 @@ automatic parts. Rolls go through `gmRoll`. State lives in metadata.
 |---|---|---|
 | Rules | `src/core/massCombat.ts` | BR table, `unitBr(composition)`, space, speed, range, morale rows, initiative, `resolveAttack`, morale triggers, adjacency/advantage from grid cells. |
 | Battle unit | token metadata `dev.owlbear-butler/battle-unit` | Side, name, composition `{ name, cr, size, speeds, rangeFt, count, mount? }[]`, commander, morale factors, starting BR, BR lost, flags (Defend/Guard/Shaken + expiry), attached characters. These are snapshots, not full sheets (400 sheets wouldn't fit). |
-| Battle | scene metadata `dev.owlbear-butler/battle` | Active, paused, round, turn, fixed tie order, sides, options (A1/A3), log. The same idea as `chase`. |
+| Battle | scene metadata `dev.owlbear-butler/battle` | Active, round, turn, fixed tie order, sides, log. The same idea as `chase`. |
 | UI | `src/extension/battlePanel.ts` in DM Tools | Army builder plus a turn panel. |
 | Automation | `src/background/battle.ts` | Turn changes, flag expiry, Guard triggers, friendly-casualty checks. |
 | Map | badges via `background/overlays.ts` | BR and morale on each unit token, plus Defend/Guard/Shaken. |
 
 Two choices to note:
-- **A separate turn order from the regular tracker.** Battle units aren't `UnitSheet` tokens, and a pause for a
-  character-scale fight has to leave the battle's turn order alone while the normal tracker runs. Reusing the
-  tracker would mean special cases all through `encounter.ts`.
-- **The battle map is a normal scene with the grid set to 100 ft.** Butler reads `OBR.scene.grid.getScale()` and warns
-  if the grid isn't 100 ft. Butler supports square grids only, so the UA's hex option is left out.
+- **A separate turn order from the regular tracker.** Battle units aren't `UnitSheet` tokens. Reusing the tracker
+  would mean special cases all through `encounter.ts`.
+- **The battle scene's grid must be at least 100 ft per square (enforced).** Butler reads `OBR.scene.grid.getScale()`.
+  On a scene with a smaller grid, or one not measured in feet, *Place on map* and *Start battle* are disabled and the
+  panel says why. One unit fills one square. Speeds and ranges are measured in feet from the grid, so a coarser grid
+  (200 ft) still works. Butler supports square grids only, so the UA's hex option is left out.
+- **Zooming in uses another scene.** The battle's record lives in its own scene's metadata, so switching to a
+  skirmish scene leaves the battle exactly where it was. There the GM runs the characters' fight with the normal
+  tracker, then switches back to carry on. Nothing has to be paused or handed over.
 
 ## Milestones
 
@@ -123,7 +128,9 @@ Two choices to note:
   - Each attack band: a tie, a target win, a win by 10, a win by 11.
   - Advantage and Disadvantage from the map's adjacency, cancelling each other.
   - Morale triggers, including A4/A5.
-  - Initiative with A1 on and off.
+  - Initiative counting the commander's Charisma twice (A1).
+  - Removal at BR 0 or below (A3), including the friendly-casualty checks it sets off.
+  - The grid check: under 100 ft refused, 100 ft and 200 ft accepted.
   - Tie order fixed once.
 
 ### M2 · Army builder (DM Tools → Mass combat)
@@ -143,7 +150,7 @@ Two choices to note:
 - The turn panel offers the five actions:
   - **Attack**: enemy targets in range or adjacent, worked out from the token positions. Advantage and Disadvantage
     are shown with their reasons and can be overridden, with toggles for high ground and cover. Both rolls are made,
-    BR is lost, and the morale checks are rolled and resolved.
+    BR is lost, a unit at BR 0 or below is removed (A3), and otherwise the morale checks are rolled and resolved.
   - **Dash**.
   - **Defend**: lasts until the end of the unit's next turn.
   - **Disengage**: the DC 10 check.
@@ -168,10 +175,11 @@ Two choices to note:
   act. BR is recalculated and the Casualties check runs.
 - **Mob shortcut**: open the existing Mob panel with the unit's count and the selected creature's AC, save bonus or
   attack, so the GM can resolve a spell or an assault on the unit's members quickly.
-- **Zoom in**: *Pause battle* freezes the battle and the regular tracker takes over. That can be on the same scene or
-  on another scene the GM prepared. *Resume* brings the battle's turn order back.
+- **Zoom in**: the GM switches to a skirmish scene and runs the characters' fight with the normal tracker. The
+  battle stays on its own scene, unchanged. Back on the battle scene, the casualties editor records what the skirmish
+  cost each unit.
 - **Done when** a fireball on a unit of 200 orcs works out its casualties with the Targets in Area of Effect table and
-  takes them off the unit's BR, and a pause and resume keeps the battle's round and turn.
+  takes them off the unit's BR, and switching to a skirmish scene and back keeps the battle's round and turn.
 
 ### M6 · Critical events, players and wrap-up
 - **Critical events**: a short list on the battle with a success consequence and a failure consequence. The GM applies
@@ -187,6 +195,7 @@ M1 → M2 → M3 together make a usable battle. M5 brings in the player characte
 M4 and M6 are refinements. M1 and M2 are self-contained. M3 is the first milestone that needs live checks.
 
 ## Open questions for the owner
-1. Keep the defaults for A1 (Charisma counted twice) and A3 (no removal at BR 0), or the alternatives?
-2. Should a battle always run on its own scene, or should a pause hand over to the tracker on the same scene?
-3. Should players see enemy BR? By default the plan hides it, as Butler hides monster HP.
+Decided 2026-11-23: A1 counted twice; A3 removal at BR 0 or below; the battle scene's grid at least 100 ft per square,
+enforced; skirmishes on another scene.
+
+1. Should players see enemy BR? By default the plan hides it, as Butler hides monster HP.
