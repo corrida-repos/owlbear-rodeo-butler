@@ -31,7 +31,7 @@ A combat assistant for [Owlbear Rodeo](https://www.owlbear.rodeo): bring in crea
 | Cards & dice | Native stat blocks, clickable rolls, advantage/disadvantage, critical damage, public/private rolls and a session log. |
 | Action bar | A BG3-style reference hotbar: the sheet's actions, bonus actions, reactions and spells together with every PHB option and the DMG's optional ones (from the 2014 DMG, labelled "2014 DMG (optional)" in 5.5E rooms; they can be turned off) and the GM's homebrew actions, each explained in plain words. Hover Attack for every way to attack. |
 | Unit identity | Portraits, names, aliases and controlling players. Players can open their own cards. |
-| DM Tools | 2024 DMG tools: fight or flight, chase mode, area templates with the half-square rule, hazards and traps on the map, mob rolls and objects with rules-based AC and HP. |
+| DM Tools | 2024 DMG tools: fight or flight, chase mode (on foot or in vehicles), area templates with the half-square rule, hazards and traps on the map, mob rolls and objects with rules-based AC and HP. |
 | Combat core | Tracker, turn controls, rounds, HP/temp HP, death saves, Stable, Dead, turn notices and an active-turn ring. |
 | Light & vision | Dim and dark scenes, carried lights (torch, lantern, *Light*…) and per-browser auras for darkvision, blindsight, truesight and tremorsense, so you can see what's lightly or heavily obscured. |
 | Conditions & movement | Conditions with durations, concentration checks, token badges, and a movement tracker with Dash and Rewind. |
