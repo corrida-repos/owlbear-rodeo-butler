@@ -31,6 +31,18 @@ export interface TacticalParticipant {
   vitals?: TacticalVitals;
 }
 
+export const FIGHT_OR_FLIGHT_DC = 10;
+export type FightOrFlight =
+  | { kind: 'committed' }
+  | { kind: 'save'; leader: string; roll: number; modifier: number };
+
+export function fightOrFlightText(decision: FightOrFlight): string {
+  if (decision.kind === 'committed') return 'The creatures are committed to fighting.';
+  const { leader, roll, modifier } = decision;
+  const total = roll + modifier;
+  return `${leader}: ${roll} ${modifier >= 0 ? '+' : '−'} ${Math.abs(modifier)} = ${total} vs. DC ${FIGHT_OR_FLIGHT_DC}. ${total >= FIGHT_OR_FLIGHT_DC ? 'They fight.' : 'They flee or try to parley.'}`;
+}
+
 export type StartingAttitude = 'Hostile' | 'Indifferent' | 'Friendly';
 export const DISPOSITIONS = ['Avoided combat', 'Parleyed', 'Party withdrew', 'Creatures fled', 'Creatures surrendered', 'Creatures defeated', 'Encounter unresolved'] as const;
 export type Disposition = typeof DISPOSITIONS[number];
@@ -46,6 +58,7 @@ export interface TacticalEncounter {
   distanceFt: number;
   context: string;
   attitude?: StartingAttitude;
+  fightOrFlight?: FightOrFlight;
   rules: '2024';
   participants: TacticalParticipant[];
 }
@@ -129,6 +142,8 @@ export function parseTacticalEncounter(text: string): TacticalEncounter {
   if (x.schema !== 'life-manager/encounter@1' || x.rules !== '2024' || !str(x.id) || !optional(x.campaignId, str) ||
       !int(x.at, 0, Number.MAX_SAFE_INTEGER) || !str(x.title) || !str(x.place) || !str(x.context) ||
       !['camp', 'travel', 'rest', 'explore'].includes(String(x.activity)) || !int(x.distanceFt) ||
+      !optional(x.fightOrFlight, (value) => object(value) && (value.kind === 'committed' ||
+        (value.kind === 'save' && str(value.leader) && int(value.roll, 1, 20) && int(value.modifier, -99, 99)))) ||
       !optional(x.attitude, (value) => ['Hostile', 'Indifferent', 'Friendly'].includes(String(value))) ||
       !Array.isArray(x.participants) || !x.participants.length || x.participants.length > 300 ||
       !x.participants.every(participant) || !unique(x.participants)) {

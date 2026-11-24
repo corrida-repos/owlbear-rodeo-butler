@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { quickStatblock } from "../src/core/custom";
-import { importLifeManagerEncounter, lifeManagerMatch, lifeManagerResult } from "../src/core/lifeManager";
+import { importLifeManagerEncounter, lifeManagerMatch, lifeManagerOpponentIds, lifeManagerResult } from "../src/core/lifeManager";
 import { parseTacticalEncounter, parseTacticalResult } from "../src/core/lifeManagerProtocol";
 import { STATE_KEY } from "../src/core/sheet";
 import { readUnit, unitMetadata, unitState } from "../src/core/unit";
@@ -17,7 +17,7 @@ it("reuses the party, imports hidden creatures, and returns only linked campaign
   }]);
   const encounter = parseTacticalEncounter(JSON.stringify({
     schema: "life-manager/encounter@1", id: "night", at: 600, title: "One wolf", activity: "rest",
-    place: "Camp", distanceFt: 30, context: "On watch: A.", attitude: "Hostile", rules: "2024", participants: [
+    place: "Camp", distanceFt: 30, context: "On watch: A.", attitude: "Hostile", fightOrFlight: { kind: "save", leader: "Wolf", roll: 12, modifier: 1 }, rules: "2024", participants: [
       { id: "a", name: "A", side: "party", surprised: true, initiative: 17,
         vitals: { hp: 14, maxHp: 20, tempHp: 2, status: "alive", successes: 0, failures: 0, conditions: [] } },
       { id: "w", name: "Wolf", side: "encounter", source: "XMM" },
@@ -27,6 +27,8 @@ it("reuses the party, imports hidden creatures, and returns only linked campaign
   const creatures = new Map([["w", { sheet: wolf, image }]]);
   const center = { x: 0, y: 0 };
   await importLifeManagerEncounter(scene, encounter, selection, creatures, center, () => "wolf");
+  expect(lifeManagerOpponentIds(scene.sceneMeta)).toEqual(["wolf"]);
+  expect(encounter.fightOrFlight).toEqual({ kind: "save", leader: "Wolf", roll: 12, modifier: 1 });
   await expect(importLifeManagerEncounter(scene, encounter, selection, creatures, center)).rejects.toThrow("already");
   expect(scene.items.map((item) => [item.id, item.spec?.visible])).toEqual([["pc", true], ["wolf", false]]);
   const imported = readUnit(scene.items[0]!.metadata)!.state;

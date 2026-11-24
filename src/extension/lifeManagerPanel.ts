@@ -1,7 +1,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { convertMonster } from "../core/fivetools";
 import { activeLifeManagerHandoff, importLifeManagerEncounter, lifeManagerMatch, lifeManagerResult, type PreparedCreature } from "../core/lifeManager";
-import { DISPOSITIONS, parseTacticalEncounter, type Disposition, type TacticalEncounter, type TacticalParticipant } from "../core/lifeManagerProtocol";
+import { DISPOSITIONS, fightOrFlightText, parseTacticalEncounter, type Disposition, type TacticalEncounter, type TacticalParticipant } from "../core/lifeManagerProtocol";
 import { isUnitItem, readUnit } from "../core/unit";
 import { rollInitiativeFor, trackerView } from "../core/tracker";
 import { fetchMonsterIndex, fivetoolsImage, getLib } from "./bestiary";
@@ -141,7 +141,8 @@ export function renderLifeManagerPanel(): Child {
 function renderPreview(pending: TacticalEncounter): Child {
   return h("div", { className: "stack" },
     h("strong", {}, pending.title),
-    pending.attitude ? h("p", { className: "small" }, `Starting attitude: ${pending.attitude}. If the creatures are unsure whether to fight, use Fight or flight under DM Tools before rolling initiative.`) : null,
+    pending.attitude ? h("p", { className: "small" }, `Starting attitude: ${pending.attitude}.`) : null,
+    h("p", { className: "small" }, pending.fightOrFlight ? fightOrFlightText(pending.fightOrFlight) : "Opening morale can be resolved in Life Manager before export."),
     h("p", { className: "small" }, `${pending.place} · ${pending.distanceFt} ft · ${pending.context}`),
     ...pending.participants.map((p) => h("label", {},
       `${p.name}${p.surprised ? " (surprised)" : ""}${p.asleep ? " (asleep)" : ""}${p.vitals ? ` · ${p.vitals.hp}/${p.vitals.maxHp} HP` : ""}`,

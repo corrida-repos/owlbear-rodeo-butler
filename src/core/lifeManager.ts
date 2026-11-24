@@ -19,6 +19,10 @@ function readHandoff(meta: Record<string, unknown>): Handoff | undefined {
   return value && typeof value.id === "string" && Array.isArray(value.bindings) ? value : undefined;
 }
 
+export function lifeManagerOpponentIds(meta: Record<string, unknown>): string[] {
+  return readHandoff(meta)?.bindings.filter((binding) => !binding.party).map((binding) => binding.tokenId) ?? [];
+}
+
 export async function activeLifeManagerHandoff(gw: SceneGateway) {
   const meta = await gw.getSceneMetadata();
   const linked = readHandoff(meta);
