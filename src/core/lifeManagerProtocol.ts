@@ -34,13 +34,13 @@ export interface TacticalParticipant {
 export const FIGHT_OR_FLIGHT_DC = 10;
 export type FightOrFlight =
   | { kind: 'committed' }
-  | { kind: 'save'; leader: string; roll: number; modifier: number };
+  | { kind: 'save'; leader: string; roll: number; modifier: number; dc?: number };
 
 export function fightOrFlightText(decision: FightOrFlight): string {
   if (decision.kind === 'committed') return 'The creatures are committed to fighting.';
-  const { leader, roll, modifier } = decision;
+  const { leader, roll, modifier, dc = FIGHT_OR_FLIGHT_DC } = decision;
   const total = roll + modifier;
-  return `${leader}: ${roll} ${modifier >= 0 ? '+' : '−'} ${Math.abs(modifier)} = ${total} vs. DC ${FIGHT_OR_FLIGHT_DC}. ${total >= FIGHT_OR_FLIGHT_DC ? 'They fight.' : 'They flee or try to parley.'}`;
+  return `${leader}: ${roll} ${modifier >= 0 ? '+' : '−'} ${Math.abs(modifier)} = ${total} vs. DC ${dc}. ${total >= dc ? 'They fight.' : 'They flee or try to parley.'}`;
 }
 
 export type StartingAttitude = 'Hostile' | 'Indifferent' | 'Friendly';
@@ -143,7 +143,7 @@ export function parseTacticalEncounter(text: string): TacticalEncounter {
       !int(x.at, 0, Number.MAX_SAFE_INTEGER) || !str(x.title) || !str(x.place) || !str(x.context) ||
       !['camp', 'travel', 'rest', 'explore'].includes(String(x.activity)) || !int(x.distanceFt) ||
       !optional(x.fightOrFlight, (value) => object(value) && (value.kind === 'committed' ||
-        (value.kind === 'save' && str(value.leader) && int(value.roll, 1, 20) && int(value.modifier, -99, 99)))) ||
+        (value.kind === 'save' && str(value.leader) && int(value.roll, 1, 20) && int(value.modifier, -99, 99) && optional(value.dc, (dc) => int(dc, 1, 99))))) ||
       !optional(x.attitude, (value) => ['Hostile', 'Indifferent', 'Friendly'].includes(String(value))) ||
       !Array.isArray(x.participants) || !x.participants.length || x.participants.length > 300 ||
       !x.participants.every(participant) || !unique(x.participants)) {
