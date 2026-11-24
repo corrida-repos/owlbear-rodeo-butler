@@ -269,7 +269,7 @@ function withChips(it: ActionItem, text: string, inTile = false): Child[] {
 
 function tile(it: ActionItem): HTMLElement {
   const icon = it.category === "item" ? "⚱" : it.category === "spell" || MAGIC_KEYS.includes(it.key) ? "✦" : it.key === ATTACK_KEY ? "⚔" : it.category === "common" ? "⬡" : it.category === "feature" ? "❖" : /\[1d20[+-]\d+\]/.test(it.text) ? "⚔" : "✧";
-  const badge = it.source === "DMG" ? it.sourceBadge ?? "DMG" : it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "";
+  const badge = it.sourceBadge ?? (it.source === "Homebrew" ? "HB" : it.limit ? it.limit.label : it.recharge ? `${it.recharge}–6` : it.spellLevel !== undefined ? (it.spellLevel ? `L${it.spellLevel}` : "C") : "");
   const rv = reveals[it.key]?.length ? it.key : null;
   const color = it.key === ATTACK_KEY ? "act" : it.cost === "bonus" ? "bonus" : "accent";
   return h("button", {

@@ -334,7 +334,9 @@ describe("Magic reveals the sheet's spells cast with an action and its Magic act
   const bar = actionBar(caster);
   const l = barLayout(bar);
   it("action spells, creature spell lists and Magic actions under Magic; other spells by their casting time", () => {
-    expect(l.magicOptions.map((o) => o.name)).toEqual(["Change Shape", "Fire Bolt", "At Will", "1/Day Each"]);
+    expect(l.magicOptions.map((o) => o.name)).toEqual([
+      "Change Shape", "Fire Bolt", "At Will", "1/Day Each", "Initiate a Circle Spell", "Contribute to a Circle Spell",
+    ]);
     const names = (id: string) => l.sections.find((s) => s.id === id)?.items.map((i) => i.name) ?? [];
     expect(names("bonus")).toContain("Misty Step");
     expect(names("reaction")).toContain("Shield");
@@ -342,6 +344,19 @@ describe("Magic reveals the sheet's spells cast with an action and its Magic act
     expect(names("action")).not.toContain("Fire Bolt");
     expect(names("action")).not.toContain("Change Shape");
     expect(names("action")).toContain("Magic");
+  });
+  it("shows Circle Magic for 5.5E casters even when optional DMG actions are off", () => {
+    const circle = barLayout(actionBar(caster, "2024", { dmg: false }), "action").magicOptions
+      .filter((o) => o.source === "FRHoF");
+    expect(circle.map((o) => [o.name, o.cost])).toEqual([
+      ["Initiate a Circle Spell", "action"], ["Contribute to a Circle Spell", "action"],
+    ]);
+    expect(actionBar(caster, "2014").items.some((o) => o.source === "FRHoF")).toBe(false);
+
+    const withoutSpells = { ...caster, spells: [], traits: [], actions: [] };
+    expect(actionBar(withoutSpells).items.some((o) => o.source === "FRHoF")).toBe(false);
+    const pactCaster = { ...withoutSpells, traits: [{ name: "Pact Magic", text: "" }] };
+    expect(barLayout(actionBar(pactCaster)).magicOptions.filter((o) => o.source === "FRHoF")).toHaveLength(2);
   });
   it("the Spells filter still lists every spell, and the Action filter counts what Attack and Magic gather", () => {
     expect(barLayout(bar, "spell").sections[0]!.items.map((i) => i.name)).toEqual(["Fire Bolt", "Misty Step", "Shield", "Alarm", "At Will", "1/Day Each"]);

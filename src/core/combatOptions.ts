@@ -17,15 +17,15 @@ export interface CombatOption {
   /** Shown with the cost ("Action or Bonus Action", "Replaces one attack"). */
   costNote?: string;
   group: OptionGroup;
-  source: "PHB" | "DMG";
+  source: "PHB" | "DMG" | "FRHoF";
   /** How it works, with this unit's numbers. */
   text: string;
   /** The key number for the tile ("DC 13 Str/Dex", "+5 · 3 Bludgeoning"). */
   summary?: string;
   /** Done along with an attack of the Attack action without replacing it (2024 Equip or Unequip a Weapon). */
   withAttack?: boolean;
-  /** Done with another action (2024 Stabilize: the Help action), so shown under that action's tile. */
-  under?: "Help";
+  /** Done with another action (Stabilize: Help, Circle Magic: Magic), so shown under that action's tile. */
+  under?: "Help" | "Magic";
   /** Only while the creature has this condition (Escape a Grapple: Grappled; Stand Up: Prone; Dismount: Mounted). */
   ifCondition?: string;
   /** Only while it doesn't (Drop Prone, Mount). */
@@ -64,6 +64,35 @@ export function skillBonus(sheet: Pick<UnitSheet, "skills" | "abilities">, skill
   const s = sheet.skills.find((x) => x.name.replace(/\s*\(.*\)$/, "").toLowerCase() === skill.toLowerCase());
   return s ? s.bonus : abilityMod(sheet.abilities[ability]);
 }
+
+/** Forgotten Realms: Heroes of Faerûn, pp. 139–141. Keep this as a rules reference like the other common actions. */
+const CIRCLE_MAGIC: CombatOption[] = [
+  {
+    name: "Initiate a Circle Spell", cost: "action", costNote: "Magic action", group: "Actions", source: "FRHoF", under: "Magic",
+    summary: "Primary caster",
+    text: [
+      "Use the Magic action to start a spell cast with a spell slot and a casting time of one action or at least one minute. Choose one Circle casting option and maintain Concentration until the casting finishes. Reactions such as Counterspell can trigger when you begin.",
+      "You need at least one secondary caster. For a one-action spell, the effect begins as soon as the secondary caster you designate as last contributes. You supply the components, spend the spell slot, choose the targets, and maintain any Concentration the finished spell requires, unless the option says otherwise.",
+      "For a spell taking at least one minute, every caster must use the Magic action on each of their turns throughout the casting and maintain Concentration. Losing any caster’s Concentration makes the spell fail. On failure, you keep your slot and Material components.",
+      "Augment — If the spell’s range is at least 5 ft., add 1,000 ft. per secondary caster, up to 1 mile of extra range.",
+      "Distribute — For a Concentration spell, every participating caster can concentrate on the finished spell. Its effects persist while at least one of them maintains Concentration.",
+      "Expand — Add 10 ft. per secondary caster to one dimension of the spell’s area. Each secondary caster spends a spell slot of any level.",
+      "Prolong — For a spell lasting at least one minute, add 1 hour with 1–3 secondary casters, 8 hours with 4–6, or 24 hours with 7 or more. Each secondary caster spends a spell slot of any level.",
+      "Safeguard — In an area spell, set aside contiguous 5-ft. cubes unaffected by the spell. Use your spellcasting ability modifier plus the number of secondary casters, with a minimum of one cube. The safe zone moves with the area.",
+      "Supplant — Reduce the required value of one priced, consumed Material component by 50 GP per secondary caster. Each secondary caster spends a spell slot at least as high as the spell’s level.",
+      "Spell-specific option — If the spell has a Casting as a Circle Spell entry, you can choose its effect in place of a general option.",
+    ].join("\n"),
+  },
+  {
+    name: "Contribute to a Circle Spell", cost: "action", costNote: "Magic action", group: "Actions", source: "FRHoF", under: "Magic",
+    summary: "Secondary caster",
+    text: [
+      "If you have Spellcasting or Pact Magic, use the Magic action while within 30 ft. of the primary caster after they initiate the spell and before their next turn starts.",
+      "For casting times of at least one minute, use the Magic action every turn throughout the casting and maintain Concentration. If any participating caster loses Concentration, the spell fails.",
+      "Expand and Prolong require a spell slot of any level. Supplant requires a slot at least as high as the spell’s level. Spending the slot costs no additional action, and you keep it if the spell fails. The GM can let an NPC substitute a limited spell use of a high enough level. Follow any additional requirements in a spell-specific Circle option.",
+    ].join("\n"),
+  },
+];
 
 export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024", opts: { dmg?: boolean; handheld?: boolean } = {}): CombatOption[] {
   const str = abilityMod(sheet.abilities.str);
@@ -187,5 +216,10 @@ export function combatOptions(sheet: UnitSheet, rules: "2024" | "2014" = "2024",
     { name: "Climb onto a Bigger Creature", cost: "action", group: "Other", source: "DMG", 
       variants: skillVariants(sheet, breakFree, { Athletics: "haul yourself up", Acrobatics: "leap and scramble on" }, "Contested by its Dexterity (Acrobatics); if you win, you cling on in its space."), text: `Leap onto a creature much larger than you: a Strength (Athletics) or Dexterity (Acrobatics) check contested by its Dexterity (Acrobatics). If you win, you move into its space and cling on: you move with it and have Advantage on attacks against it. It can try to shake you off with an action (its Athletics against your Athletics or Acrobatics).` },
   ];
+  // Imported sheets do not always distinguish slot casting from innate spells. Show the reference for apparent
+  // casters and leave the eligibility check to the table.
+  if (o2024 && (sheet.spells.length || [...sheet.traits, ...sheet.actions].some((e) => /^(Spellcasting|Pact Magic)\b/i.test(e.name)))) {
+    list.push(...CIRCLE_MAGIC);
+  }
   return opts.dmg === false ? list.filter((o) => o.source !== "DMG") : list;
 }

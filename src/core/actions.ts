@@ -43,8 +43,8 @@ export interface ActionItem {
   summary: string;
   /** Combat options: their group ("Attack options", "Movement"…) and book (DMG = optional rule, Homebrew = the GM's). */
   group?: OptionGroup;
-  source?: "PHB" | "DMG" | "Homebrew";
-  /** DMG options: the label and tile badge for the room's edition ("2014 DMG (optional)" / "2014 DMG" in 5.5E). */
+  source?: "PHB" | "DMG" | "FRHoF" | "Homebrew";
+  /** The source label and tile badge for the room's edition ("2014 DMG (optional)" / "2014 DMG" in 5.5E). */
   sourceLabel?: string;
   sourceBadge?: string;
   /** Done along with an attack of the Attack action (shown under Attack though it costs nothing). */
@@ -247,6 +247,7 @@ export function commonActions(sheet: UnitSheet, rules: "2024" | "2014", opts: Ba
       key: `common:${c.name}`, name: c.name, text: c.text, section: "common", category: "common", cost: c.cost,
       ...(c.costNote ? { costNote: c.costNote } : {}), summary: c.summary ?? "", group: c.group, source: c.source,
       ...(c.source === "DMG" ? { sourceLabel: dmgLabel(rules), sourceBadge: dmgBadge(rules) } : {}),
+      ...(c.source === "FRHoF" ? { sourceLabel: "Forgotten Realms: Heroes of Faerûn, pp. 139–141", sourceBadge: "FRHoF" } : {}),
       ...(c.withAttack ? { withAttack: true } : {}),
       ...(c.under ? { under: `common:${c.under}` } : {}),
       ...(c.ifCondition ? { ifCondition: c.ifCondition } : {}),
@@ -518,7 +519,8 @@ export function explain(it: ActionItem, legendaryPerRound = 0): string[] {
   }
   if (it.category === "common") {
     // The rule, with this unit's numbers, comes first; then what it costs.
-    if (it.text) out.unshift(it.text);
+    if (it.text) out.unshift(...(it.source === "FRHoF" ? it.text.split("\n") : [it.text]));
+    if (it.source === "FRHoF" && it.sourceLabel) out.push(it.sourceLabel);
     if (it.source === "DMG") out.push(it.sourceLabel === "2014 DMG (optional)"
       ? "2014 DMG (optional): an optional rule from the 2014 Dungeon Master's Guide, which the 2024 DMG doesn't have (the GM can turn these off in Room settings)."
       : "An optional rule from the Dungeon Master's Guide (the GM can turn these off in Room settings).");
