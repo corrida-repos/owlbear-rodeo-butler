@@ -26,16 +26,20 @@ import { roomSettings, roomSystem } from "./roomSettings";
 
 const MISHAPS_BY_KEY = Object.fromEntries(MISHAPS.map((m) => [m.key, m]));
 
-export interface ChaseCtx {
-  c: ChaseState;
+/** What rolling and applying effects on units needs (chases, naval and aerial combat). */
+export interface UnitCtx {
   units: TrackerUnit[];
-  /** Initiative order (unit ids). */
-  order: string[];
   vis: "public" | "private";
   rules: "2024" | "2014";
   /** The turn point used for condition durations (null outside combat). */
   now: TurnPoint | null;
   lines: string[];
+}
+
+export interface ChaseCtx extends UnitCtx {
+  c: ChaseState;
+  /** Initiative order (unit ids). */
+  order: string[];
 }
 
 export async function chaseCtx(now?: TurnPoint | null): Promise<ChaseCtx> {
@@ -53,11 +57,11 @@ export async function sceneGrid(): Promise<{ multiplier: number; unit: string } 
 
 export const saveChase = (x: ChaseCtx) => OBR.scene.setMetadata({ [CHASE_KEY]: x.c satisfies ChaseState });
 export const say = (x: ChaseCtx, line: string) => { x.lines.push(line); x.c = withLog(x.c, line); };
-export const unitOf = (x: ChaseCtx, id: string | undefined) => (id ? x.units.find((u) => u.id === id) : undefined);
+export const unitOf = (x: UnitCtx, id: string | undefined) => (id ? x.units.find((u) => u.id === id) : undefined);
 /** Dead, at 0 HP, or gone from the scene. */
-export const isDown = (x: ChaseCtx, id: string) => { const u = unitOf(x, id); return !u || u.dead || u.state.hp <= 0; };
+export const isDown = (x: UnitCtx, id: string) => { const u = unitOf(x, id); return !u || u.dead || u.state.hp <= 0; };
 
-async function freshUnit(x: ChaseCtx, id: string): Promise<TrackerUnit | undefined> {
+export async function freshUnit(x: UnitCtx, id: string): Promise<TrackerUnit | undefined> {
   const view = trackerView(await obrGateway.getItems(), await OBR.scene.getMetadata());
   const u = [...view.order, ...view.waiting, ...view.outside].find((v) => v.id === id);
   if (u) x.units = x.units.map((o) => (o.id === id ? u : o));
@@ -70,7 +74,7 @@ const optionBonus = (u: TrackerUnit, kind: ChaseTest["kind"], o: { ability: Abil
   kind === "save" ? saveBonus(u.sheet, o.ability) : o.skill ? skillBonus(u.sheet, o.skill, o.ability) : abilityMod(u.sheet.abilities[o.ability]);
 
 /** A unit's save or check against `test` with its best option; Exhaustion applies (2024 −2 per level, 2014 Disadvantage). */
-export async function unitTest(x: ChaseCtx, u: TrackerUnit, test: ChaseTest, why: string, extra?: Mode): Promise<{ total: number; pass: boolean; text: string }> {
+export async function unitTest(x: UnitCtx, u: TrackerUnit, test: ChaseTest, why: string, extra?: Mode): Promise<{ total: number; pass: boolean; text: string }> {
   const best = [...test.options].sort((a, b) => optionBonus(u, test.kind, b) - optionBonus(u, test.kind, a))[0]!;
   const ex = exhaustionOnTest(exhaustionLevel(u.state), test.kind, x.rules);
   const mode = combineModes(ex.mode, extra);
@@ -81,11 +85,11 @@ export async function unitTest(x: ChaseCtx, u: TrackerUnit, test: ChaseTest, why
   return { total: r.total, pass, text: `${name} ${r.total} vs DC ${test.dc}: ${pass ? "succeeds" : "fails"}` };
 }
 
-export const unitSave = (x: ChaseCtx, u: TrackerUnit, ability: Ability, dc: number, why: string) =>
+export const unitSave = (x: UnitCtx, u: TrackerUnit, ability: Ability, dc: number, why: string) =>
   unitTest(x, u, { kind: "save", dc, options: [{ ability }] }, why);
 
 /** Rolls the damage dice once (an area or one source), for several units to take. */
-export async function rollDamage(x: ChaseCtx, parts: DamagePart[], why: string, unit?: TrackerUnit, crit = false): Promise<{ amount: number; type?: string }[]> {
+export async function rollDamage(x: UnitCtx, parts: DamagePart[], why: string, unit?: TrackerUnit, crit = false): Promise<{ amount: number; type?: string }[]> {
   const out: { amount: number; type?: string }[] = [];
   for (const p of parts) {
     const dice = crit ? p.dice.replace(/(\d+)d(\d+)/g, (_m, n: string, d: string) => `${Number(n) * 2}d${d}`) : p.dice;
@@ -96,7 +100,7 @@ export async function rollDamage(x: ChaseCtx, parts: DamagePart[], why: string, 
 }
 
 /** Applies rolled damage to a unit (halved if `half`), after its defenses. Returns "takes 7 damage (Resistance to Fire)". */
-export async function hurtUnit(x: ChaseCtx, u: TrackerUnit, rolled: { amount: number; type?: string }[], half = false): Promise<string> {
+export async function hurtUnit(x: UnitCtx, u: TrackerUnit, rolled: { amount: number; type?: string }[], half = false): Promise<string> {
   const parts = rolled.map((p) => ({ ...p, amount: half ? Math.floor(p.amount / 2) : p.amount }));
   const hit = hitAgainst(u.sheet.defenses, parts);
   if (hit.amount > 0) await changeHp(obrGateway, [u.id], { kind: "damage", amount: hit.amount }, { autoDeadAtZero: roomSettings().autoDeadAtZero, system: roomSystem() });
@@ -105,7 +109,7 @@ export async function hurtUnit(x: ChaseCtx, u: TrackerUnit, rolled: { amount: nu
 }
 
 /** Adds conditions to a unit, skipping those it's immune to. Returns "" or " Immune to Prone." */
-export async function condUnit(x: ChaseCtx, u: TrackerUnit, conds: { key: string; duration?: Duration; note?: string }[]): Promise<string> {
+export async function condUnit(x: UnitCtx, u: TrackerUnit, conds: { key: string; duration?: Duration; note?: string }[]): Promise<string> {
   const t = (await freshUnit(x, u.id)) ?? u;
   let state = t.state;
   const skipped: string[] = [];
@@ -119,7 +123,7 @@ export async function condUnit(x: ChaseCtx, u: TrackerUnit, conds: { key: string
 }
 
 /** A fall: 1d6 Bludgeoning per 10 feet (at most 20d6), landing Prone. */
-export async function fallUnit(x: ChaseCtx, u: TrackerUnit, feet: number, why: string): Promise<string> {
+export async function fallUnit(x: UnitCtx, u: TrackerUnit, feet: number, why: string): Promise<string> {
   const dice = fallDice(feet);
   const dmg = dice ? await hurtUnit(x, u, await rollDamage(x, [{ dice, type: "Bludgeoning" }], why, u)) : "takes no damage";
   return `falls ${feet} feet, ${dmg} and lands Prone.${await condUnit(x, u, [{ key: "prone" }])}`;

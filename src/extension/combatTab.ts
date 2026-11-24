@@ -156,6 +156,8 @@ function renderSettings(): Child {
       "Players see whether their attacks from the action bar hit (this hints at the target's AC; off: Butler checks hits for you and players only see their rolls)"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().massCombat, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ massCombat: (e.target as HTMLInputElement).checked }))() }),
       "Mass combat (Unearthed Arcana 2017, playtest): a Mass combat panel in DM Tools for battles of hundreds of creatures, badges on unit tokens, and a Battle view for players"),
+    h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().naval, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ naval: (e.target as HTMLInputElement).checked }))() }),
+      "Naval and aerial combat (Ghosts of Saltmarsh, Spelljammer, Eberron, DMG, Xanathar's): a Ships and sky panel in DM Tools for ship-to-ship battles, ship turns announced in initiative, and creatures in the air falling when they're knocked Prone or stopped"),
     h("div", { className: "small muted", style: "margin-top:4px" }, "Homebrew actions: add them with ＋ Homebrew on any unit's action bar; they show for every unit in the room."));
 }
 

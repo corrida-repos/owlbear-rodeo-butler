@@ -25,9 +25,12 @@ export interface RoomSettings {
   revealHits: boolean;
   /** Mass combat (Unearthed Arcana 2017, playtest): the DM Tools panel, unit badges and the players' Battle view. Off by default. */
   massCombat: boolean;
+  /** Naval and aerial combat (GoS, AAG, DMG, XGE): the Ships and sky panel in DM Tools, ship turns in initiative, and
+   *  falls of creatures in the air. Off by default. */
+  naval: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true, massCombat: false };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true, massCombat: false, naval: false };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -41,6 +44,7 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     autoApplyCasts: typeof s.autoApplyCasts === "boolean" ? s.autoApplyCasts : DEFAULT_SETTINGS.autoApplyCasts,
     revealHits: typeof s.revealHits === "boolean" ? s.revealHits : DEFAULT_SETTINGS.revealHits,
     massCombat: typeof s.massCombat === "boolean" ? s.massCombat : DEFAULT_SETTINGS.massCombat,
+    naval: typeof s.naval === "boolean" ? s.naval : DEFAULT_SETTINGS.naval,
   };
 }
 

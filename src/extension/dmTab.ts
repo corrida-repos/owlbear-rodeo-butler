@@ -1,6 +1,6 @@
 /**
  * "DM Tools" tab (GM): the 2024 DMG's combat tools that aren't tied to one unit: mob rolls, fight or flight, objects,
- * chases, hazards and traps, area templates, and mass combat (UA 2017). Each tool is its own panel module; this file reads the scene.
+ * chases, hazards and traps, area templates, mass combat (UA 2017), and naval and aerial combat. Each tool is its own panel module; this file reads the scene.
  */
 import OBR from "@owlbear-rodeo/sdk";
 import { trackerView, type TrackerView } from "../core/tracker";
@@ -13,6 +13,7 @@ import { sceneGrid } from "./chaseRun";
 import { aoePanel, refreshAreas } from "./aoePanel";
 import { hazardsPanel, refreshHazards } from "./hazardsPanel";
 import { battlePanel, refreshBattle } from "./battlePanel";
+import { navalPanel } from "./navalPanel";
 import { obrGateway } from "./obrGateway";
 import { roomSettings } from "./roomSettings";
 
@@ -39,5 +40,5 @@ export function resetDmTab() { view = null; }
 export function renderDmTab(): Child[] {
   if (!view) { refreshDmTab(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const units = [...view.order, ...view.waiting, ...view.outside];
-  return [moralePanel(units, sceneMeta), chasePanel(units, sceneMeta, view.encounter.started, grid), aoePanel(units), hazardsPanel(units), mobPanel(units), objectsPanel(sceneMeta), roomSettings().massCombat ? battlePanel(units) : null];
+  return [moralePanel(units, sceneMeta), chasePanel(units, sceneMeta, view.encounter.started, grid), aoePanel(units), hazardsPanel(units), mobPanel(units), objectsPanel(sceneMeta), roomSettings().massCombat ? battlePanel(units) : null, roomSettings().naval ? navalPanel(units, sceneMeta) : null];
 }

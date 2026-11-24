@@ -27,6 +27,7 @@ import { movedFeet, readMovement, speedLimit } from "../core/movement";
 import { speedPenalty, type TurnPoint } from "../core/conditions";
 import { resetMovementMemory, rewindActive, setDash, trackMovement } from "./movement";
 import { chaseTurnEnded } from "./chase";
+import { navalTurnChanged, navalWatch } from "./naval";
 import { resetAreas, updateAreas } from "./aoe";
 import { resetHazards, watchHazards } from "./hazards";
 import { receiveCast, receiveCastSave } from "./casts";
@@ -246,6 +247,7 @@ async function onSceneChange() {
       const turnStarted = primary && turnKeyNow && turnKeyNow !== lastTurnKey && lastTurnKey !== null ? v.active ?? null : null;
       if (primary) for (const line of await watchHazards(items, [...v.order, ...v.waiting, ...v.outside], turnKeyNow || "out", turnStarted)
         .catch((e) => { console.error("[Butler] hazards failed", e); return [] as string[]; })) await notify(line, "WARNING");
+      if (primary && roomSettings().naval) for (const line of await navalWatch(meta).catch((e) => { console.error("[Butler] naval falls failed", e); return [] as string[]; })) await notify(line, "WARNING");
       await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] darkness fog failed", e));
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
@@ -262,6 +264,7 @@ async function onSceneChange() {
         if (forward) for (const line of await expireConditions(obrGateway, prevTurn, lastTurn, roomSystem())) await notify(line);
         if (forward) await checkMorale(v, lastTurn.round).catch((e) => console.error("[Butler] fight or flight failed", e));
         if (forward) for (const line of await chaseTurnEnded(prevTurn, lastTurn, prevMovement).catch((e) => { console.error("[Butler] chase failed", e); return [] as string[]; })) await notify(line);
+        if (forward && roomSettings().naval) for (const line of await navalTurnChanged(prevTurn, lastTurn, v).catch((e) => { console.error("[Butler] naval turn failed", e); return [] as string[]; })) await notify(line);
       }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
