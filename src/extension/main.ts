@@ -8,6 +8,7 @@ import OBR from "@owlbear-rodeo/sdk";
 import { refreshCombat, renderCombatTab, resetCombatTab } from "./combatTab";
 import { refreshDmTab, renderDmTab, resetDmTab } from "./dmTab";
 import { h, rerender, setRerender, store, ui, type Child } from "./dom";
+import { renderLifeManagerPanel, resetLifeManagerPanel } from "./lifeManagerPanel";
 import { renderPackageTab, resetPackageTab } from "./packageTab";
 import { renderPartyTab, resetPartyTab } from "./partyTab";
 import { refreshPlayersTab, renderPlayersTab, resetPlayersTab } from "./playersTab";
@@ -33,6 +34,7 @@ const app = document.getElementById("app")!;
 
 function renderCreaturesTab(): Child[] {
   return [
+    ...(role === "GM" && sceneReady ? [renderLifeManagerPanel()] : []),
     ...creatures.render(),
     h("details", { className: "panel", open: packageOpen, ontoggle: (e: Event) => { packageOpen = (e.target as HTMLDetailsElement).open; } },
       h("summary", {}, "Prepared encounter (map + positioned creatures in one file)"),
@@ -80,7 +82,7 @@ if (OBR.isAvailable) {
     // Subscribe first, so a scene that becomes ready while we're still starting up isn't missed.
     OBR.scene.onReadyChange((r) => {
       sceneReady = r;
-      if (!r) { resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); resetPlayersTab(); resetDmTab(); }
+      if (!r) { resetLifeManagerPanel(); resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); resetPlayersTab(); resetDmTab(); }
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
       else if (tab === "tracker") refreshTracker(true);
       else if (tab === "combat") refreshCombat(true);

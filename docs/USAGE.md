@@ -235,3 +235,12 @@ Found a bug or have an idea? [Open an issue](https://github.com/corrida-repos/ow
 - Light and vision auras and the darkness fog don't stop at walls (use Owlbear's own fog for walls), a Bullseye Lantern's cone counts as a full circle, and magical darkness isn't modelled. The fog only knows Encounter Butler units and the lights set on their cards.
 - Active spell effects (Mage Armor, Shield) aren't applied to party AC, and multiclass spell slots aren't combined.
 - Lair actions are noted on the card but not listed as actions. Mythic actions are listed with the legendary actions.
+
+
+## Encounters from D&D Life Manager
+
+Open **Add Creatures → D&D Life Manager** in a room using the 2024 rules. Upload or paste the encounter JSON and preview it. Check how party members map to existing Butler tokens. Published creatures can be created as hidden tokens. Review placement in the current scene before revealing them. Use **Roll missing initiative** to respect any initiative already supplied, including Disadvantage for a surprised participant with no result yet.
+
+The preview includes Life Manager's starting attitude. For creatures unsure whether to fight, open **DM Tools → Fight or flight** before starting rounds. During combat, Butler can still prompt for morale. Decide how any retreat, surrender, or parley plays out.
+
+Before resetting the tracker, return to **D&D Life Manager → Review result for this scene**, confirm elapsed seconds and choose the encounter outcome. Capture and download or copy the result, then review it in Life Manager. Include a partial round if the encounter ends mid-round. The return file carries linked party members' HP, life status, death saves, and conditions. Record resource use and any loot or world changes separately.
