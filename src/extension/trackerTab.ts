@@ -95,7 +95,7 @@ function row(u: TrackerUnit, v: TrackerView, tie: { up: boolean; down: boolean }
       h("div", { className: "row", style: "gap:4px" },
         h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name),
         u.hidden ? h("span", { className: "small muted", title: "Hidden from players" }, "(hidden)") : null,
-        u.party ? h("span", { className: "small muted" }, "party") : null),
+        u.state.influencedAlly ? h("span", { className: "small muted" }, "NPC ally") : u.party ? h("span", { className: "small muted" }, "party") : null),
       h("div", { className: "small muted" }, `AC ${u.ac} · init ${fmtMod(u.initMod)}`),
       conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.detail ? ` ${c.detail}` : ""))) : null,
       u.state.concentrationCheck ? h("div", { className: "small warn" }, `Concentration check: DC ${u.state.concentrationCheck.dc} (on its card)`) : null,

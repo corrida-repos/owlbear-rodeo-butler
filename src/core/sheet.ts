@@ -113,6 +113,8 @@ export interface UnitState {
   inEncounter: boolean;
   /** PC, companion or sidekick (the party). */
   party: boolean;
+  /** An encounter NPC persuaded to fight on the party’s side. */
+  influencedAlly?: boolean;
   /** Owlbear player id of the player who controls this unit. */
   controlledBy?: string;
   conditions: ConditionInstance[];

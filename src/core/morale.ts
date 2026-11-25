@@ -18,23 +18,24 @@ export function readMorale(meta: Record<string, unknown>): MoralePrompt | null {
   return m && typeof m.unitId === "string" && typeof m.reason === "string" ? m : null;
 }
 
-interface Side { id: string; party: boolean; inEncounter: boolean; sheet: Pick<UnitSheet, "hp">; state: Pick<UnitState, "hp" | "maxHpOverride" | "conditions"> }
+interface Side { id: string; party: boolean; inEncounter: boolean; sheet: Pick<UnitSheet, "hp">; state: Pick<UnitState, "hp" | "maxHpOverride" | "conditions" | "influencedAlly"> }
 
 const INCAPACITATING = ["incapacitated", "paralyzed", "petrified", "stunned", "unconscious", "dead"];
 /** Out of the fight: dead, at 0 HP, or Incapacitated (or a condition that includes it). */
 export const outOfFight = (u: Pick<Side, "state">) => u.state.hp <= 0 || u.state.conditions.some((c) => INCAPACITATING.includes(c.key));
+const onPartySide = (unit: Side) => unit.party || unit.state.influencedAlly === true;
 const bloodied = (u: Side) => u.state.hp * 2 <= maxHp(u.sheet, u.state);
 
 /**
- * Why `unit` is likely to flee at the start of its turn, or null. Only non-party units (monsters); sides are the party
- * and everyone else in the encounter.
+ * Why an opponent or an influenced ally is likely to flee at the start of its turn, or null.
  */
-export function fleeReason(unit: Side, all: Side[]): string | null {
-  if (unit.party || outOfFight(unit) || !bloodied(unit)) return null;
+export function fleeReason(unit: Side, all: Side[], startingCombatants: readonly string[] = []): string | null {
+  if ((unit.party && !unit.state.influencedAlly) || outOfFight(unit) || !bloodied(unit)) return null;
   if (unit.state.conditions.some((c) => c.key === "frightened")) return "it starts its turn Bloodied and Frightened";
-  const fighters = all.filter((u) => u.inEncounter || u.id === unit.id);
-  const allies = fighters.filter((u) => !u.party && u.id !== unit.id);
-  const foes = fighters.filter((u) => u.party);
+  const fighters = all.filter((u) => u.inEncounter || u.id === unit.id || (startingCombatants.includes(u.id) && outOfFight(u)));
+  const side = onPartySide(unit);
+  const allies = fighters.filter((u) => onPartySide(u) === side && u.id !== unit.id);
+  const foes = fighters.filter((u) => onPartySide(u) !== side);
   const down = allies.filter(outOfFight).length;
   if (allies.length && down * 2 > allies.length && foes.length && !foes.some(outOfFight))
     return `it starts its turn Bloodied, ${down} of its ${allies.length} allies are dead or Incapacitated, and nobody on the other side is`;

@@ -25,6 +25,16 @@ describe("fight or flight (2024 DMG)", () => {
     expect(fleeReason(u("p", true, 5, [{ key: "frightened" }]), [])).toBeNull();
     expect(fleeReason(u("o", false, 0, [{ key: "frightened" }]), [])).toBeNull();
   });
+  it("checks an influenced ally using party casualties, including allies removed at 0 HP", () => {
+    const npc = u("npc", false, 10);
+    const ally = { ...npc, state: { ...npc.state, influencedAlly: true } };
+    const fallen = { ...u("fallen", true, 0), inEncounter: false };
+    const adversary = u("enemy", false, 20);
+    expect(fleeReason(ally, [ally, fallen, adversary], ["npc", "fallen", "enemy"])).toMatch(/1 of its 1 allies/);
+    expect(fleeReason(ally, [ally, fallen, adversary])).toBeNull();
+    expect(fleeReason(ally, [ally, fallen, { ...adversary, state: { ...adversary.state, hp: 0 } }])).toBeNull();
+  });
+
   it("words the DC 10 Wisdom save", () => {
     expect(moraleOutcome(12)).toMatch(/keeps fighting/);
     expect(moraleOutcome(9)).toMatch(/flees or tries to parley/);

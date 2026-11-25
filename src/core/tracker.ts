@@ -111,6 +111,9 @@ export async function encounterAction(gw: SceneGateway, action: EncounterAction)
       break;
     }
   }
+  if (next.started && (action === "start" || !enc.started)) {
+    next.startingCombatants = [...view.order, ...view.waiting].map((u) => u.id);
+  }
   await saveEncounter(gw, next);
   return next;
 }

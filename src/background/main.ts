@@ -299,7 +299,7 @@ async function checkMorale(v: TrackerView, round: number) {
   const all = trackerView(fresh, await OBR.scene.getMetadata());
   const units = [...all.order, ...all.waiting, ...all.outside];
   const active = units.find((u) => u.id === v.active);
-  const reason = active ? fleeReason(active, units) : null;
+  const reason = active ? fleeReason(active, units, all.encounter.startingCombatants) : null;
   const prompt: MoralePrompt | undefined = active && reason ? { unitId: active.id, name: active.name, round, reason } : undefined;
   await OBR.scene.setMetadata({ [MORALE_KEY]: prompt });
   if (prompt) await notify(`Fight or flight: ${prompt.name} is likely to flee (${reason}). Roll its DC 10 Wisdom save in the Tracker.`, "WARNING");

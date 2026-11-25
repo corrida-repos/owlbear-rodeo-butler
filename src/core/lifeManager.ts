@@ -59,10 +59,10 @@ function importedState(p: TacticalParticipant, state: UnitState, sheet: UnitShee
   if (v?.status === "dead") conditions.push({ id: "life-manager:dead", key: "dead" });
   if (!v) {
     conditions.push(...state.conditions.filter((c) => c.key === "stable" || c.key === "dead"));
-    return { ...state, party, conditions, inEncounter: true, initiative: p.initiative ?? null, initiativeRoll: undefined, initiativeTiebreak: undefined };
+    return { ...state, party, influencedAlly: p.influencedAlly, conditions, inEncounter: true, initiative: p.initiative ?? null, initiativeRoll: undefined, initiativeTiebreak: undefined };
   }
   return {
-    ...state, party, hp: v.hp, tempHp: v.tempHp, maxHpOverride: v.maxHp === sheet.hp.max ? undefined : v.maxHp,
+    ...state, party, influencedAlly: p.influencedAlly, hp: v.hp, tempHp: v.tempHp, maxHpOverride: v.maxHp === sheet.hp.max ? undefined : v.maxHp,
     conditions, inEncounter: true, initiative: p.initiative ?? null, initiativeRoll: undefined, initiativeTiebreak: undefined, deathSaves: v.status === "dying" ? { successes: v.successes, failures: v.failures } : undefined,
     concentrationCheck: undefined, zeroHpPending: undefined,
   };

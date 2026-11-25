@@ -19,6 +19,8 @@ export interface EncounterState {
   turnIndex: number;
   /** Earlier turns, newest last, for Previous turn. */
   history: TurnRef[];
+  /** Units enrolled when combat began, including those later removed at zero HP. */
+  startingCombatants?: string[];
 }
 
 export const EMPTY_ENCOUNTER: EncounterState = { v: 1, started: false, round: 0, turnId: null, turnIndex: 0, history: [] };
@@ -33,6 +35,7 @@ export function readEncounter(sceneMeta: Record<string, unknown>): EncounterStat
     round: typeof e.round === "number" ? e.round : 0,
     turnId: typeof e.turnId === "string" ? e.turnId : null,
     turnIndex: typeof e.turnIndex === "number" ? e.turnIndex : 0,
+    startingCombatants: Array.isArray(e.startingCombatants) ? e.startingCombatants.filter((id) => typeof id === "string") : undefined,
     history: Array.isArray(e.history) ? e.history.filter((t) => t && typeof t.turnId === "string") : [],
   };
 }

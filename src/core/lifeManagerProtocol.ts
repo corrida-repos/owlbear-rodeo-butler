@@ -22,6 +22,7 @@ export interface TacticalParticipant {
   id: string;
   name: string;
   side: 'party' | 'encounter';
+  influencedAlly?: boolean;
   ddbId?: number;
   source?: string;
   creatureName?: string;
@@ -101,6 +102,7 @@ export function validVitals(x: unknown): x is TacticalVitals {
 function participant(x: unknown): x is TacticalParticipant {
   return object(x) && str(x.id) && str(x.name) && ['party', 'encounter'].includes(String(x.side)) &&
     optional(x.ddbId, (value) => int(value, 1, Number.MAX_SAFE_INTEGER)) && optional(x.source, str) && optional(x.creatureName, str) &&
+    optional(x.influencedAlly, bool) && (x.influencedAlly !== true || x.side === 'encounter') &&
     optional(x.surprised, bool) && optional(x.initiative, (value) => int(value, -999, 999)) && optional(x.asleep, bool) && optional(x.vitals, validVitals);
 }
 

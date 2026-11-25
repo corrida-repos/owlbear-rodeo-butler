@@ -20,7 +20,7 @@ it("reuses the party, imports hidden creatures, and returns only linked campaign
     place: "Camp", distanceFt: 30, context: "On watch: A.", attitude: "Hostile", fightOrFlight: { kind: "save", leader: "Wolf", roll: 12, modifier: 1 }, rules: "2024", participants: [
       { id: "a", name: "A", side: "party", surprised: true, initiative: 17,
         vitals: { hp: 14, maxHp: 20, tempHp: 2, status: "alive", successes: 0, failures: 0, conditions: [] } },
-      { id: "w", name: "Wolf", side: "encounter", source: "XMM" },
+      { id: "w", name: "Wolf", side: "encounter", source: "XMM", influencedAlly: true },
     ],
   }));
   const selection = { a: lifeManagerMatch(encounter.participants[0]!, await scene.getItems()), w: "create" };
@@ -33,7 +33,7 @@ it("reuses the party, imports hidden creatures, and returns only linked campaign
   expect(scene.items.map((item) => [item.id, item.spec?.visible])).toEqual([["pc", true], ["wolf", false]]);
   const imported = readUnit(scene.items[0]!.metadata)!.state;
   expect(imported).toMatchObject({ hp: 14, tempHp: 2, initiative: 17, conditions: [{ key: "surprised" }] });
-  expect(readUnit(scene.items[1]!.metadata)!.state.initiative).toBeNull();
+  expect(readUnit(scene.items[1]!.metadata)!.state).toMatchObject({ initiative: null, party: false, influencedAlly: true });
   await scene.patchMetadata([{ id: "pc", key: STATE_KEY, patch: { hp: 3, conditions: [{ id: "p", key: "prone" }] } }]);
   const result = parseTacticalResult(JSON.stringify(await lifeManagerResult(scene, 13, () => "done", "Creatures fled")));
   expect(result).toMatchObject({ id: "done", encounterId: "night", elapsedSeconds: 13, disposition: "Creatures fled",

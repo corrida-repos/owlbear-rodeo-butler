@@ -84,6 +84,7 @@ export interface Combatant {
   level: number | null;
   levelSource: "set" | "sheet" | "cr" | null;
   exclude: boolean;
+  influencedAlly?: boolean;
   initiative: number | null;
   setup: InitiativeSetup;
 }
@@ -136,6 +137,7 @@ export function listCombatants(items: SceneItemLite[], rules: "2024" | "2014" = 
       name: i.label || i.name || sheet.name,
       party, onList: state.inEncounter, cr, level, levelSource,
       exclude: s.exclude === true,
+      influencedAlly: state.influencedAlly,
       initiative: state.initiative,
       setup: initiativeSetupFor(m, sheet, state, rules),
     }];
@@ -145,7 +147,7 @@ export function listCombatants(items: SceneItemLite[], rules: "2024" | "2014" = 
 /** Difficulty of the scene as the Combat tab shows it: included party members vs non-excluded creatures. */
 export function sceneDifficulty(cs: Combatant[]): Difficulty & { missingLevels: string[]; missingCr: string[] } {
   const party = cs.filter((c) => c.party && !c.exclude);
-  const foes = cs.filter((c) => !c.party && !c.exclude);
+  const foes = cs.filter((c) => !c.party && !c.exclude && !c.influencedAlly);
   const d = encounterDifficulty(party.flatMap((c) => (c.level ? [c.level] : [])), foes.flatMap((c) => (c.cr !== null ? [{ name: c.name, cr: c.cr }] : [])));
   return { ...d, missingLevels: party.filter((c) => !c.level).map((c) => c.name), missingCr: foes.filter((c) => c.cr === null).map((c) => c.name) };
 }
@@ -243,7 +245,7 @@ export function difficulty2024(levels: number[], creatures: { name: string; cr: 
 /** The scene's difficulty under the room's rules (included party members vs non-excluded creatures). */
 export function sceneDifficultyFor(cs: Combatant[], rules: "2024" | "2014"): DifficultyView & { missingLevels: string[]; missingCr: string[] } {
   const party = cs.filter((c) => c.party && !c.exclude);
-  const foes = cs.filter((c) => !c.party && !c.exclude);
+  const foes = cs.filter((c) => !c.party && !c.exclude && !c.influencedAlly);
   const levels = party.flatMap((c) => (c.level ? [c.level] : []));
   const creatures = foes.flatMap((c) => (c.cr !== null ? [{ name: c.name, cr: c.cr }] : []));
   const d = rules === "2014" ? difficulty2014(levels, creatures) : difficulty2024(levels, creatures);

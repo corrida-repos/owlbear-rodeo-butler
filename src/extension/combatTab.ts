@@ -83,8 +83,8 @@ function renderDifficulty(cs: Combatant[]): Child {
 
   const foeRows = foes.map((c) =>
     h("tr", { className: c.exclude ? "off" : "" },
-      h("td", {}, h("input", { type: "checkbox", checked: !c.exclude, title: "Hostile (counts toward difficulty)", onchange: action(() => setCombatSettings(obrGateway, c.id, { exclude: !c.exclude })) })),
-      h("td", {}, cardLink(c), c.exclude ? h("div", { className: "muted small" }, "not hostile: ignored") : null),
+      h("td", {}, h("input", { type: "checkbox", checked: !c.exclude && !c.influencedAlly, disabled: c.influencedAlly, title: "Hostile (counts toward difficulty)", onchange: action(() => setCombatSettings(obrGateway, c.id, { exclude: !c.exclude })) })),
+      h("td", {}, cardLink(c), c.influencedAlly ? h("div", { className: "muted small" }, "NPC ally") : c.exclude ? h("div", { className: "muted small" }, "not hostile: ignored") : null),
       h("td", { className: "num" }, c.cr === null ? "?" : crLabel(c.cr)),
       h("td", { className: "num" }, c.cr === null ? "—" : fmt(xpForCr(c.cr)))));
 
@@ -97,7 +97,7 @@ function renderDifficulty(cs: Combatant[]): Child {
     h("h2", { style: "margin-top:12px" }, `Party members (${party.filter((c) => !c.exclude).length}/${party.length})`),
     party.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Name"), h("th", {}, "Level"))), h("tbody", {}, ...partyRows))
       : h("div", { className: "small muted" }, "None in this scene. Party members (Add Party Members tab) show up here."),
-    h("h2", { style: "margin-top:12px" }, `Creatures (${foes.filter((c) => !c.exclude).length} hostile of ${foes.length})`),
+    h("h2", { style: "margin-top:12px" }, `Creatures (${foes.filter((c) => !c.exclude && !c.influencedAlly).length} hostile of ${foes.length})`),
     foes.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", { title: "Hostile" }, "Hostile"), h("th", {}, "Name"), h("th", {}, "CR"), h("th", {}, "XP"))), h("tbody", {}, ...foeRows))
       : h("div", { className: "small muted" }, "None in this scene."),
     h("details", { className: "small", style: "margin-top:8px" }, h("summary", {}, "How it's calculated"),
