@@ -2,7 +2,7 @@ import { BUTLER_ITEM_KEY, BUTLER_NS, SIZE_CELLS } from "./constants";
 import { readEncounter } from "./encounter";
 import { type ImageItemSpec, type ResolvedImage, type SceneGateway, type SceneItemLite } from "./importer";
 import { tokenImageGrid, type Vec2 } from "./layout";
-import { type Disposition, type TacticalEncounter, type TacticalParticipant, type TacticalResult, type TacticalVitals, validVitals } from "./lifeManagerProtocol";
+import { type Disposition, type TacticalEncounter, type TacticalParticipant, type TacticalResult, type TacticalVitals, openingPositionText, validVitals } from "./lifeManagerProtocol";
 import { maxHp, STATE_KEY, type ConditionInstance, type UnitSheet, type UnitState } from "./sheet";
 import { isDead, isStable } from "./systems";
 import { readUnit, unitMetadata, unitState } from "./unit";
@@ -39,10 +39,13 @@ export function lifeManagerMatch(p: TacticalParticipant, items: SceneItemLite[])
   return matching.length === 1 ? matching[0]!.id : "";
 }
 
+const ROAD_NET_ID = "life-manager:road-net";
+const OPENING_POSITION_ID = "life-manager:opening-position";
+
 function importedState(p: TacticalParticipant, state: UnitState, sheet: UnitSheet, tokenId: string): UnitState {
   const v = p.vitals;
   const party = p.side === "party";
-  const conditions = state.conditions.filter((c) => !["surprised", "dead", "stable"].includes(c.key) && c.id !== SLEEP_ID &&
+  const conditions = state.conditions.filter((c) => !["surprised", "dead", "stable"].includes(c.key) && c.id !== SLEEP_ID && c.id !== ROAD_NET_ID && c.id !== OPENING_POSITION_ID &&
     (!v || !["exhaustion", "concentration", ...v.conditions.map((condition) => condition.key)].includes(c.key)));
   for (const c of v?.conditions ?? []) {
     const rounds = c.remainingSeconds == null ? 0 : Math.ceil(c.remainingSeconds / 6);
@@ -50,6 +53,13 @@ function importedState(p: TacticalParticipant, state: UnitState, sheet: UnitShee
       id: c.id, key: c.key, level: c.level, label: c.label,
       ...(rounds > 0 ? { until: { rounds, at: "start", turnOf: tokenId }, from: { round: 1, turnId: tokenId } } : {}),
     });
+  }
+  if (p.roadNetRestrained) {
+    conditions.push({ id: ROAD_NET_ID, key: "restrained", note: "Roadside net. As an action, make a DC 10 Strength (Athletics) check to free themselves or another creature within reach." });
+  }
+  if (p.openingPosition) {
+    conditions.push({ id: OPENING_POSITION_ID, key: "custom", label: openingPositionText(p.openingPosition),
+      note: "Opening position from Life Manager. Check cover from the attacker's direction and remove this note when the unit leaves its position." });
   }
   if (p.surprised) conditions.push({ id: SURPRISE_ID, key: "surprised" });
   if (p.asleep && !conditions.some((condition) => condition.key === "unconscious")) {

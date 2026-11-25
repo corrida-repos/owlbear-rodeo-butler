@@ -18,6 +18,21 @@ export interface TacticalVitals {
   conditions: TacticalCondition[];
 }
 
+export interface OpeningPosition {
+  feature: string;
+  cover?: 'half' | 'three-quarters';
+  elevationFt?: number;
+}
+
+export function openingPositionText(position: OpeningPosition): string {
+  const details = [
+    position.cover === 'half' ? 'Half Cover (+2 AC and Dexterity saves)' :
+      position.cover === 'three-quarters' ? 'Three-Quarters Cover (+5 AC and Dexterity saves)' : '',
+    position.elevationFt ? `${position.elevationFt} ft above the party` : '',
+  ].filter(Boolean);
+  return `${details.join(' · ')} at ${position.feature}`;
+}
+
 export interface TacticalParticipant {
   id: string;
   name: string;
@@ -27,6 +42,8 @@ export interface TacticalParticipant {
   source?: string;
   creatureName?: string;
   surprised?: boolean;
+  roadNetRestrained?: boolean;
+  openingPosition?: OpeningPosition;
   initiative?: number;
   asleep?: boolean;
   vitals?: TacticalVitals;
@@ -99,10 +116,19 @@ export function validVitals(x: unknown): x is TacticalVitals {
     x.conditions.filter((c) => c.key === 'exhaustion').length <= 1;
 }
 
+function validOpeningPosition(x: unknown): boolean {
+  return object(x) && str(x.feature) &&
+    optional(x.cover, (value) => value === 'half' || value === 'three-quarters') &&
+    optional(x.elevationFt, (value) => int(value, 1, 1000)) &&
+    (x.cover !== undefined || x.elevationFt !== undefined);
+}
+
 function participant(x: unknown): x is TacticalParticipant {
   return object(x) && str(x.id) && str(x.name) && ['party', 'encounter'].includes(String(x.side)) &&
     optional(x.ddbId, (value) => int(value, 1, Number.MAX_SAFE_INTEGER)) && optional(x.source, str) && optional(x.creatureName, str) &&
     optional(x.influencedAlly, bool) && (x.influencedAlly !== true || x.side === 'encounter') &&
+    optional(x.openingPosition, validOpeningPosition) && (x.openingPosition === undefined || x.side === 'encounter') &&
+    optional(x.roadNetRestrained, bool) && (x.roadNetRestrained !== true || x.side === 'party') &&
     optional(x.surprised, bool) && optional(x.initiative, (value) => int(value, -999, 999)) && optional(x.asleep, bool) && optional(x.vitals, validVitals);
 }
 
@@ -129,7 +155,7 @@ function upgradePreviousEncounter(x: RecordValue): RecordValue {
         status: p.hp > 0 ? 'alive' : p.stable ? 'stable' : 'dying', successes: 0, failures: 0, conditions: exhaustion,
       } : undefined;
       return { id: p.id, name: p.name, side: p.side, ddbId: p.ddbId, surprised: p.surprised,
-        asleep: p.resting, source: creature.source, creatureName: creature.name, vitals };
+        asleep: p.resting, roadNetRestrained: p.roadNetRestrained, openingPosition: p.openingPosition, source: creature.source, creatureName: creature.name, vitals };
     }) : x.participants;
   return {
     schema: 'life-manager/encounter@1', id: x.encounterId, campaignId: x.campaignId, at: x.minute, title: x.summary,

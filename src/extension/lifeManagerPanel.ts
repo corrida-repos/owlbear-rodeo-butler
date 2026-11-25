@@ -1,7 +1,7 @@
 import OBR from "@owlbear-rodeo/sdk";
 import { convertMonster } from "../core/fivetools";
 import { activeLifeManagerHandoff, importLifeManagerEncounter, lifeManagerMatch, lifeManagerResult, type PreparedCreature } from "../core/lifeManager";
-import { DISPOSITIONS, fightOrFlightText, parseTacticalEncounter, type Disposition, type TacticalEncounter, type TacticalParticipant } from "../core/lifeManagerProtocol";
+import { DISPOSITIONS, fightOrFlightText, openingPositionText, parseTacticalEncounter, type Disposition, type TacticalEncounter, type TacticalParticipant } from "../core/lifeManagerProtocol";
 import { isUnitItem, readUnit } from "../core/unit";
 import { rollInitiativeFor, trackerView } from "../core/tracker";
 import { fetchMonsterIndex, fivetoolsImage, getLib } from "./bestiary";
@@ -145,7 +145,7 @@ function renderPreview(pending: TacticalEncounter): Child {
     h("p", { className: "small" }, pending.fightOrFlight ? fightOrFlightText(pending.fightOrFlight) : "Opening morale can be resolved in Life Manager before export."),
     h("p", { className: "small" }, `${pending.place} · ${pending.distanceFt} ft · ${pending.context}`),
     ...pending.participants.map((p) => h("label", {},
-      `${p.name}${p.influencedAlly ? " (NPC ally)" : ""}${p.surprised ? " (surprised)" : ""}${p.asleep ? " (asleep)" : ""}${p.vitals ? ` · ${p.vitals.hp}/${p.vitals.maxHp} HP` : ""}`,
+      `${p.name}${p.influencedAlly ? " (NPC ally)" : ""}${p.surprised ? " (surprised)" : ""}${p.roadNetRestrained ? " (restrained by net)" : ""}${p.asleep ? " (asleep)" : ""}${p.openingPosition ? ` · ${openingPositionText(p.openingPosition)}` : ""}${p.vitals ? ` · ${p.vitals.hp}/${p.vitals.maxHp} HP` : ""}`,
       h("select", { onchange: (e: Event) => { selections[p.id] = (e.target as HTMLSelectElement).value; } },
         h("option", { value: "", selected: !selections[p.id] }, "Choose a token"),
         p.side === "encounter" ? h("option", { value: "create", selected: selections[p.id] === "create" }, "Create hidden token") : null,
