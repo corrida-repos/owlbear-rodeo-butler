@@ -63,10 +63,10 @@ export function moralePanel(units: TrackerUnit[], meta: Record<string, unknown>)
   if (!monsters.some((u) => u.id === leaderId)) leaderId = monsters[0]?.id ?? "";
   const leader = monsters.find((u) => u.id === leaderId);
   return h("details", { className: "panel" }, h("summary", {}, h("strong", {}, "Fight or flight")),
-    h("div", { className: "small muted" }, "Before Initiative, a creature unsure whether to fight makes a DC 10 Wisdom save (the leader for a group); on a failure it flees or parleys. In combat, Butler warns you when a Bloodied opponent or NPC ally starting its turn is Frightened, or has lost more than half its allies while nobody on the other side is down."),
+    h("div", { className: "small muted" }, "Before Initiative, a creature unsure whether to fight makes a DC 10 Wisdom save (the leader for a group); on a failure it flees or parleys. In combat, Butler warns you when a Bloodied opponent starting its turn is Frightened, or has lost more than half its allies while nobody on the other side is down."),
     moralePrompt(units, meta),
     npc ? h("div", { className: "stack tight" },
-      h("label", {}, "NPC influenced to fight alongside the party",
+      h("label", {}, "NPC fighting alongside the party",
         h("select", { onchange: (e: Event) => { npcId = (e.target as HTMLSelectElement).value; rerender(); } },
           ...candidates.map((u) => h("option", { value: u.id, selected: u.id === npcId }, u.name))),
       ),

@@ -27,10 +27,10 @@ const onPartySide = (unit: Side) => unit.party || unit.state.influencedAlly === 
 const bloodied = (u: Side) => u.state.hp * 2 <= maxHp(u.sheet, u.state);
 
 /**
- * Why an opponent or an influenced ally is likely to flee at the start of its turn, or null.
+ * Why an opponent is likely to flee at the start of its turn, or null.
  */
 export function fleeReason(unit: Side, all: Side[], startingCombatants: readonly string[] = []): string | null {
-  if ((unit.party && !unit.state.influencedAlly) || outOfFight(unit) || !bloodied(unit)) return null;
+  if (onPartySide(unit) || outOfFight(unit) || !bloodied(unit)) return null;
   if (unit.state.conditions.some((c) => c.key === "frightened")) return "it starts its turn Bloodied and Frightened";
   const fighters = all.filter((u) => u.inEncounter || u.id === unit.id || (startingCombatants.includes(u.id) && outOfFight(u)));
   const side = onPartySide(unit);
