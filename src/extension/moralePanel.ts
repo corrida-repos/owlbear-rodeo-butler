@@ -3,6 +3,7 @@
  * monster's turn, and "Will they fight?" before combat. Both roll a DC 10 Wisdom saving throw (the GM can change the DC).
  */
 import OBR from "@owlbear-rodeo/sdk";
+import { readEncounter } from "../core/encounter";
 import { fmtMod } from "../core/dice";
 import { lifeManagerOpponentIds } from "../core/lifeManager";
 import { MORALE_DC, MORALE_KEY, moraleOutcome, readMorale } from "../core/morale";
@@ -28,7 +29,7 @@ async function rollWis(u: TrackerUnit, why: string, d: number): Promise<string> 
 
 /** The in-combat prompt (Tracker and DM Tools), or nothing. */
 export function moralePrompt(units: TrackerUnit[], meta: Record<string, unknown>): Child {
-  const p = readMorale(meta);
+  const p = readEncounter(meta).started ? readMorale(meta) : null;
   const u = p && units.find((x) => x.id === p.unitId);
   if (!p || !u) {
     const withdrawing = units.find((candidate) => candidate.id === withdrawalId && candidate.inEncounter);

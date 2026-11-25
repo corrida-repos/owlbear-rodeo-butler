@@ -266,6 +266,9 @@ async function onSceneChange() {
         if (forward) for (const line of await chaseTurnEnded(prevTurn, lastTurn, prevMovement).catch((e) => { console.error("[Butler] chase failed", e); return [] as string[]; })) await notify(line);
         if (forward && roomSettings().naval) for (const line of await navalTurnChanged(prevTurn, lastTurn, v).catch((e) => { console.error("[Butler] naval turn failed", e); return [] as string[]; })) await notify(line);
       }
+      if (primary && lastTurn && !prevTurn) {
+        await checkMorale(v, lastTurn.round).catch((e) => console.error("[Butler] fight or flight failed", e));
+      }
       const me = { id: OBR.player.id, role };
       const unit = (id?: string) => v.order.find((u) => u.id === id);
       const item = (id?: string) => items.find((i) => i.id === id);
