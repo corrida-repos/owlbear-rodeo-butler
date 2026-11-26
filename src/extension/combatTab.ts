@@ -1,19 +1,11 @@
-/**
- * "Combat" tab: Difficulty Calculator (2024 DMG budgets + an invented Extreme tier) over the Butler units in the
- * scene, and the Initiatives buttons (roll everyone, or just the creatures when players roll their own).
- */
-import OBR from "@owlbear-rodeo/sdk";
-import { crLabel, EXTREME_FACTOR, listCombatants, rollSceneInitiative, sceneDifficultyFor, setCombatSettings, xpForCr, type Combatant, type InitiativeReport } from "../core/combat";
-import { describeInitiative, fmtMod } from "../core/dice";
+import { crLabel, EXTREME_FACTOR, listCombatants, sceneDifficultyFor, setCombatSettings, xpForCr, type Combatant } from "../core/combat";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { openCard } from "./cardPopover";
-import { renderRollLog } from "./rollLogView";
 import { roomSettings, roomSystem, setRoomSettings } from "./roomSettings";
 import { SYSTEMS, type SystemId } from "../core/systems";
 
 let combatants: Combatant[] | null = null;
-let lastRoll: InitiativeReport | null = null;
 let pending = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -64,7 +56,7 @@ function renderDifficulty(cs: Combatant[]): Child {
       h("div", { className: "small", style: "margin-top:6px" }, TIER_TEXT[d.tier] ?? ""),
       d.belowFirst ? h("div", { className: "small muted" }, `This is under even the ${first.name} threshold (${fmt(first.xp)} XP): barely a speed bump.`) : null)
     : h("div", { className: "small muted" },
-      !party.filter((c) => !c.exclude).length ? "Add party members (Add Party tab) to compare against." : "No hostile creatures in the scene yet (Add Creatures tab).");
+      !party.filter((c) => !c.exclude).length ? "Add party members in Party → Manage to compare against." : "No hostile creatures in the scene yet. Add them in Encounter → Add creatures.");
 
   const levelInput = (c: Combatant) => {
     const inp = h("input", { type: "text", inputmode: "numeric", className: "lvl", value: c.level ? String(c.level) : "", placeholder: "?" }) as HTMLInputElement;
@@ -96,7 +88,7 @@ function renderDifficulty(cs: Combatant[]): Child {
     d.missingCr.length ? h("div", { className: "small warn", style: "margin-top:4px" }, `⚠ No CR for ${d.missingCr.join(", ")}: not counted.`) : null,
     h("h2", { style: "margin-top:12px" }, `Party members (${party.filter((c) => !c.exclude).length}/${party.length})`),
     party.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, ""), h("th", {}, "Name"), h("th", {}, "Level"))), h("tbody", {}, ...partyRows))
-      : h("div", { className: "small muted" }, "None in this scene. Party members (Add Party Members tab) show up here."),
+      : h("div", { className: "small muted" }, "None in this scene. Party members show up here after they are added in Party → Manage."),
     h("h2", { style: "margin-top:12px" }, `Creatures (${foes.filter((c) => !c.exclude && !c.influencedAlly).length} hostile of ${foes.length})`),
     foes.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", { title: "Hostile" }, "Hostile"), h("th", {}, "Name"), h("th", {}, "CR"), h("th", {}, "XP"))), h("tbody", {}, ...foeRows))
       : h("div", { className: "small muted" }, "None in this scene."),
@@ -107,29 +99,7 @@ function renderDifficulty(cs: Combatant[]): Child {
       d.rules === "2024" ? h("p", {}, `Extreme is an extra tier for boss-level fights, not from the DMG: ${EXTREME_FACTOR}× the High budget. The tier shown is the highest budget the encounter reaches. Untick a creature that isn't hostile, or a character who isn't in this fight.`) : null));
 }
 
-async function roll(scope: "all" | "creatures") {
-  lastRoll = await rollSceneInitiative(obrGateway, scope, { rules: roomSystem().rules });
-  await OBR.notification.show(`Rolled initiative for ${lastRoll.rolled.length} ${scope === "all" ? "units" : "creatures"}.`, "SUCCESS");
-}
-
-function renderInitiative(cs: Combatant[]): Child {
-  const onList = cs.filter((c) => c.onList);
-  const creatures = onList.filter((c) => !c.party).length;
-  const order = [...onList].filter((c) => c.initiative !== null).sort((a, b) => b.initiative! - a.initiative!);
-  return h("div", { className: "panel" },
-    h("h2", {}, "Initiatives"),
-    h("div", { className: "row", style: "flex-wrap:nowrap" },
-      h("button", { className: "grow", disabled: ui.busy || !onList.length, onclick: action(() => roll("all")) }, "Roll all initiatives"),
-      h("button", { className: "grow secondary", disabled: ui.busy || !creatures, onclick: action(() => roll("creatures")) }, "Roll just creatures' initiatives")),
-    h("div", { className: "small muted", style: "margin-top:4px" }, "Players rolling their own? Use the second button; entering their results comes with the initiative tracker."),
-    lastRoll ? h("ul", { className: "plain small", style: "margin-top:8px" }, ...lastRoll.rolled.map((r) =>
-      h("li", {}, h("strong", {}, `${r.roll.total}`), ` ${r.name}${r.party ? " (party)" : ""}: ${describeInitiative(r.roll)}`))) : null,
-    !lastRoll && order.length ? h("div", { style: "margin-top:8px" },
-      h("div", { className: "small muted" }, "Current order"),
-      h("ul", { className: "plain small" }, ...order.map((c) => h("li", {}, h("strong", {}, String(c.initiative)), " ", cardLink(c), ` (${fmtMod(c.setup.modifier)}${c.setup.advantage ? " adv" : ""})`)))) : null);
-}
-
-function renderSettings(): Child {
+export function renderSettings(): Child {
   const sys = roomSystem();
   return h("div", { className: "panel" },
     h("h2", {}, "Game system"),
@@ -165,6 +135,6 @@ function renderSettings(): Child {
 
 export function renderCombatTab(): Child[] {
   if (!combatants) { refreshCombat(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
-  return [renderDifficulty(combatants), renderInitiative(combatants), renderRollLog(), renderSettings()];
+  return [renderDifficulty(combatants)];
 }
-export function resetCombatTab() { combatants = null; lastRoll = null; }
+export function resetCombatTab() { combatants = null; }

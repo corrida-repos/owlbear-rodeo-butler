@@ -31,7 +31,7 @@ A combat assistant for [Owlbear Rodeo](https://www.owlbear.rodeo): bring in crea
 | Cards & dice | Native stat blocks, clickable rolls, advantage/disadvantage, critical damage, public/private rolls and a session log. |
 | Action bar | A BG3-style reference hotbar: the sheet's actions, bonus actions, reactions and spells together with every PHB option and the DMG's optional ones (from the 2014 DMG, labelled "2014 DMG (optional)" in 5.5E rooms; they can be turned off) and the GM's homebrew actions, each explained in plain words. Hover Attack for every way to attack. |
 | Unit identity | Portraits, names, aliases and controlling players. Players can open their own cards. |
-| DM Tools | 2024 DMG tools: fight or flight, chase mode (on foot or in vehicles), area templates with the half-square rule, hazards and traps on the map, mob rolls and objects with rules-based AC and HP. |
+| Tools | 2024 DMG tools: fight or flight, chase mode (on foot or in vehicles), area templates with the half-square rule, hazards and traps on the map, mob rolls and objects with rules-based AC and HP. |
 | Combat core | Tracker, turn controls, rounds, HP/temp HP, death saves, Stable, Dead, turn notices and an active-turn ring. |
 | Light & vision | Dim and dark scenes, carried lights (torch, lantern, *Light*…) and per-browser auras for darkvision, blindsight, truesight and tremorsense, so you can see what's lightly or heavily obscured. |
 | Conditions & movement | Conditions with durations, concentration checks, token badges, and a movement tracker with Dash and Rewind. |
@@ -51,7 +51,7 @@ You need an Owlbear Rodeo account and a room where you are the **GM**. Players d
    ```
 
 2. Open your room, click **Extensions** (the puzzle piece), and enable **Encounter Butler**.
-3. Open Butler from the room toolbar. In **Combat → Game system**, choose your edition. **D&D 5.5E (2024)** is the default.
+3. Open Butler from the room toolbar. In **Settings → Game system**, choose your edition. **D&D 5.5E (2024)** is the default.
 
 The hosted extension updates without a download or reinstall. **Upgrading from 1.x?** If the right-click *View unit card* or turn notices don't appear, remove Encounter Butler in **Profile → Extensions** and add the link again: Owlbear keeps the old manifest, and 2.0 adds a background page.
 
@@ -59,8 +59,8 @@ The hosted extension updates without a download or reinstall. **Upgrading from 1
 
 ## Start with one small encounter
 
-1. **Add Creatures:** search for a creature, put it on the list, set a quantity and add it to the scene.
-2. **Add Party:** add characters or companions directly, or use **Sync from D&D Beyond**. The sync needs a one-time bookmark setup in a desktop browser and access to the campaign you DM.
+1. **Encounter → Add creatures:** search for a creature, put it on the list, set a quantity and add it to the scene.
+2. **Party → Manage:** add characters or companions directly, or use **Sync from D&D Beyond**. The sync needs a one-time bookmark setup in a desktop browser and access to the campaign you DM.
 3. **Open a card:** right-click a Butler token → **View unit card**. Click a roll; hold **Shift** for advantage or **Ctrl/Cmd** for disadvantage.
 4. **Tracker:** roll initiative, press **Start combat**, and move through turns. Enter `-7` for damage, `+5` for healing or `t5` for temporary HP.
 

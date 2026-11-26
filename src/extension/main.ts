@@ -1,11 +1,11 @@
 /**
  * Encounter Butler popover.
- *  GM: tabs — Tracker, Players (party members' key stats), Add Creatures, Add Party Members (incl. D&D Beyond sync), Combat.
+ *  GM: Tracker, Encounter, Party, Tools and Settings.
  *  Player: their own units (cards to roll from) and the roll log.
  */
 import "./devlog";
 import OBR from "@owlbear-rodeo/sdk";
-import { refreshCombat, renderCombatTab, resetCombatTab } from "./combatTab";
+import { refreshCombat, renderCombatTab, renderSettings, resetCombatTab } from "./combatTab";
 import { refreshDmTab, renderDmTab, resetDmTab } from "./dmTab";
 import { h, rerender, setRerender, store, ui, type Child } from "./dom";
 import { renderLifeManagerPanel, resetLifeManagerPanel } from "./lifeManagerPanel";
@@ -19,12 +19,16 @@ import { refreshTracker, renderTrackerTab, resetTrackerTab } from "./trackerTab"
 import { initRoomSettings, onRoomSettings } from "./roomSettings";
 import { initVisionPanel } from "./visionPanel";
 
-type Tab = "tracker" | "players" | "creatures" | "party" | "combat" | "dm";
-const TABS: [Tab, string][] = [["tracker", "Tracker"], ["players", "Players"], ["creatures", "Add Creatures"], ["party", "Add Party"], ["combat", "Combat"], ["dm", "DM Tools"]];
+const TABS = [["tracker", "Tracker"], ["encounter", "Encounter"], ["party", "Party"], ["dm", "Tools"], ["settings", "Settings"]] as const;
+type Tab = typeof TABS[number][0];
 const savedTab = store.get("butler.tab");
-let tab: Tab = TABS.some(([t]) => t === savedTab) ? savedTab as Tab : "tracker";
+let tab: Tab = TABS.find(([key]) => key === savedTab)?.[0]
+  ?? (savedTab === "creatures" || savedTab === "combat" ? "encounter" : savedTab === "players" ? "party" : "tracker");
+let encounterView: "creatures" | "import" | "difficulty" = savedTab === "combat" ? "difficulty" : "creatures";
+let partyView = savedTab === "party" ? store.get("butler.partyView") ?? "manage" : "overview";
 let sceneReady = true;
-let packageOpen = false;
+let restoreScroll: number | undefined;
+const scrollByTab = new Map<Tab, number>();
 let role: "GM" | "PLAYER" | null = null;
 let playerPending = false;
 document.addEventListener("focusout", () => { if (playerPending) { playerPending = false; setTimeout(render, 0); } });
@@ -32,14 +36,60 @@ document.addEventListener("focusout", () => { if (playerPending) { playerPending
 const creatures = createRoster("creature");
 const app = document.getElementById("app")!;
 
-function renderCreaturesTab(): Child[] {
-  return [
-    ...(role === "GM" && sceneReady ? [renderLifeManagerPanel()] : []),
-    ...creatures.render(),
-    h("details", { className: "panel", open: packageOpen, ontoggle: (e: Event) => { packageOpen = (e.target as HTMLDetailsElement).open; } },
-      h("summary", {}, "Prepared encounter (map + positioned creatures in one file)"),
-      packageOpen ? h("div", { className: "stack", style: "margin-top:8px" }, ...renderPackageTab()) : null),
-  ];
+function segment(label: string, active: boolean, select: () => void): Child {
+  return h("button", { className: active ? "on" : "", "aria-pressed": String(active), "data-nav": label, onclick: select }, label);
+}
+
+function renderEncounter(): Child[] {
+  const views = [["creatures", "Add creatures"], ["import", "Import encounter"], ["difficulty", "Difficulty"]] as const;
+  return [h("div", { className: "seg", role: "group", "aria-label": "Encounter" }, ...views.map(([key, label]) =>
+    segment(label, encounterView === key, () => {
+      encounterView = key;
+      restoreScroll = 0;
+      if (key === "difficulty" && sceneReady) refreshCombat(true);
+      rerender();
+    }))),
+    ...(encounterView === "creatures" ? creatures.render() : encounterView === "import" ? [renderLifeManagerPanel(), ...renderPackageTab()] : renderCombatTab())];
+}
+
+function manageParty() {
+  partyView = "manage";
+  store.set("butler.partyView", partyView);
+  restoreScroll = 0;
+  rerender();
+}
+
+function renderParty(): Child[] {
+  return [h("div", { className: "seg", role: "group", "aria-label": "Party" },
+    segment("Overview", partyView !== "manage", () => {
+      partyView = "overview";
+      store.set("butler.partyView", partyView);
+      restoreScroll = 0;
+      if (sceneReady) refreshPlayersTab(true);
+      rerender();
+    }),
+    segment("Manage", partyView === "manage", manageParty)),
+    ...(partyView === "manage" ? renderPartyTab() : renderPlayersTab(manageParty))];
+}
+
+function refreshTab(immediate = false) {
+  if (!sceneReady || role !== "GM") return;
+  if (tab === "tracker") refreshTracker(immediate);
+  if (tab === "encounter" && encounterView === "difficulty") refreshCombat(immediate);
+  if (tab === "party" && partyView !== "manage") refreshPlayersTab(immediate);
+  if (tab === "party" && partyView === "manage") void refreshPartyPanel();
+  if (tab === "dm") refreshDmTab(immediate);
+}
+
+function selectTab(next: Tab) {
+  if (next === tab) return;
+  scrollByTab.set(tab, window.scrollY);
+  tab = next;
+  restoreScroll = scrollByTab.get(tab) ?? 0;
+  store.set("butler.tab", tab);
+  ui.error = "";
+  refreshTab(true);
+  rerender();
 }
 
 function render() {
@@ -56,15 +106,19 @@ function render() {
     return;
   }
   const nodes: Child[] = [
-    h("nav", { className: "tabs" }, ...TABS.map(([t, label]) =>
-      h("button", { className: t === tab ? "on" : "", onclick: () => { tab = t; store.set("butler.tab", t); ui.error = ""; if (t === "combat") refreshCombat(true); if (t === "tracker") refreshTracker(true); if (t === "players") refreshPlayersTab(true); if (t === "dm") refreshDmTab(true); rerender(); } }, label))),
+    h("nav", { className: "tabs", "aria-label": "DM navigation" }, ...TABS.map(([key, label]) =>
+      h("button", { className: key === tab ? "on" : "", "aria-current": key === tab ? "page" : null,
+        "data-nav": key, onclick: () => selectTab(key) }, label))),
   ];
-  if (!sceneReady) nodes.push(h("div", { className: "panel warn" }, "Open a scene in Owlbear — this panel updates when it's ready."));
-  if (ui.error) nodes.push(h("div", { className: "panel bad" }, ui.error, " ", h("button", { className: "icon", onclick: () => { ui.error = ""; rerender(); } }, "✕")));
-  nodes.push(...(tab === "tracker" ? renderTrackerTab() : tab === "players" ? renderPlayersTab() : tab === "creatures" ? renderCreaturesTab() : tab === "party" ? renderPartyTab() : tab === "dm" ? renderDmTab() : renderCombatTab()));
+  if (!sceneReady && tab !== "settings") nodes.push(h("div", { className: "panel warn" }, "Open a scene in Owlbear to use this tab."));
+  if (ui.error) nodes.push(h("div", { className: "panel bad", role: "alert" }, ui.error, " ", h("button", { className: "icon", "aria-label": "Dismiss error", onclick: () => { ui.error = ""; rerender(); } }, "✕")));
+  if (tab === "settings") nodes.push(renderSettings());
+  else if (sceneReady) nodes.push(...(tab === "tracker" ? renderTrackerTab() : tab === "encounter" ? renderEncounter() : tab === "party" ? renderParty() : renderDmTab()));
+  const navFocus = focused?.dataset.nav;
   app.replaceChildren(...nodes.filter((n): n is Node | string => !!n));
-  window.scrollTo(0, scrollY);
-  if (focused && focused !== document.body && focused.isConnected && document.activeElement !== focused) focused.focus();
+  window.scrollTo(0, restoreScroll ?? scrollY);
+  restoreScroll = undefined;
+  if (navFocus) app.querySelector<HTMLElement>(`[data-nav="${navFocus}"]`)?.focus({ preventScroll: true });
 }
 setRerender(render);
 
@@ -84,10 +138,7 @@ if (OBR.isAvailable) {
       sceneReady = r;
       if (!r) { resetLifeManagerPanel(); resetPackageTab(); resetPartyTab(); resetCombatTab(); resetTrackerTab(); resetPartyPanel(); resetPlayersTab(); resetDmTab(); }
       else if (role === "PLAYER") void initPlayerItems(() => render()).then(render);
-      else if (tab === "tracker") refreshTracker(true);
-      else if (tab === "combat") refreshCombat(true);
-      else if (tab === "players") refreshPlayersTab(true);
-      else if (tab === "dm") refreshDmTab(true);
+      else refreshTab(true);
       if (r) void initVisionPanel(() => render()).then(render);
       render();
     });
@@ -95,9 +146,10 @@ if (OBR.isAvailable) {
     if (role === "PLAYER" && sceneReady) await initPlayerItems(() => render());
     if (sceneReady) await initVisionPanel(() => render());
     render();
-    // Combat tab follows the scene live (tokens added, removed, initiative changed…)
-    OBR.scene.items.onChange(() => { if (role !== "GM") return; if (tab === "combat") refreshCombat(); if (tab === "tracker") refreshTracker(); if (tab === "party") void refreshPartyPanel(); if (tab === "players") refreshPlayersTab(); if (tab === "dm") refreshDmTab(); });
-    OBR.scene.onMetadataChange(() => { if (tab === "tracker") refreshTracker(); if (tab === "dm") refreshDmTab(); });
+    OBR.scene.items.onChange(() => refreshTab());
+    OBR.scene.onMetadataChange(() => {
+      if (tab === "tracker" || tab === "dm") refreshTab();
+    });
   });
 } else {
   app.append(h("div", { className: "panel" }, "This page is an Owlbear Rodeo extension. Add ", h("code", {}, new URL("manifest.json", location.href).toString()),

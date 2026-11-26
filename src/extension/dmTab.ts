@@ -14,6 +14,7 @@ import { aoePanel, refreshAreas } from "./aoePanel";
 import { hazardsPanel, refreshHazards } from "./hazardsPanel";
 import { battlePanel, refreshBattle } from "./battlePanel";
 import { navalPanel } from "./navalPanel";
+import { visionPanel } from "./visionPanel";
 import { obrGateway } from "./obrGateway";
 import { roomSettings } from "./roomSettings";
 
@@ -37,8 +38,34 @@ export function refreshDmTab(immediate = false) {
 document.addEventListener("focusout", () => { if (pending) { pending = false; setTimeout(rerender, 0); } });
 export function resetDmTab() { view = null; }
 
+const openTools = new Map<string, boolean>();
+
+function toolPanel(key: string, panel: Child): Child {
+  if (!(panel instanceof HTMLDetailsElement)) return panel;
+  panel.open = openTools.get(key) ?? panel.open;
+  const initialOpen = panel.open;
+  panel.addEventListener("toggle", () => {
+    if (panel.isConnected && (panel.open !== initialOpen || openTools.has(key))) openTools.set(key, panel.open);
+  });
+  return panel;
+}
+
 export function renderDmTab(): Child[] {
   if (!view) { refreshDmTab(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const units = [...view.order, ...view.waiting, ...view.outside];
-  return [moralePanel(units, sceneMeta), chasePanel(units, sceneMeta, view.encounter.started, grid), aoePanel(units), hazardsPanel(units), mobPanel(units), objectsPanel(sceneMeta), roomSettings().massCombat ? battlePanel(units) : null, roomSettings().naval ? navalPanel(units, sceneMeta) : null];
+  return [
+    h("section", { className: "stack", "aria-labelledby": "map-tools" },
+      h("h2", { id: "map-tools" }, "Map tools"),
+      toolPanel("areas", aoePanel(units)),
+      toolPanel("hazards", hazardsPanel(units)),
+      toolPanel("vision", visionPanel("GM", rerender, units)),
+      toolPanel("objects", objectsPanel(sceneMeta))),
+    h("section", { className: "stack", "aria-labelledby": "rules-tools" },
+      h("h2", { id: "rules-tools" }, "Rules tools"),
+      toolPanel("morale", moralePanel(units, sceneMeta)),
+      chasePanel(units, sceneMeta, view.encounter.started, grid),
+      toolPanel("mob", mobPanel(units)),
+      roomSettings().massCombat ? battlePanel(units) : null,
+      roomSettings().naval ? navalPanel(units, sceneMeta) : null),
+  ];
 }

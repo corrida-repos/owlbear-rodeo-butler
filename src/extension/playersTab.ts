@@ -68,10 +68,11 @@ function card(u: TrackerUnit): HTMLElement {
     conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.level ? ` ${c.level}` : "", c.detail ? ` ${c.detail}` : ""))) : null);
 }
 
-export function renderPlayersTab(): Child[] {
+export function renderPlayersTab(manageParty: () => void): Child[] {
   if (!units) { refreshPlayersTab(true); return [h("div", { className: "panel small muted" }, "Reading the party…")]; }
   const party = units.filter((u) => u.party).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  if (!party.length) return [h("div", { className: "panel small muted" }, "No party members in this scene yet. Add them in the Add Party tab (D&D Beyond sync, or mark a unit that's already here as a party member).")];
+  if (!party.length) return [h("div", { className: "panel stack" }, h("div", {}, "No party members in this scene yet."),
+    h("button", { onclick: manageParty }, "Add party members"))];
   const stats = party.map((u) => playerStats(u.sheet, u.state, u));
   const lowest = (f: (s: (typeof stats)[number]) => number) => Math.min(...stats.map(f));
   return [

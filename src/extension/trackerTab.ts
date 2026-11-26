@@ -17,7 +17,7 @@ import { movementInfo } from "./movementView";
 import { action, h, rerender, ui, type Child } from "./dom";
 import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
-import { visionPanel } from "./visionPanel";
+import { renderRollLog } from "./rollLogView";
 import { moralePrompt } from "./moralePanel";
 import { martialPanel } from "./martialPanel";
 import { castResultsPanel } from "./castUi";
@@ -112,30 +112,35 @@ function row(u: TrackerUnit, v: TrackerView, tie: { up: boolean; down: boolean }
       h("button", { className: "icon tiny", title: "Remove from initiative", onclick: action(() => setInEncounter(obrGateway, [u.id], false)) }, "✕")));
 }
 
-function controls(v: TrackerView): Child {
+let encounterActionsOpen = false;
+
+function controls(v: TrackerView): Child[] {
   const e = v.encounter;
   const act = (a: EncounterAction) => action(async () => { notes = []; await encounterAction(obrGateway, a); });
   const activeName = v.order.find((u) => u.id === v.active)?.name;
-  return h("div", { className: "panel stack tight" },
-    h("div", { className: "row between" },
+  return [h("div", { className: "panel row between tracker-turn" },
       h("div", {}, e.started ? h("span", {}, h("strong", { className: "round" }, `Round ${e.round}`), activeName ? ` · ${activeName}'s turn` : "") : h("strong", {}, "Not in combat")),
       e.started
         ? h("div", { className: "row" },
           h("button", { className: "secondary", disabled: ui.busy || !e.history.length, onclick: act("previous") }, "◀ Prev"),
           h("button", { disabled: ui.busy || !v.order.length, onclick: act("next") }, "Next turn ▶"))
         : h("button", { disabled: ui.busy || !v.order.length, onclick: act("start") }, "Start combat")),
-    h("div", { className: "row" },
+    h("div", { className: "panel stack tight" }, h("div", { className: "row" },
       h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "all", { rules: roomSystem().rules }); }) }, "Roll all"),
-      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "creatures", { rules: roomSystem().rules }); }) }, "Roll creatures"),
-      h("button", { className: "secondary small", disabled: ui.busy, title: "Clear initiative values and the round; units stay in the encounter", onclick: act("reset") }, "Reset round & initiative"),
-      e.started ? h("button", { className: "secondary small", disabled: ui.busy, onclick: act("end") }, "End combat") : null),
-    followToggle());
+      h("button", { className: "secondary small", disabled: ui.busy || !(v.order.length + v.waiting.length), onclick: action(async () => { await rollSceneInitiative(obrGateway, "creatures", { rules: roomSystem().rules }); }) }, "Roll creatures")),
+    h("details", { open: encounterActionsOpen, ontoggle: (e: Event) => {
+      const details = e.currentTarget as HTMLDetailsElement;
+      if (details.isConnected) encounterActionsOpen = details.open;
+    } }, h("summary", {}, "Encounter actions"),
+    h("div", { className: "row" }, h("button", { className: "secondary small", disabled: ui.busy, title: "Clear initiative values and the round; units stay in the encounter", onclick: act("reset") }, "Reset round & initiative"),
+      e.started ? h("button", { className: "secondary small", disabled: ui.busy, onclick: act("end") }, "End combat") : null)),
+    followToggle())];
 }
 
 export function renderTrackerTab(): Child[] {
   if (!view) { refreshTracker(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const v = view;
-  const out: Child[] = [controls(v), moralePrompt([...v.order, ...v.waiting, ...v.outside], sceneMeta), castResultsPanel([...v.order, ...v.waiting, ...v.outside], sceneMeta), martialPanel(sceneMeta, [...v.order, ...v.waiting, ...v.outside], sceneItems)];
+  const out: Child[] = [...controls(v), moralePrompt([...v.order, ...v.waiting, ...v.outside], sceneMeta), castResultsPanel([...v.order, ...v.waiting, ...v.outside], sceneMeta), martialPanel(sceneMeta, [...v.order, ...v.waiting, ...v.outside], sceneItems)];
   if (notes.length) out.push(h("div", { className: "panel warn small" }, ...notes.map((n) => h("div", {}, n)), h("button", { className: "icon tiny", onclick: () => { notes = []; rerender(); } }, "OK")));
   out.push(h("div", { className: "panel tracker" },
     v.order.length ? null : h("div", { className: "small muted" }, "Nobody has an initiative yet. Roll above, or type players' rolls in the boxes below."),
@@ -160,6 +165,6 @@ export function renderTrackerTab(): Child[] {
         h("span", {}, "☠ ", h("button", { className: "linkish", onclick: () => void openCard(u.id) }, u.name)),
         h("button", { className: "secondary small", onclick: action(() => reviveUnits(obrGateway, [u.id])) }, "Revive")))));
   }
-  out.push(visionPanel("GM", rerender, [...v.order, ...v.waiting, ...v.outside].map((u) => ({ id: u.id, name: u.name, party: u.party }))));
+  out.push(renderRollLog());
   return out;
 }

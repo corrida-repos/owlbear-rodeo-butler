@@ -196,7 +196,7 @@ function renderPreview(p: PartyPackage, pv: PartyPreview): Child[] {
           "Create tokens for characters without one"),
         h("label", { style: "flex-direction:column;gap:2px" }, "Initiative",
           h("select", { onchange: (e: Event) => { opts.initiative = (e.target as HTMLSelectElement).value as InitChoice; store.set("butler.partyInitiative", opts.initiative); } },
-            h("option", { value: "keep", selected: opts.initiative === "keep" }, "don't touch (roll it in the Combat tab)"),
+            h("option", { value: "keep", selected: opts.initiative === "keep" }, "don't touch (roll it in Tracker)"),
             h("option", { value: "unset", selected: opts.initiative === "unset" }, "roll for anyone without one"),
             h("option", { value: "all", selected: opts.initiative === "all" }, "re-roll for everyone"))),
         h("label", { style: "flex-direction:column;gap:2px" }, "Current HP",
