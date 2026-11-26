@@ -1,3 +1,4 @@
+import { martialArmorClass } from "../core/martial";
 /**
  * Action bar → Cast: for an entry with an attack roll, a saving throw or damage (a spell, a breath weapon, a sword),
  * pick the targets (each listed with its distance and whether it's in range, or everyone in a placed area for it),
@@ -84,7 +85,7 @@ async function computeTargets(ctx: CastCtx, it: ActionItem, sig: string) {
     if (!b) continue;
     const feet = gridFeet(me, b, dpi, fpc, measurement as Measurement);
     const band = ctx.reach ? bandFor(ctx.reach, feet) : null;
-    list.push({ id: i.id, name: shownName(i, ctx.role), feet, band: band?.label ?? null, long: band?.kind === "long", ac: u.sheet.ac, party: u.state.party });
+    list.push({ id: i.id, name: shownName(i, ctx.role), feet, band: band?.label ?? null, long: band?.kind === "long", ac: martialArmorClass(u.sheet, u.state.conditions), party: u.state.party });
   }
   list.sort((a, b) => a.feet - b.feet);
   cache = { key: it.key, sig, list };

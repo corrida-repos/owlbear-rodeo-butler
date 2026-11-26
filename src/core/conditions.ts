@@ -9,6 +9,7 @@
  */
 import type { ConditionInstance, UnitState } from "./sheet";
 import type { GameSystem } from "./systems";
+import { isMartialLink } from "./martial";
 import { condition } from "./hp";
 
 export interface TurnPoint { round: number; turnId: string }
@@ -24,7 +25,7 @@ export function addCondition(
   key: string,
   opts: { label?: string; note?: string; level?: number; duration?: Duration; now?: TurnPoint | null } = {},
 ): Partial<UnitState> {
-  const same = (c: ConditionInstance) => c.key === key && (key !== "custom" || (c.label ?? "").toLowerCase() === (opts.label ?? "").toLowerCase());
+  const same = (c: ConditionInstance) => !isMartialLink(c) && !c.id.startsWith("martial:binding:") && c.key === key && (key !== "custom" || (c.label ?? "").toLowerCase() === (opts.label ?? "").toLowerCase());
   const rest = state.conditions.filter((c) => !same(c));
   const d = opts.duration ?? { kind: "none" };
   const until: ConditionInstance["until"] | undefined =

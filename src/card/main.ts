@@ -1,3 +1,4 @@
+import { martialArmorClass } from "../core/martial";
 /**
  * Unit card popover (card.html?id=<itemId>), F2 + F3 + F7.
  *  - GM, or a player who controls the unit: the full stat block, every roll clickable.
@@ -301,7 +302,7 @@ function statsBar(sheet: UnitSheet, state: UnitState): Child {
   const init = initiativeRoll(sheet, roomSystem().rules, state);
   const max = maxHp(sheet, state);
   return h("div", { className: "statbar" },
-    h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(sheet.ac)), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),
+    h("div", { className: "stat" }, h("span", { className: "k" }, "AC"), h("span", { className: "v" }, String(martialArmorClass(sheet, state.conditions))), sheet.acNote ? h("span", { className: "small muted" }, sheet.acNote) : null),
     h("div", { className: "stat" }, h("span", { className: "k" }, "HP"),
       h("span", { className: `v${state.hp * 2 <= max ? " low" : ""}` }, `${state.hp}/${max}`),
       state.tempHp ? h("span", { className: "small ok" }, `+${state.tempHp} temp`) : sheet.hp.formula ? h("span", { className: "small muted" }, sheet.hp.formula) : null,

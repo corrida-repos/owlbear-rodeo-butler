@@ -1,3 +1,5 @@
+import { martialRequest, martialWatch } from "./martial";
+import { readMartial, readMartialQueue } from "../core/martial";
 /**
  * Background script: loaded once per client (GM and every player) while the extension is enabled in the room,
  * even when no popover is open.
@@ -235,7 +237,7 @@ async function onSceneChange() {
       const mv = primary ? await trackMovement(meta, active) : readMovement(meta);
       const au = v.order.find((u) => u.id === mv?.unitId);
       const movement = mv && au && active?.id === au.id
-        ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
+        ? (() => { const lim = speedLimit(au.sheet, { dash: mv.dash, state: au.state, penalty: speedPenalty(roomSystem(), au.state) }); const moved = movedFeet(mv); return { unitId: au.id, text: `${moved}/${lim} ft${mv.dash ? " Dash" : ""}`, over: moved > lim }; })()
         : null;
       await updateOverlays([...v.order, ...v.waiting, ...v.outside], items, role, roomSystem(), movement);
       await updateBattle(roomSettings().massCombat ? items : [], meta, role, (t) => notify(t, "SUCCESS")).catch((e) => console.error("[Butler] mass combat badges failed", e));
@@ -250,6 +252,18 @@ async function onSceneChange() {
       if (primary && roomSettings().naval) for (const line of await navalWatch(meta).catch((e) => { console.error("[Butler] naval falls failed", e); return [] as string[]; })) await notify(line, "WARNING");
       await updateDarkness([...v.order, ...v.waiting, ...v.outside], items, role, meta, selection, roomSystem().rules)
         .catch((e) => console.error("[Butler] darkness fog failed", e));
+      const hasMartialState = lite.some((u) => {
+        const m = readMartial(u.metadata);
+        return m.grapples?.length || m.binding || !active && m.shotRound !== undefined
+          || (u.metadata[STATE_KEY] as { conditions?: { id: string }[] } | undefined)?.conditions?.some((c) => c.id.startsWith("martial:") && (c.id.endsWith(":hold") || !active && (c.id.startsWith("martial:short:") || c.id === "martial:speech-lost" || c.id === "martial:neck-guard")));
+      });
+      if (primary && (hasMartialState || readMartialQueue(meta).length)) {
+        const next = active ? { round: active.round, turnId: active.id } : null;
+        const prev = lastTurn;
+        const pos = (id: string) => v.order.findIndex((u) => u.id === id);
+        const forward = next && prev && (next.round > prev.round || next.round === prev.round && pos(next.turnId) > pos(prev.turnId));
+        for (const line of await martialWatch(forward ? prev : null, next).catch((e) => { console.error("[Butler] martial effects failed", e); return []; })) await notify(line, "WARNING");
+      }
       const key = v.encounter.started && v.active ? `${v.encounter.round}:${v.active}` : "";
       if (key === lastTurnKey) continue;
       const firstLook = lastTurnKey === null;
@@ -350,6 +364,15 @@ async function handleRequest(req: unknown) {
     }
     const name = (it as { text?: { plainText?: string } }).text?.plainText || it.name;
     switch (req.type) {
+      case "martial":
+      case "martial-displace":
+      case "martial-review":
+      case "martial-care": {
+        const line = await martialRequest(req, fromGm);
+        if (line) await notify(line);
+        break;
+      }
+
       case "cast": {
         // The caster's id and name come from the token, not the request.
         const line = await receiveCast({ ...req.record, caster: { id: req.unitId, name } });

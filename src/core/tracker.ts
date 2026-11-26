@@ -1,3 +1,4 @@
+import { martialArmorClass } from "./martial";
 /**
  * The initiative tracker's data and GM operations (F4, F5, F6, F10), on top of the SceneGateway so they run against
  * Owlbear or the in-memory test scene. Turn logic is in encounter.ts, HP rules in hp.ts.
@@ -51,7 +52,7 @@ export function trackerUnits(items: SceneItemLite[]): TrackerUnit[] {
       hidden: i.visible === false,
       dead: isDead(state),
       imageUrl: state.portraitUrl || i.image?.url,
-      hp: state.hp, maxHp: maxHp(sheet, state), tempHp: state.tempHp, ac: sheet.ac,
+      hp: state.hp, maxHp: maxHp(sheet, state), tempHp: state.tempHp, ac: martialArmorClass(sheet, state.conditions),
     }];
   });
 }

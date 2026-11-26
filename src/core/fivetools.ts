@@ -298,6 +298,7 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
   const pb = proficiencyBonusForCr(cr.value);
 
   const acRaw = Array.isArray(m.ac) ? m.ac[0] : undefined;
+  const shield = (Array.isArray(acRaw?.from) ? acRaw.from : []).find((from: unknown) => typeof from === "string" && /\bshield\b/i.test(from));
   const ac = typeof acRaw === "number" ? acRaw : typeof acRaw?.ac === "number" ? acRaw.ac : NaN;
   if (!Number.isFinite(ac)) flags.push("Armor class could not be parsed.");
   if (Array.isArray(m.ac) && m.ac.length > 1) flags.push(`Multiple AC values listed; using ${ac}.`);
@@ -372,6 +373,7 @@ export function convertMonster(input: any, opts: ConvertOptions = {}): Statblock
     type: typeStr || undefined,
     alignment: alignmentText(m.alignment) || undefined,
     ac: Number.isFinite(ac) ? ac : 10,
+    ...(typeof shield === "string" ? { shieldAcBonus: 2 + Number(/\+(\d+)\b/.exec(shield)?.[1] ?? 0) } : {}),
     hp: { max: Number.isFinite(hpAvg) ? hpAvg : 1, formula: m.hp?.formula },
     speed: {
       walk: speedValue(sp.walk), swim: speedOrUndef(sp.swim), fly: speedOrUndef(sp.fly), climb: speedOrUndef(sp.climb),

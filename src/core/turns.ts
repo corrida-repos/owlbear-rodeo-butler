@@ -2,6 +2,7 @@
  * Requests a player's client sends to the GM's client, which checks and applies them. Players can't write the
  * encounter record, and Owlbear only lets them change tokens they own, so these go through the GM.
  */
+import { isDisplacement, isMartialMove, type Displacement, type MartialMove } from "./martial";
 import { BUTLER_NS } from "./constants";
 import type { CastRecord } from "./cast";
 import type { Duration } from "./conditions";
@@ -60,7 +61,12 @@ export type BattleOp =
   | { op: "move"; dir: Direction } | { op: "undo-move" } | { op: "end-turn" };
 export type BattleRequest = Base & { type: "battle"; round: number } & BattleOp;
 const BATTLE_OPS = ["attack", "guard-attack", "dash", "defend", "disengage", "guard", "move", "undo-move", "end-turn"];
-export type PlayerRequest = BattleRequest | CastRequest | CastSaveRequest | EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
+export type MartialRequest = Base & ({ type: "martial"; targetId: string; move: MartialMove; round: number }
+  | { type: "martial-review"; entryId: string; options?: { defense: "str" | "dex"; ability: "str" | "dex" | "int" | "wis" | "cha" | "con"; acAdjustment: number; permanent: boolean; breathless: boolean; partAc: number; partHp: number; partImmune: string; holdingLimb?: string; cannotMaintain?: boolean } }
+  | { type: "martial-displace"; heldId: string; grapplerMove: Displacement; heldMove: Displacement; dc: number; canFollow: boolean }
+  | { type: "martial-care"; care: "rest"; injuryId?: never }
+  | { type: "martial-care"; care: "restore" | "restore-part"; injuryId: string });
+export type PlayerRequest = MartialRequest | BattleRequest | CastRequest | CastSaveRequest | EndTurnRequest | DeathSaveRequest | DeathSaveSetRequest | ZeroHpChoiceRequest | ConcentrationRequest | RewindRequest | DashRequest
   | HpRequest | InitiativeRequest | ConditionAddRequest | ConditionRemoveRequest | SheetSyncRequest | WildShapeRequest | LightRequest;
 
 /** Requests that edit a unit's state or sheet: only applied while the room allows player edits. */
@@ -69,6 +75,19 @@ export const EDIT_REQUESTS: PlayerRequest["type"][] = ["hp", "initiative", "cond
 export function isPlayerRequest(x: unknown): x is PlayerRequest {
   const r = x as PlayerRequest;
   if (!r || r.v !== 1 || typeof r.unitId !== "string" || typeof r.playerId !== "string" || typeof r.playerName !== "string") return false;
+  if (r.type === "martial") return typeof r.targetId === "string" && Number.isInteger(r.round) && isMartialMove(r.move);
+  if (r.type === "martial-review") return typeof r.entryId === "string" && (r.options === undefined || (
+    ["str", "dex"].includes(r.options?.defense) && ["str", "dex", "int", "wis", "cha", "con"].includes(r.options.ability)
+    && Number.isInteger(r.options.acAdjustment) && Math.abs(r.options.acAdjustment) <= 20
+    && typeof r.options.permanent === "boolean" && typeof r.options.breathless === "boolean"
+    && Number.isInteger(r.options.partAc) && r.options.partAc >= 0 && r.options.partAc <= 40
+    && Number.isInteger(r.options.partHp) && r.options.partHp >= 0 && r.options.partHp <= 9999
+    && typeof r.options.partImmune === "string" && r.options.partImmune.length <= 150
+    && (r.options.holdingLimb === undefined || typeof r.options.holdingLimb === "string")
+    && (r.options.cannotMaintain === undefined || typeof r.options.cannotMaintain === "boolean")));
+  if (r.type === "martial-displace") return typeof r.heldId === "string" && isDisplacement(r.grapplerMove) && isDisplacement(r.heldMove)
+    && Number.isInteger(r.dc) && r.dc >= 1 && r.dc <= 40 && typeof r.canFollow === "boolean";
+  if (r.type === "martial-care") return r.care === "rest" || (["restore", "restore-part"].includes(r.care) && typeof r.injuryId === "string");
   if (r.type === "end-turn") return typeof r.round === "number";
   if (r.type === "battle") {
     const b = r as BattleRequest;

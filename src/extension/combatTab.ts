@@ -148,6 +148,8 @@ function renderSettings(): Child {
       roomSystem().rules === "2024"
         ? "Action bars include the 2014 DMG's optional action options, labelled 2014 DMG (optional): Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature (the 2024 DMG doesn't have them)"
         : "Action bars include the DMG's optional action options (Disarm, Mark, Overrun, Shove Aside, Tumble, Climb onto a Bigger Creature)"),
+    h("label", { className: "small" }, h("input", { type: "checkbox", checked: roomSettings().martialOptions, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ martialOptions: (e.target as HTMLInputElement).checked }))() }),
+      "Martial house rules: called shots, injuries and advanced grapples"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().handheld, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ handheld: (e.target as HTMLInputElement).checked }))() }),
       "Handheld management: action bars include Don or Doff a Shield, Equip or Unequip a Weapon (5.5E) and the notes on drawing weapons and swapping spellcasting foci with your free object interaction"),
     h("label", { className: "small", style: "margin-top:4px" }, h("input", { type: "checkbox", checked: roomSettings().autoApplyCasts, disabled: ui.busy, onchange: (e: Event) => void action(() => setRoomSettings({ autoApplyCasts: (e.target as HTMLInputElement).checked }))() }),

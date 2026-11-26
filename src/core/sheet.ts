@@ -44,6 +44,8 @@ export interface UnitSheet {
   alignment?: string;
   ac: number;
   acNote?: string;
+  /** Shield contribution already included in AC, when known. */
+  shieldAcBonus?: number;
   hp: { max: number; formula?: string };
   speed: { walk: number; swim?: number; fly?: number; climb?: number; burrow?: number; hover?: boolean };
   abilities: Record<Ability, number>;
@@ -157,6 +159,7 @@ export function validateSheet(x: unknown): string[] {
   if (x.kind !== "creature" && x.kind !== "character") e.push("kind: creature or character");
   if (typeof x.size !== "string" || !(x.size in SIZE_CELLS)) e.push("size: T/S/M/L/H/G");
   if (!isNum(x.ac)) e.push("ac: number");
+  if (x.shieldAcBonus !== undefined && (!isNum(x.shieldAcBonus) || x.shieldAcBonus < 0)) e.push("shieldAcBonus: non-negative number");
   if (!isObj(x.hp) || !isNum(x.hp.max) || x.hp.max <= 0) e.push("hp.max: > 0");
   if (!isObj(x.speed) || !isNum(x.speed.walk)) e.push("speed.walk: number");
   if (!isObj(x.abilities) || !ABILITIES.every((a) => isNum(x.abilities[a]))) e.push("abilities: six numbers");

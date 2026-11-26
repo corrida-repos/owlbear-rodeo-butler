@@ -131,7 +131,7 @@ export function displayConditions(system: GameSystem, sheet: Pick<UnitSheet, "hp
   const defs = new Map(system.conditions.map((c) => [c.key, c]));
   const out: ShownCondition[] = state.conditions
     .filter((c) => !defs.get(c.key)?.automatic)
-    .map((c) => ({ key: c.key, label: c.label ?? defs.get(c.key)?.label ?? c.key, level: c.level }));
+    .map((c) => ({ key: c.key, label: c.label ?? defs.get(c.key)?.label ?? c.key, level: c.level, ...(c.id.startsWith("martial:") && c.note ? { detail: c.note } : {}) }));
   if (needsDeathSaves(state)) {
     const ds = state.deathSaves ?? { successes: 0, failures: 0 };
     out.push({ key: "death-saves", label: "Death Saves", automatic: true, detail: `${ds.successes} ✓ / ${ds.failures} ✗` });

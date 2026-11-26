@@ -328,6 +328,8 @@ export function convertDdbCharacter(c: any, opts: DdbConvertOptions = {}): Party
     type: [c.race?.fullName, classes].filter(Boolean).join(" · ") || undefined,
     alignment: ALIGNMENT[c.alignmentId] || undefined,
     ac,
+    ...(shield && !acOverride ? { shieldAcBonus: (shield.definition.armorClass ?? 2) + find("bonus", "armor-class")
+      .filter((m) => m._group === "item" && m.componentId === shield.definition.id).reduce((total, m) => total + bonusValue(m), 0) } : {}),
     hp: { max: hp.max },
     speed: {
       walk, swim: speedOrUndef(innate("swimming", rs.swim)), fly: speedOrUndef(innate("flying", rs.fly)),

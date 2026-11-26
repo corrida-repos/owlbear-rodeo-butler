@@ -15,6 +15,7 @@
  *    or Alive (see zeroHpChoicePatch). Until then a party member is on death saves (the rules' default) and a creature
  *    is simply at 0 HP. Death saves aren't only for the party: a creature put on them follows the same rules.
  */
+import { cannotRecoverHp } from "./martial";
 import { maxHp, type ConditionInstance, type UnitSheet, type UnitState } from "./sheet";
 import { DND5E_2024, isDead, isStable, type GameSystem } from "./systems";
 
@@ -55,6 +56,9 @@ const without = (conds: ConditionInstance[], key: string) => conds.filter((c) =>
 const ZERO = { successes: 0, failures: 0 };
 
 export function applyHp(sheet: Pick<UnitSheet, "hp">, state: S, change: HpChange, system: Pick<GameSystem, "concentrationDc"> = DND5E_2024): HpResult {
+  if (cannotRecoverHp(state) && (change.kind === "heal" || change.kind === "set" && change.amount > state.hp)) {
+    throw new Error("This creature can't regain HP until it can breathe.");
+  }
   const max = maxHp(sheet, state);
   const events: HpEvent[] = [];
   const patch: Partial<UnitState> = {};
@@ -131,9 +135,10 @@ export function applyDeathSave(state: S, natural: number): { patch: Partial<Unit
 
 function deathSaveResult(state: S, natural: number): { patch: Partial<UnitState>; outcome: DeathSaveOutcome } {
   const ds = state.deathSaves ?? ZERO;
-  if (natural >= 20) return { patch: { hp: 1, deathSaves: undefined, conditions: without(state.conditions, "stable") }, outcome: "regain-1-hp" };
+  const suffocating = cannotRecoverHp(state);
+  if (natural >= 20 && !suffocating) return { patch: { hp: 1, deathSaves: undefined, conditions: without(state.conditions, "stable") }, outcome: "regain-1-hp" };
   if (natural >= 10) {
-    const successes = ds.successes + 1;
+    const successes = Math.min(suffocating ? 2 : 3, ds.successes + 1);
     if (successes >= 3) return { patch: { deathSaves: { ...ZERO }, conditions: [...without(state.conditions, "stable"), condition("stable")] }, outcome: "stable" };
     return { patch: { deathSaves: { ...ds, successes } }, outcome: "success" };
   }
@@ -147,7 +152,7 @@ function deathSaveResult(state: S, natural: number): { patch: Partial<UnitState>
  */
 export function setDeathSaveCounts(state: S, successes: number, failures: number): { patch: Partial<UnitState>; outcome: "set" | "stable" | "dead" } {
   const clamp = (n: number) => Math.max(0, Math.min(3, Math.floor(Number(n) || 0)));
-  const s = clamp(successes), f = clamp(failures);
+  const s = Math.min(cannotRecoverHp(state) ? 2 : 3, clamp(successes)), f = clamp(failures);
   const pending = state.zeroHpPending ? { zeroHpPending: undefined } : {};
   if (s >= 3) return { patch: { deathSaves: { ...ZERO }, conditions: [...without(state.conditions, "stable"), condition("stable")], ...pending }, outcome: "stable" };
   return { patch: { deathSaves: { successes: s, failures: f }, ...pending }, outcome: f >= 3 ? "dead" : "set" };
@@ -173,6 +178,7 @@ export function revive(state: Pick<UnitState, "conditions">): Partial<UnitState>
 
 /** Stable set by hand on a party member at 0 HP: supersedes Death Saves (counters reset; stays in initiative). */
 export function setStable(state: Pick<UnitState, "conditions" | "hp" | "party" | "deathSaves">): Partial<UnitState> {
+  if (cannotRecoverHp(state)) throw new Error("This creature can’t stabilize until it can breathe.");
   if (state.hp > 0 || !(state.party || state.deathSaves)) throw new Error("Only a unit at 0 HP making death saves can be made Stable this way.");
   return { conditions: [...without(state.conditions, "stable"), condition("stable")], deathSaves: state.party ? { ...ZERO } : undefined, zeroHpPending: undefined };
 }
@@ -199,6 +205,7 @@ function lifeStatus(state: Pick<UnitState, "conditions" | "hp" | "party" | "deat
   const toZero = (conds: ConditionInstance[]): Partial<UnitState> => state.hp > 0
     ? { hp: 0, conditions: without(conds, "concentration"), concentrationCheck: undefined }
     : { conditions: conds };
+  if (to === "stable" && cannotRecoverHp(state)) throw new Error("This creature can’t stabilize until it can breathe.");
   if (to === "stable") return { ...toZero([...base, condition("stable")]), deathSaves: state.party ? { ...ZERO } : undefined };
   if (to === "dying") return { ...toZero(base), deathSaves: { ...ZERO } };
   return { conditions: base, deathSaves: state.party && state.hp <= 0 ? { ...ZERO } : undefined };
@@ -215,6 +222,7 @@ export type ZeroHpChoice = "dead" | "dying" | "stable" | "alive";
 export const ZERO_HP_CHOICES: ZeroHpChoice[] = ["dead", "dying", "stable", "alive"];
 
 export function zeroHpChoicePatch(state: Pick<UnitState, "conditions" | "hp" | "party" | "deathSaves" | "zeroHpPending">, choice: ZeroHpChoice): Partial<UnitState> {
+  if (choice === "alive" && cannotRecoverHp(state)) throw new Error("This creature can’t regain HP until it can breathe.");
   if (choice === "alive") {
     return { hp: Math.max(1, state.hp), conditions: without(without(state.conditions, "dead"), "stable"), deathSaves: undefined, zeroHpPending: undefined };
   }

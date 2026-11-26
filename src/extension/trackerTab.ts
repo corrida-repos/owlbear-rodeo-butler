@@ -19,10 +19,12 @@ import { obrGateway } from "./obrGateway";
 import { roomSettings, roomSystem } from "./roomSettings";
 import { visionPanel } from "./visionPanel";
 import { moralePrompt } from "./moralePanel";
+import { martialPanel } from "./martialPanel";
 import { castResultsPanel } from "./castUi";
 
 let view: TrackerView | null = null;
 let sceneMeta: Record<string, unknown> = {};
+let sceneItems: Awaited<ReturnType<typeof obrGateway.getItems>> = [];
 let notes: string[] = [];
 let outsideOpen = false;
 let pending = false;
@@ -32,7 +34,7 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 export function refreshTracker(immediate = false) {
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
-    try { sceneMeta = await OBR.scene.getMetadata(); view = trackerView(await obrGateway.getItems(), sceneMeta); } catch { return; }
+    try { sceneMeta = await OBR.scene.getMetadata(); sceneItems = await obrGateway.getItems(); view = trackerView(sceneItems, sceneMeta); } catch { return; }
     const a = document.activeElement;
     if (a && a.closest("#app") && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName) && (a as HTMLInputElement).type !== "checkbox") { pending = true; return; }
     rerender();
@@ -97,7 +99,7 @@ function row(u: TrackerUnit, v: TrackerView, tie: { up: boolean; down: boolean }
         u.hidden ? h("span", { className: "small muted", title: "Hidden from players" }, "(hidden)") : null,
         u.state.influencedAlly ? h("span", { className: "small muted" }, "NPC ally") : u.party ? h("span", { className: "small muted" }, "party") : null),
       h("div", { className: "small muted" }, `AC ${u.ac} · init ${fmtMod(u.initMod)}`),
-      conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}` }, c.label, c.detail ? ` ${c.detail}` : ""))) : null,
+      conds.length ? h("div", { className: "conds tight" }, ...conds.map((c) => h("span", { className: `cond${c.automatic ? " auto" : ""}`, title: c.detail }, c.label, c.automatic && c.detail ? ` ${c.detail}` : ""))) : null,
       u.state.concentrationCheck ? h("div", { className: "small warn" }, `Concentration check: DC ${u.state.concentrationCheck.dc} (on its card)`) : null,
       isActive ? movementInfo(sceneMeta, u, "GM") : null),
     h("div", { className: "thp" },
@@ -133,7 +135,7 @@ function controls(v: TrackerView): Child {
 export function renderTrackerTab(): Child[] {
   if (!view) { refreshTracker(true); return [h("div", { className: "panel small muted" }, "Reading the scene…")]; }
   const v = view;
-  const out: Child[] = [controls(v), moralePrompt([...v.order, ...v.waiting, ...v.outside], sceneMeta), castResultsPanel([...v.order, ...v.waiting, ...v.outside], sceneMeta)];
+  const out: Child[] = [controls(v), moralePrompt([...v.order, ...v.waiting, ...v.outside], sceneMeta), castResultsPanel([...v.order, ...v.waiting, ...v.outside], sceneMeta), martialPanel(sceneMeta, [...v.order, ...v.waiting, ...v.outside], sceneItems)];
   if (notes.length) out.push(h("div", { className: "panel warn small" }, ...notes.map((n) => h("div", {}, n)), h("button", { className: "icon tiny", onclick: () => { notes = []; rerender(); } }, "OK")));
   out.push(h("div", { className: "panel tracker" },
     v.order.length ? null : h("div", { className: "small muted" }, "Nobody has an initiative yet. Roll above, or type players' rolls in the boxes below."),

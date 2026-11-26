@@ -9,7 +9,7 @@ import { roomSystem } from "./roomSettings";
 export function movementInfo(sceneMeta: Record<string, unknown>, u: Pick<TrackerUnit, "id" | "sheet" | "state">, role: "GM" | "PLAYER"): Child {
   const m = readMovement(sceneMeta);
   if (!m || m.unitId !== u.id) return null;
-  const limit = speedLimit(u.sheet, { dash: m.dash, penalty: speedPenalty(roomSystem(), u.state) });
+  const limit = speedLimit(u.sheet, { dash: m.dash, state: u.state, penalty: speedPenalty(roomSystem(), u.state) });
   const moved = movedFeet(m);
   const over = moved > limit;
   // Rewind / Dash always go through the primary GM client's background (it owns the movement record).

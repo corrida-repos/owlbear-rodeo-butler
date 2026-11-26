@@ -28,9 +28,10 @@ export interface RoomSettings {
   /** Naval and aerial combat (GoS, AAG, DMG, XGE): the Ships and sky panel in DM Tools, ship turns in initiative, and
    *  falls of creatures in the air. Off by default. */
   naval: boolean;
+  martialOptions: boolean;
 }
 
-export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true, massCombat: false, naval: false };
+export const DEFAULT_SETTINGS: RoomSettings = { system: DEFAULT_SYSTEM, playerEdits: true, autoDeadAtZero: false, dmgOptions: true, handheld: false, autoApplyCasts: false, revealHits: true, massCombat: false, naval: false, martialOptions: false };
 
 export function readSettings(roomMetadata: Record<string, unknown>): RoomSettings {
   const raw = roomMetadata[SETTINGS_KEY];
@@ -44,6 +45,7 @@ export function readSettings(roomMetadata: Record<string, unknown>): RoomSetting
     autoApplyCasts: typeof s.autoApplyCasts === "boolean" ? s.autoApplyCasts : DEFAULT_SETTINGS.autoApplyCasts,
     revealHits: typeof s.revealHits === "boolean" ? s.revealHits : DEFAULT_SETTINGS.revealHits,
     massCombat: typeof s.massCombat === "boolean" ? s.massCombat : DEFAULT_SETTINGS.massCombat,
+    martialOptions: s.martialOptions === true,
     naval: typeof s.naval === "boolean" ? s.naval : DEFAULT_SETTINGS.naval,
   };
 }

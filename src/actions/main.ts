@@ -28,6 +28,8 @@ import { d20Penalty } from "../core/conditions";
 import { isSurprised, SURPRISED_TEXT } from "../core/systems";
 import { areaOf } from "../core/reach";
 import { placeTemplate } from "../extension/aoeItems";
+import { martialActionWarning } from "../core/martial";
+import { martialSection } from "./martialSection";
 import { castSection, castStrip } from "./castSection";
 import { costlyMaterial, materialWarning } from "../core/components";
 import { pendingSaves, pendingSavesBox } from "../extension/castUi";
@@ -306,6 +308,7 @@ function lastRollLine(it: ActionItem): Child {
 function detail(it: ActionItem, bar: ActionBar): Child {
   const how = explain(it, bar.legendary);
   const rolls = rollsOf(it);
+  const warning = martialActionWarning(it, (item && readUnit(item.metadata)?.state.conditions) || []);
   return h("div", { className: "panel ab-detail" },
     h("div", { className: "row between" },
       h("span", {}, h("strong", {}, it.name),
@@ -313,8 +316,11 @@ function detail(it: ActionItem, bar: ActionBar): Child {
       h("button", { className: "icon tiny", title: "Close", onclick: () => { selected = null; render(); } }, "✕")),
     reachLine(it),
     materialLine(it),
+    warning ? h("div", { className: "small warn" }, warning) : null,
     areaButton(it),
     item ? castSection(castCtx(it), it) : null,
+    item && roomSettings().martialOptions && (it.key === ATTACK_KEY || it.name === "Grapple" || it.name === "Escape a Grapple")
+      ? martialSection({ actor: item, items: sceneItems, meta: sceneMeta, actions: bar.items, role, render, note: (message) => { note = message; } }) : null,
     rolls.length ? h("div", { className: "ab-rolls row small" }, h("span", { className: "muted" }, "Roll"),
       ...rolls.map((r) => h("span", { className: "ab-roll" }, rollChip(it, r.seg, r.label), ` ${r.label}`))) : null,
     lastRollLine(it),

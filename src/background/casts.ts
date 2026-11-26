@@ -1,3 +1,4 @@
+import { martialArmorClass } from "../core/martial";
 /**
  * Casts from the action bar, primary GM client (see core/cast.ts): stores the record, rolls creatures' saving throws
  * privately, works out damage with each target's defenses, and records party members' saves when they roll them.
@@ -38,7 +39,7 @@ export async function receiveCast(rec: CastRecord): Promise<string> {
     r = { ...r, targets: r.targets.map((t) => {
       const u = unit(t.id);
       // Attack rolls: the hit is decided here, against the target's AC (the caster may not see it).
-      const outcome = r.kind === "attack" && t.roll !== undefined && u ? attackOutcome(t.roll, t.natural, u.sheet.ac) : t.outcome;
+      const outcome = r.kind === "attack" && t.roll !== undefined && u ? attackOutcome(t.roll, t.natural, martialArmorClass(u.sheet, u.state.conditions)) : t.outcome;
       const resolved = { ...t, outcome, ...(outcome === "miss" ? { rolled: undefined } : {}) };
       const d = damageFor(r, resolved, u?.sheet.defenses);
       return { ...resolved, damage: d.amount, ...(d.notes.length ? { notes: d.notes } : {}) };

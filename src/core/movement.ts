@@ -4,7 +4,8 @@
  * math here takes segment lengths in feet and stays pure.
  */
 import { BUTLER_NS } from "./constants";
-import type { UnitSheet } from "./sheet";
+import { martialSpeeds } from "./martial";
+import type { UnitSheet, UnitState } from "./sheet";
 
 export const MOVEMENT_KEY = `${BUTLER_NS}/movement`;
 
@@ -35,8 +36,10 @@ export const movedFeet = (m: Pick<MovementState, "segments">) => round1(m.segmen
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /** The movement limit: the unit's fastest speed (walk, fly, swim, climb, burrow), doubled by Dash, minus penalties. */
-export function speedLimit(sheet: Pick<UnitSheet, "speed">, opts: { dash?: boolean; penalty?: number } = {}): number {
-  const s = sheet.speed;
+export function speedLimit(sheet: Pick<UnitSheet, "speed">, opts: { dash?: boolean; penalty?: number; state?: Pick<UnitState, "conditions"> } = {}): number {
+  const conditions = opts.state?.conditions ?? [];
+  if (conditions.some((c) => c.id.startsWith("martial:") && (c.key === "grappled" || c.key === "restrained"))) return 0;
+  const s = martialSpeeds(sheet.speed, conditions);
   const base = Math.max(s.walk ?? 0, s.fly ?? 0, s.swim ?? 0, s.climb ?? 0, s.burrow ?? 0);
   const v = Math.max(0, base - (opts.penalty ?? 0));
   return opts.dash ? v * 2 : v;
